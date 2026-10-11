@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Local-only data (session names, hook state)
+/names.json
+names*.json
+!web/**/names*.json
+.pixel-office/
+hook.log*
+
+# Deploy / secrets
+.vercel/
+.env
+.env.*
+*.pem
+
+# Editors / OS / scratch
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+*.log
+*.pid
+*.tmp
+/scratch/
+/tmp/

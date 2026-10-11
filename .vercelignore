@@ -1,0 +1,12 @@
+/server.py
+/pixel_office/
+/tests/
+/docs/
+/tools/
+/names.json
+/dev_server.py
+/PROJECT.md
+/.pixel-office/
+/.env*
+**/__pycache__/
+**/*.pyc

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pixel Office</title>
+<meta name="description" content="Claude Code oturumlarını pixel-art bir ofiste canlı izleyin.">
+<meta name="theme-color" content="#1e1e2a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%231e1e2a'/%3E%3Crect x='1' y='1' width='6' height='4' fill='%233f9a8f'/%3E%3Crect x='2' y='2' width='3' height='1' fill='%23d6fff4'/%3E%3Crect x='3' y='5' width='2' height='1' fill='%236b7180'/%3E%3Crect x='1' y='6' width='6' height='1' fill='%23a0703c'/%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main id="app">
+  <header id="topbar">
+    <h1 class="logo"><span class="logo-icon" aria-hidden="true"></span>Pixel Office</h1>
+    <span id="room-name" class="room-name" hidden></span>
+    <span id="mode-badge" class="mode-badge" data-mode="">…</span>
+    <span id="conn-status" class="conn-status" data-status="connecting" role="status" aria-live="polite">Bağlanıyor…</span>
+    <nav id="toolbar" class="toolbar" aria-label="Oda araçları" hidden>
+      <button type="button" id="btn-invite" class="btn" data-cloud hidden title="Odaya davet bağlantısını kopyala">Davet et</button>
+      <button type="button" id="btn-setup" class="btn accent" data-cloud hidden title="Claude Code ya da başka bir ajanı bu odaya bağla">Ajan bağla</button>
+      <button type="button" id="btn-mini" class="btn" hidden title="Her zaman üstte duran küçük pencere. Ekranın sağ altına sürükleyin.">Mini pencere</button>
+      <button type="button" id="btn-install" class="btn" hidden title="Pixel Ofis'i masaüstü uygulaması olarak yükle">Uygulamayı yükle</button>
+      <a id="btn-rooms" class="btn ghost" data-cloud hidden href="./" title="Oda oluştur ya da başka bir odaya geç">Odalar</a>
+    </nav>
+  </header>
+  <div id="stage">
+    <div class="frame">
+      <canvas id="office" width="1056" height="672" aria-label="Pixel ofis: ajanlar karakter olarak görünür"></canvas>
+      <div id="conn-banner" class="show" role="status">Bağlanıyor…</div>
+    </div>
+  </div>
+  <div id="mini-strip" class="mini-strip" role="status" aria-live="polite">…</div>
+  <aside id="panel">
+    <header class="panel-head">
+      <h2>Ajanlar</h2>
+      <div id="summary" class="summary"></div>
+    </header>
+    <ul id="agent-list" class="agent-list"></ul>
+    <section id="agent-details" class="details placeholder" aria-live="polite"></section>
+  </aside>
+</main>
+
+<!-- Cloud landing (CLOUD.md §9.3): create / join / recent rooms -->
+<section id="landing" class="landing" hidden aria-labelledby="landing-title">
+  <div class="landing-card">
+    <h2 id="landing-title"><span class="logo-icon" aria-hidden="true"></span>Bulut Ofis</h2>
+    <p class="muted">Arkadaşlarınızla aynı pixel ofise girin ve birbirinizin yapay zeka ajanlarını canlı görün.</p>
+    <p id="landing-error" class="form-error" role="alert" hidden></p>
+    <div class="landing-cols">
+      <form id="create-form" class="card-block" autocomplete="off">
+        <h3>Yeni oda oluştur</h3>
+        <label>Oda adı <input name="room" maxlength="32" placeholder="Pixel Ofis"></label>
+        <label>Adınız <input name="name" maxlength="24" placeholder="ör. Timur" required></label>
+        <label id="create-token-row" hidden>Oluşturma parolası <input name="token" type="password" autocomplete="off" placeholder="Sunucu yöneticisinden alın"></label>
+        <button type="submit" class="btn accent">Oda oluştur</button>
+      </form>
+      <form id="join-form" class="card-block" autocomplete="off">
+        <h3>Bağlantıyla katıl</h3>
+        <label>Davet bağlantısı <input name="link" placeholder="https://…/?room=…#key=…" required></label>
+        <button type="submit" class="btn">Katıl</button>
+        <p class="muted small">Davet bağlantısı ajan bağlamanızı sağlar. Yalnızca izleme bağlantısıyla odayı sadece izleyebilirsiniz.</p>
+      </form>
+    </div>
+    <div id="recent-block" class="card-block" hidden>
+      <h3>Son odalar</h3>
+      <ul id="recent-list" class="recent-list"></ul>
+    </div>
+  </div>
+</section>
+
+<!-- Invite dialog -->
+<dialog id="dlg-invite" class="dlg" aria-labelledby="dlg-invite-title">
+  <form method="dialog" class="dlg-head"><h2 id="dlg-invite-title">Davet et</h2><button class="close" value="close" aria-label="Kapat">✕</button></form>
+  <div id="invite-join-block">
+    <h3>Katılma bağlantısı</h3>
+    <p class="muted small">Bu bağlantıyı alan kişi odayı izleyebilir ve kendi ajanlarını bağlayabilir. İçinde yazma anahtarı var, yalnızca güvendiğiniz kişilerle paylaşın.</p>
+    <div class="copy-row"><input id="invite-join" readonly aria-label="Katılma bağlantısı"><button type="button" class="btn accent" data-copy="invite-join">Kopyala</button></div>
+  </div>
+  <h3>Sadece izleme bağlantısı</h3>
+  <p class="muted small">Bu bağlantıyla oda yalnızca izlenebilir. Ajan bağlanamaz, adlar değiştirilemez.</p>
+  <div class="copy-row"><input id="invite-view" readonly aria-label="Sadece izleme bağlantısı"><button type="button" class="btn" data-copy="invite-view">Kopyala</button></div>
+  <p id="invite-nokey" class="muted small" hidden>Bu odayı izleme bağlantısıyla açtınız, katılma bağlantısı sizde yok.</p>
+</dialog>
+
+<!-- "Ajan bağla" setup dialog (CLOUD.md §7.5–§7.7, §17) -->
+<dialog id="dlg-setup" class="dlg wide" aria-labelledby="dlg-setup-title">
+  <form method="dialog" class="dlg-head"><h2 id="dlg-setup-title">Ajan bağla</h2><button class="close" value="close" aria-label="Kapat">✕</button></form>
+  <div id="setup-nokey" hidden>
+    <p><b>Bu oda yalnızca izleme bağlantısıyla açıldı.</b></p>
+    <p class="muted">Ajan bağlamak için yazma anahtarı gerekir. Oda sahibinden <b>katılma bağlantısını</b> (Davet et → Katılma bağlantısı) isteyin ve o bağlantıyı açın.</p>
+  </div>
+  <div id="setup-body">
+    <label class="setup-name">Adınız (ofiste görünecek) <input id="setup-name" maxlength="24" placeholder="ör. Timur"></label>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" class="tab" data-tab="unix" aria-selected="true">macOS / Linux</button>
+      <button type="button" role="tab" class="tab" data-tab="win" aria-selected="false">Windows</button>
+      <button type="button" role="tab" class="tab" data-tab="api" aria-selected="false">Genel API</button>
+      <button type="button" role="tab" class="tab" data-tab="adv" aria-selected="false">Gelişmiş</button>
+    </div>
+    <section class="tab-pane" data-pane="unix" role="tabpanel">
+      <p>Claude Code kancasını kurmak için terminalde şu komutu çalıştırın (Python 3.8+ gerekir; yoksa <code>pwsh</code> kullanılır):</p>
+      <div class="cmd" data-cmd="unix"></div>
+      <p class="muted small">Komutu çalıştırmadan önce betiği okuyabilirsiniz: <a data-href="/hook/install.sh" target="_blank" rel="noopener"></a></p>
+      <p class="note">Açık Claude Code oturumlarını yeniden başlatın.</p>
+      <details><summary>Sorun giderme ve kaldırma</summary>
+        <div class="cmd" data-cmd="unix-doctor"></div>
+        <div class="cmd" data-cmd="unix-uninstall"></div>
+      </details>
+    </section>
+    <section class="tab-pane" data-pane="win" role="tabpanel" hidden>
+      <p>PowerShell ya da Komut İstemi'nde çalıştırın. <b>Python gerekmez</b>: Python varsa o, yoksa Windows'la gelen PowerShell istemcisi kurulur. Gizlilik aynıdır.</p>
+      <div class="cmd" data-cmd="win"></div>
+      <p class="muted small">Komutu çalıştırmadan önce betiği okuyabilirsiniz: <a data-href="/hook/install.ps1" target="_blank" rel="noopener"></a></p>
+      <p class="note">Açık Claude Code oturumlarını yeniden başlatın.</p>
+      <p class="muted small">Şirket bilgisayarlarında PowerShell betikleri engellenmiş olabilir. O durumda "Gelişmiş" sekmesine bakın.</p>
+    </section>
+    <section class="tab-pane" data-pane="api" role="tabpanel" hidden>
+      <p>Herhangi bir betik, bot ya da ajan durumunu <code>POST /api/status</code> ile bildirebilir. Yalnızca durum değişince gönderin; işiniz bitince <code>offline</code> gönderin.</p>
+      <h4>curl</h4>
+      <div class="cmd" data-cmd="curl"></div>
+      <div class="cmd" data-cmd="curl-off"></div>
+      <h4>Yerel yapay zeka ajanları (<code>pixel_agent.py</code>)</h4>
+      <p class="muted small">Ollama, LM Studio, llama.cpp, aider, Open Interpreter… Önce aracı indirin:</p>
+      <div class="cmd" data-cmd="agent-dl"></div>
+      <p class="muted small"><b>pixel-run</b>: herhangi bir komutu sarar, çıktı geldikçe "çalışıyor", sessizlikte "kahve" gösterir.</p>
+      <div class="cmd" data-cmd="pixel-run"></div>
+      <p class="muted small"><b>pixel-proxy</b>: Ollama/OpenAI uyumlu sunucunun önüne konur, akışı bozmadan aktarır. Ajanınızın adresini <code>http://127.0.0.1:11435</code> yapın.</p>
+      <div class="cmd" data-cmd="pixel-proxy"></div>
+      <p class="muted small">Kanca kuruluysa betiklerden en kolay yol:</p>
+      <div class="cmd" data-cmd="hook-status"></div>
+    </section>
+    <section class="tab-pane" data-pane="adv" role="tabpanel" hidden>
+      <h4>Gelişmiş: kurulum yapılamıyorsa (HTTP kancası)</h4>
+      <div class="danger">
+        <p><b>Dikkat: bu yöntem gizlilik garantisini bozar.</b> Claude Code her olayda ham kanca verisini (istemleriniz, araç girdilerindeki kod, Claude'un son yanıtı) bu sunucuya gönderir. Sunucu yalnızca durum, araç adı ve proje adını alır, gerisini saklamaz ve günlüğe yazmaz. Ama veri bilgisayarınızdan <b>çıkar</b>. Ayrıca HTTP kancaları senkron çalışır, her araç çağrısı sunucuyu bekler.</p>
+        <label class="check"><input type="checkbox" id="adv-accept"> Anladım, istem ve kod içeriklerinin sunucuya gönderileceğini kabul ediyorum.</label>
+      </div>
+      <div id="adv-snippet" hidden>
+        <p>Aşağıdaki <code>hooks</code> bölümünü <code>~/.claude/settings.json</code> dosyanıza ekleyin (var olan kancalarınızı silmeyin), sonra Claude Code'u yeniden başlatın:</p>
+        <div class="cmd" data-cmd="http-hook"></div>
+      </div>
+    </section>
+  </div>
+</dialog>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

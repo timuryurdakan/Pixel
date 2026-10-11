@@ -1,0 +1,909 @@
+{
+ "_comment": "Shared hook mapping vectors (CLOUD.md 7.2/7.4) for pixel_hook.py and pixel_hook.ps1. expect items are merged onto 'base'; null = key must be absent. $S = sha256(salt+session_id)[:20], $A = sha256(salt+agent_id)[:20], $S0 = sha256(salt)[:20]. Event defaults: session_id sess-1, cwd /home/user/Desktop/Pixel (null removes).",
+ "cfg": {
+  "name": "Timur",
+  "ownerId": "o_testowner1",
+  "salt": "s4lt-s4lt-s4lt-s4lt",
+  "color": 3,
+  "project_aliases": {},
+  "hide_projects": false,
+  "send_mcp_names": false,
+  "enabled": true
+ },
+ "base": {
+  "session": "$S",
+  "owner": "Timur",
+  "ownerId": "o_testowner1",
+  "project": "Pixel",
+  "source": "claude-code",
+  "color": 3
+ },
+ "vectors": [
+  {
+   "name": "SessionStart startup",
+   "event": {
+    "hook_event_name": "SessionStart",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "source": "startup"
+   },
+   "expect": [
+    {
+     "state": "idle"
+    }
+   ]
+  },
+  {
+   "name": "SessionStart resume",
+   "event": {
+    "hook_event_name": "SessionStart",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "source": "resume"
+   },
+   "expect": [
+    {
+     "state": "idle"
+    }
+   ]
+  },
+  {
+   "name": "SessionStart clear",
+   "event": {
+    "hook_event_name": "SessionStart",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "source": "clear"
+   },
+   "expect": [
+    {
+     "state": "idle"
+    }
+   ]
+  },
+  {
+   "name": "SessionStart compact sends nothing",
+   "event": {
+    "hook_event_name": "SessionStart",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "source": "compact"
+   },
+   "expect": []
+  },
+  {
+   "name": "UserPromptSubmit",
+   "event": {
+    "hook_event_name": "UserPromptSubmit",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "prompt": "secret"
+   },
+   "expect": [
+    {
+     "state": "thinking"
+    }
+   ]
+  },
+  {
+   "name": "PreToolUse Bash",
+   "event": {
+    "hook_event_name": "PreToolUse",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "Bash"
+   },
+   "expect": [
+    {
+     "state": "working",
+     "tool": "Bash"
+    }
+   ]
+  },
+  {
+   "name": "PreToolUse Read",
+   "event": {
+    "hook_event_name": "PreToolUse",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "Read"
+   },
+   "expect": [
+    {
+     "state": "working",
+     "tool": "Read"
+    }
+   ]
+  },
+  {
+   "name": "PreToolUse Edit",
+   "event": {
+    "hook_event_name": "PreToolUse",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "Edit"
+   },
+   "expect": [
+    {
+     "state": "working",
+     "tool": "Edit"
+    }
+   ]
+  },
+  {
+   "name": "PreToolUse WebFetch",
+   "event": {
+    "hook_event_name": "PreToolUse",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "WebFetch"
+   },
+   "expect": [
+    {
+     "state": "working",
+     "tool": "WebFetch"
+    }
+   ]
+  },
+  {
+   "name": "PreToolUse Agent",
+   "event": {
+    "hook_event_name": "PreToolUse",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "Agent"
+   },
+   "expect": [
+    {
+     "state": "working",
+     "tool": "Agent"
+    }
+   ]
+  },
+  {
+   "name": "PreToolUse MCP hidden",
+   "event": {
+    "hook_event_name": "PreToolUse",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "mcp__github__create_issue"
+   },
+   "expect": [
+    {
+     "state": "working",
+     "tool": "MCP"
+    }
+   ]
+  },
+  {
+   "name": "PreToolUse MCP names allowed",
+   "event": {
+    "hook_event_name": "PreToolUse",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "mcp__github__create_issue"
+   },
+   "expect": [
+    {
+     "state": "working",
+     "tool": "mcp__github__create_issue"
+    }
+   ],
+   "cfg": {
+    "send_mcp_names": true
+   }
+  },
+  {
+   "name": "PreToolUse MCP long name truncated",
+   "event": {
+    "hook_event_name": "PreToolUse",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "mcp__very_long_server_name__do_the_thing"
+   },
+   "expect": [
+    {
+     "state": "working",
+     "tool": "mcp__very_long_server_name__do_t"
+    }
+   ],
+   "cfg": {
+    "send_mcp_names": true
+   }
+  },
+  {
+   "name": "PreToolUse AskUserQuestion",
+   "event": {
+    "hook_event_name": "PreToolUse",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "AskUserQuestion"
+   },
+   "expect": [
+    {
+     "state": "waiting_for_user",
+     "tool": "AskUserQuestion",
+     "label": "Soru soruyor"
+    }
+   ]
+  },
+  {
+   "name": "PreToolUse ExitPlanMode",
+   "event": {
+    "hook_event_name": "PreToolUse",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "ExitPlanMode"
+   },
+   "expect": [
+    {
+     "state": "waiting_for_user",
+     "tool": "ExitPlanMode",
+     "label": "Plan onayı bekliyor"
+    }
+   ]
+  },
+  {
+   "name": "PreToolUse invalid tool name dropped",
+   "event": {
+    "hook_event_name": "PreToolUse",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "Bad Tool!"
+   },
+   "expect": [
+    {
+     "state": "working"
+    }
+   ]
+  },
+  {
+   "name": "PermissionRequest Bash",
+   "event": {
+    "hook_event_name": "PermissionRequest",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "Bash"
+   },
+   "expect": [
+    {
+     "state": "waiting_for_user",
+     "tool": "Bash",
+     "label": "İzin bekliyor"
+    }
+   ]
+  },
+  {
+   "name": "PermissionRequest MCP",
+   "event": {
+    "hook_event_name": "PermissionRequest",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "mcp__x__y"
+   },
+   "expect": [
+    {
+     "state": "waiting_for_user",
+     "tool": "MCP",
+     "label": "İzin bekliyor"
+    }
+   ]
+  },
+  {
+   "name": "PostToolUse after waiting",
+   "event": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "Bash"
+   },
+   "expect": [
+    {
+     "state": "thinking"
+    }
+   ],
+   "last": "waiting_for_user"
+  },
+  {
+   "name": "PostToolUse while working",
+   "event": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "Bash"
+   },
+   "expect": [],
+   "last": "working"
+  },
+  {
+   "name": "PostToolUse stateless",
+   "event": {
+    "hook_event_name": "PostToolUse",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "Bash"
+   },
+   "expect": []
+  },
+  {
+   "name": "PostToolUseFailure interrupt",
+   "event": {
+    "hook_event_name": "PostToolUseFailure",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "Bash",
+    "is_interrupt": true
+   },
+   "expect": [
+    {
+     "state": "idle",
+     "label": "Durduruldu"
+    }
+   ],
+   "last": "working"
+  },
+  {
+   "name": "PostToolUseFailure after waiting",
+   "event": {
+    "hook_event_name": "PostToolUseFailure",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "Bash",
+    "is_interrupt": false
+   },
+   "expect": [
+    {
+     "state": "thinking"
+    }
+   ],
+   "last": "waiting_for_user"
+  },
+  {
+   "name": "PostToolUseFailure while working",
+   "event": {
+    "hook_event_name": "PostToolUseFailure",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "Bash",
+    "is_interrupt": false
+   },
+   "expect": [],
+   "last": "working"
+  },
+  {
+   "name": "PostToolUseFailure is_interrupt string is not true",
+   "event": {
+    "hook_event_name": "PostToolUseFailure",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "is_interrupt": "true"
+   },
+   "expect": [],
+   "last": "working"
+  },
+  {
+   "name": "Notification permission_prompt",
+   "event": {
+    "hook_event_name": "Notification",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "notification_type": "permission_prompt",
+    "message": "x"
+   },
+   "expect": [
+    {
+     "state": "waiting_for_user",
+     "label": "İzin bekliyor"
+    }
+   ],
+   "last": "working"
+  },
+  {
+   "name": "Notification permission_prompt already waiting",
+   "event": {
+    "hook_event_name": "Notification",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "notification_type": "permission_prompt"
+   },
+   "expect": [],
+   "last": "waiting_for_user"
+  },
+  {
+   "name": "Notification elicitation_dialog",
+   "event": {
+    "hook_event_name": "Notification",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "notification_type": "elicitation_dialog"
+   },
+   "expect": [
+    {
+     "state": "waiting_for_user",
+     "label": "Yanıt bekliyor"
+    }
+   ]
+  },
+  {
+   "name": "Notification agent_needs_input",
+   "event": {
+    "hook_event_name": "Notification",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "notification_type": "agent_needs_input"
+   },
+   "expect": [
+    {
+     "state": "waiting_for_user",
+     "label": "Yanıt bekliyor"
+    }
+   ]
+  },
+  {
+   "name": "Notification idle_prompt",
+   "event": {
+    "hook_event_name": "Notification",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "notification_type": "idle_prompt"
+   },
+   "expect": [
+    {
+     "state": "idle"
+    }
+   ]
+  },
+  {
+   "name": "Notification other type",
+   "event": {
+    "hook_event_name": "Notification",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "notification_type": "auth_success"
+   },
+   "expect": []
+  },
+  {
+   "name": "PreCompact",
+   "event": {
+    "hook_event_name": "PreCompact",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "trigger": "auto"
+   },
+   "expect": [
+    {
+     "state": "thinking",
+     "label": "Bağlam sıkıştırılıyor"
+    }
+   ]
+  },
+  {
+   "name": "Stop",
+   "event": {
+    "hook_event_name": "Stop",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "last_assistant_message": "x"
+   },
+   "expect": [
+    {
+     "state": "idle"
+    }
+   ]
+  },
+  {
+   "name": "StopFailure rate_limit",
+   "event": {
+    "hook_event_name": "StopFailure",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "error": "rate_limit"
+   },
+   "expect": [
+    {
+     "state": "idle",
+     "label": "API hatası: rate_limit"
+    }
+   ]
+  },
+  {
+   "name": "StopFailure unknown enum not sent",
+   "event": {
+    "hook_event_name": "StopFailure",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "error": "weird_thing"
+   },
+   "expect": [
+    {
+     "state": "idle",
+     "label": "API hatası"
+    }
+   ]
+  },
+  {
+   "name": "StopFailure missing error",
+   "event": {
+    "hook_event_name": "StopFailure",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel"
+   },
+   "expect": [
+    {
+     "state": "idle",
+     "label": "API hatası"
+    }
+   ]
+  },
+  {
+   "name": "SubagentStart Explore",
+   "event": {
+    "hook_event_name": "SubagentStart",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "agent_id": "agent-1",
+    "agent_type": "Explore"
+   },
+   "expect": [
+    {
+     "sub": "$A",
+     "state": "working",
+     "label": "Alt-ajan",
+     "agentType": "Explore"
+    }
+   ]
+  },
+  {
+   "name": "SubagentStart custom type",
+   "event": {
+    "hook_event_name": "SubagentStart",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "agent_id": "agent-1",
+    "agent_type": "my-reviewer"
+   },
+   "expect": [
+    {
+     "sub": "$A",
+     "state": "working",
+     "label": "Alt-ajan",
+     "agentType": "Özel ajan"
+    }
+   ]
+  },
+  {
+   "name": "SubagentStart without agent_id",
+   "event": {
+    "hook_event_name": "SubagentStart",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "agent_type": "Explore"
+   },
+   "expect": []
+  },
+  {
+   "name": "SubagentStop",
+   "event": {
+    "hook_event_name": "SubagentStop",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "agent_id": "agent-1",
+    "agent_type": "Plan"
+   },
+   "expect": [
+    {
+     "sub": "$A",
+     "state": "sleeping",
+     "agentType": "Plan"
+    }
+   ]
+  },
+  {
+   "name": "PreToolUse inside subagent",
+   "event": {
+    "hook_event_name": "PreToolUse",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "tool_name": "Grep",
+    "agent_id": "agent-1",
+    "agent_type": "Plan"
+   },
+   "expect": [
+    {
+     "sub": "$A",
+     "state": "working",
+     "tool": "Grep",
+     "agentType": "Plan"
+    }
+   ]
+  },
+  {
+   "name": "Stop in subagent without type",
+   "event": {
+    "hook_event_name": "Stop",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "agent_id": "agent-1"
+   },
+   "expect": [
+    {
+     "sub": "$A",
+     "state": "idle"
+    }
+   ]
+  },
+  {
+   "name": "SessionEnd",
+   "event": {
+    "hook_event_name": "SessionEnd",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "reason": "prompt_input_exit"
+   },
+   "expect": [
+    {
+     "state": "offline"
+    }
+   ]
+  },
+  {
+   "name": "SessionEnd with agent_id applies to session",
+   "event": {
+    "hook_event_name": "SessionEnd",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel",
+    "agent_id": "agent-1"
+   },
+   "expect": [
+    {
+     "state": "offline"
+    }
+   ]
+  },
+  {
+   "name": "Windows cwd",
+   "event": {
+    "hook_event_name": "Stop",
+    "session_id": "sess-1",
+    "cwd": "C:\\Users\\timur\\code\\WinApp"
+   },
+   "expect": [
+    {
+     "state": "idle",
+     "project": "WinApp"
+    }
+   ]
+  },
+  {
+   "name": "Windows cwd trailing backslash",
+   "event": {
+    "hook_event_name": "Stop",
+    "session_id": "sess-1",
+    "cwd": "C:\\Users\\timur\\code\\WinApp\\"
+   },
+   "expect": [
+    {
+     "state": "idle",
+     "project": "WinApp"
+    }
+   ]
+  },
+  {
+   "name": "Windows drive root has no project",
+   "event": {
+    "hook_event_name": "Stop",
+    "session_id": "sess-1",
+    "cwd": "C:\\"
+   },
+   "expect": [
+    {
+     "state": "idle",
+     "project": null
+    }
+   ]
+  },
+  {
+   "name": "POSIX root has no project",
+   "event": {
+    "hook_event_name": "Stop",
+    "session_id": "sess-1",
+    "cwd": "/"
+   },
+   "expect": [
+    {
+     "state": "idle",
+     "project": null
+    }
+   ]
+  },
+  {
+   "name": "Missing cwd",
+   "event": {
+    "hook_event_name": "Stop",
+    "session_id": "sess-1"
+   },
+   "expect": [
+    {
+     "state": "idle",
+     "project": null
+    }
+   ]
+  },
+  {
+   "name": "Alias exact",
+   "event": {
+    "hook_event_name": "Stop",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel"
+   },
+   "expect": [
+    {
+     "state": "idle",
+     "project": "Ofis"
+    }
+   ],
+   "cfg": {
+    "project_aliases": {
+     "/home/user/Desktop/Pixel": "Ofis"
+    }
+   }
+  },
+  {
+   "name": "Alias for subdirectory",
+   "event": {
+    "hook_event_name": "Stop",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel/web/js"
+   },
+   "expect": [
+    {
+     "state": "idle",
+     "project": "Ofis"
+    }
+   ],
+   "cfg": {
+    "project_aliases": {
+     "/home/user/Desktop/Pixel/": "Ofis"
+    }
+   }
+  },
+  {
+   "name": "Alias not a prefix match on partial name",
+   "event": {
+    "hook_event_name": "Stop",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel2"
+   },
+   "expect": [
+    {
+     "state": "idle",
+     "project": "Pixel2"
+    }
+   ],
+   "cfg": {
+    "project_aliases": {
+     "/home/user/Desktop/Pixel": "Ofis"
+    }
+   }
+  },
+  {
+   "name": "Alias with slash is flattened",
+   "event": {
+    "hook_event_name": "Stop",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel"
+   },
+   "expect": [
+    {
+     "state": "idle",
+     "project": "a-b"
+    }
+   ],
+   "cfg": {
+    "project_aliases": {
+     "/home/user/Desktop/Pixel": "a/b"
+    }
+   }
+  },
+  {
+   "name": "hide_projects",
+   "event": {
+    "hook_event_name": "Stop",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel"
+   },
+   "expect": [
+    {
+     "state": "idle",
+     "project": "Gizli proje"
+    }
+   ],
+   "cfg": {
+    "hide_projects": true
+   }
+  },
+  {
+   "name": "Long basename truncated to 32",
+   "event": {
+    "hook_event_name": "Stop",
+    "session_id": "sess-1",
+    "cwd": "/x/pppppppppppppppppppppppppppppppppppppppp"
+   },
+   "expect": [
+    {
+     "state": "idle",
+     "project": "pppppppppppppppppppppppppppppppp"
+    }
+   ]
+  },
+  {
+   "name": "No color in cfg",
+   "event": {
+    "hook_event_name": "Stop",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel"
+   },
+   "expect": [
+    {
+     "state": "idle",
+     "color": null
+    }
+   ],
+   "cfg": {
+    "color": null
+   }
+  },
+  {
+   "name": "enabled false",
+   "event": {
+    "hook_event_name": "Stop",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel"
+   },
+   "expect": [],
+   "cfg": {
+    "enabled": false
+   }
+  },
+  {
+   "name": "Unknown event",
+   "event": {
+    "hook_event_name": "TeammateIdle",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel"
+   },
+   "expect": []
+  },
+  {
+   "name": "Missing event name",
+   "event": {
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel"
+   },
+   "expect": []
+  },
+  {
+   "name": "Event name is case-sensitive",
+   "event": {
+    "hook_event_name": "stop",
+    "session_id": "sess-1",
+    "cwd": "/home/user/Desktop/Pixel"
+   },
+   "expect": []
+  },
+  {
+   "name": "Missing session_id still hashes",
+   "event": {
+    "hook_event_name": "Stop",
+    "cwd": "/home/user/Desktop/Pixel"
+   },
+   "expect": [
+    {
+     "state": "idle",
+     "session": "$S0"
+    }
+   ]
+  }
+ ]
+}
