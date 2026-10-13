@@ -305,7 +305,8 @@ def snapshot(room_id: str, fields: dict[str, str], now_ms: int, st: S.Settings |
             "source": "claude-code", "nameSource": src, "defaultName": default,
         })
     agents.sort(key=lambda a: (a["startedAt"], a["id"]))
-    act = activity([a["state"] for a in agents])
+    # Residents never drive the poll rate: a room with only residents polls like an empty one (§12 budget).
+    act = activity([a["state"] for a in agents if a["id"] not in resident_ids])
     payload = {
         "mode": "cloud",
         "serverTime": now_ms,

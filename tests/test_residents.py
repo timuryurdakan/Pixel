@@ -58,6 +58,7 @@ class Api(Base):
         agents = self.state(room).json()["agents"]
         self.assertEqual(sorted(a["name"] for a in agents), ["Mete", "Saltuk"])
         self.assertTrue(all(a["state"] in STATES for a in agents))
+        self.assertEqual(self.state(room).json()["pollMs"], 60000)   # residents alone don't speed up polling
         self.assertNotEqual(agents[0]["ownerColor"], agents[1]["ownerColor"])
         # Rename works and survives later reads, even long after (no record to purge against).
         self.call("POST", f"/api/rename?room={room}", {"scope": "agent", "agentId": mete_id, "name": "Mete Usta"},
