@@ -277,10 +277,26 @@ class UnconfiguredStorage:
 
 # -- selection -------------------------------------------------------------------------------------
 
+_URL_SUFFIXES = ("KV_REST_API_URL", "REDIS_REST_URL", "REST_API_URL")
+
+
+def _upstash_env(env: Mapping[str, str]) -> tuple[str | None, str | None]:
+    """Upstash REST credentials. The Vercel Marketplace lets the user pick any prefix (KV_, STORAGE_, …),
+    so after the well-known names, accept any `<prefix>_…REST_API_URL` with its matching `…_TOKEN`."""
+    for u, t in (("KV_REST_API_URL", "KV_REST_API_TOKEN"), ("UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN")):
+        if env.get(u) and env.get(t):
+            return env[u], env[t]
+    for name in sorted(env):
+        if name.endswith(_URL_SUFFIXES) and env.get(name):
+            tok = env.get(name[:-len("URL")] + "TOKEN")
+            if tok:
+                return env[name], tok
+    return None, None
+
+
 def storage_from_env(env: Mapping[str, str] | None = None, clock: Callable[[], float] = time.time):
     env = os.environ if env is None else env
-    url = env.get("KV_REST_API_URL") or env.get("UPSTASH_REDIS_REST_URL")
-    token = env.get("KV_REST_API_TOKEN") or env.get("UPSTASH_REDIS_REST_TOKEN")
+    url, token = _upstash_env(env)
     if url and token:
         try:
             return UpstashStorage(url, token)

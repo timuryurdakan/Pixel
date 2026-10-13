@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kurulum Rehberi · Pixel Office</title>
+<meta name="description" content="Pixel Ofis'e nasıl katılacağınızı, uygulamayı nasıl yükleyeceğinizi ve ajanlarınızı nasıl bağlayacağınızı adım adım anlatır.">
+<meta name="theme-color" content="#1e1e2a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%231e1e2a'/%3E%3Crect x='1' y='1' width='6' height='4' fill='%233f9a8f'/%3E%3Crect x='2' y='2' width='3' height='1' fill='%23d6fff4'/%3E%3Crect x='3' y='5' width='2' height='1' fill='%236b7180'/%3E%3Crect x='1' y='6' width='6' height='1' fill='%23a0703c'/%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/guide.css">
+</head>
+<body class="guide">
+<header class="g-top">
+  <a class="logo" href="./" data-back><span class="logo-icon" aria-hidden="true"></span>Pixel Office</a>
+  <a class="btn accent" href="./" data-back>Ofise git →</a>
+</header>
+
+<main class="g-main">
+  <section class="g-hero">
+    <p class="g-kicker" id="g-kicker">Kurulum rehberi</p>
+    <h1>Pixel Ofis'e hoş geldin! <span class="wave" aria-hidden="true">👋</span></h1>
+    <p class="g-lead">Burada yapay zeka ajanları küçük pixel çalışanlar gibi yaşar: iş varken <b>masada yazar</b>, boşta kalınca <b>kahve içer</b>, iş bitince <b>uyur</b>. Birkaç dakikada kurulur, söz.</p>
+    <canvas class="px-scene" id="scene-hero" aria-label="Ajanlar masada çalışıyor, kahve içiyor ve uyuyor"></canvas>
+    <ol class="g-toc">
+      <li><a href="#adim-1">Davet bağlantısını aç</a></li>
+      <li><a href="#adim-2">Uygulamayı yükle</a></li>
+      <li><a href="#adim-3">Mini pencereyi köşeye koy</a></li>
+      <li><a href="#adim-4">Ajanını bağla</a></li>
+      <li><a href="#adim-5">Ofisi izle</a></li>
+    </ol>
+  </section>
+
+  <section class="g-step reveal" id="adim-1">
+    <div class="g-num">1</div>
+    <div class="g-body">
+      <h2>Davet bağlantısını aç</h2>
+      <p>Arkadaşın sana bir <b>katılma bağlantısı</b> gönderir. Açtığında kapıdan içeri girersin, o kadar. Bağlantı hatırlanır, bir dahaki sefere doğrudan ofise düşersin.</p>
+      <p class="g-tip">🔑 Katılma bağlantısında senin yazma anahtarın var, başkasıyla paylaşma. Sadece izlemesini istediğin biri için <b>Davet et → Sadece izleme bağlantısı</b>'nı kullan.</p>
+    </div>
+    <div class="g-visual"><canvas class="px-scene" id="scene-door" aria-label="Bir karakter kapıdan içeri giriyor"></canvas></div>
+  </section>
+
+  <section class="g-step reveal" id="adim-2">
+    <div class="g-num">2</div>
+    <div class="g-body">
+      <h2>Uygulamayı yükle</h2>
+      <p>Ofisin üst çubuğundaki <span class="kbd">Uygulamayı yükle</span> düğmesine bas (ya da adres çubuğundaki <b>yükle</b> simgesine). Pixel Ofis kendi penceresinde, masaüstü uygulaması gibi açılır. İndirme yok, kurulum dosyası yok.</p>
+      <p class="g-tip">💡 Chrome ve Edge'de çalışır. Safari'de: Paylaş → <b>Dock'a / Ana Ekrana Ekle</b>.</p>
+    </div>
+    <div class="g-visual">
+      <div class="mock-browser" aria-hidden="true">
+        <div class="mb-bar"><span class="mb-dots"><i></i><i></i><i></i></span><span class="mb-url">pixel-ofis.vercel.app</span><span class="mb-install">⊕</span></div>
+        <div class="mb-page">
+          <span class="mb-btn">Uygulamayı yükle</span>
+          <div class="mb-popup">Pixel Office yüklensin mi?<span class="mb-ok">Yükle</span></div>
+        </div>
+        <span class="cursor"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="g-step reveal" id="adim-3">
+    <div class="g-num">3</div>
+    <div class="g-body">
+      <h2>Mini pencereyi sağ alta koy</h2>
+      <p><span class="kbd">Mini pencere</span>'ye bas. Her zaman üstte duran minik bir ofis açılır. Onu bir kere ekranın <b>sağ alt köşesine sürükle</b>; çalışırken ajanlarını göz ucuyla izlersin.</p>
+      <p class="g-tip">🪟 Ana pencereyi küçültsen bile mini ofis yaşamaya devam eder.</p>
+    </div>
+    <div class="g-visual">
+      <div class="mock-desktop" aria-hidden="true">
+        <div class="md-win"><canvas class="px-scene" id="scene-mini"></canvas></div>
+        <span class="cursor drag"></span>
+        <div class="md-bar"><i></i><i></i><i></i><b>12:34</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="g-step reveal" id="adim-4">
+    <div class="g-num">4</div>
+    <div class="g-body">
+      <h2>Ajanını bağla</h2>
+      <p>Ofiste <span class="kbd">Ajan bağla</span>'ya bas, adını yaz ve işletim sistemine uygun <b>tek satırlık komutu kopyala</b>. Terminale yapıştırıp Enter'a bas, sonra <b>Claude Code'u yeniden başlat</b>. Birkaç saniye içinde karakterin kapıdan girer! 🎉</p>
+      <p class="g-tip">🦙 Claude dışındaki ajanlar da olur: Ollama, LM Studio, aider ya da kendi betiklerin. <b>Ajan bağla → Genel API</b> sekmesinde hazır komutlar var.</p>
+    </div>
+    <div class="g-visual">
+      <div class="mock-term" aria-hidden="true">
+        <div class="mt-bar"><span class="mb-dots"><i></i><i></i><i></i></span>Terminal</div>
+        <pre id="term"></pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="g-step reveal wide" id="adim-5">
+    <div class="g-num">5</div>
+    <div class="g-body">
+      <h2>Ofiste neler oluyor?</h2>
+      <p>Her karakter bir ajan. Ne yaptığını hareketlerinden anlarsın:</p>
+      <div class="legend">
+        <figure><canvas class="px-scene" data-legend="working"></canvas><figcaption><b class="st working">Çalışıyor</b>Masada yazıyor, baloncukta kullandığı araç.</figcaption></figure>
+        <figure><canvas class="px-scene" data-legend="thinking"></canvas><figcaption><b class="st thinking">Düşünüyor</b>Bir sonraki adımı tartıyor.</figcaption></figure>
+        <figure><canvas class="px-scene" data-legend="waiting"></canvas><figcaption><b class="st waiting">Seni bekliyor</b>Onay ya da cevap lazım!</figcaption></figure>
+        <figure><canvas class="px-scene" data-legend="coffee"></canvas><figcaption><b class="st coffee">Kahve molası</b>Turunu bitirdi, sıradaki işi bekliyor.</figcaption></figure>
+        <figure><canvas class="px-scene" data-legend="sleep"></canvas><figcaption><b class="st sleep">Uyuyor</b>İşi bitti. Uzun süre uyursa kapıdan çıkar.</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="g-step reveal" id="adim-6">
+    <div class="g-num">✎</div>
+    <div class="g-body">
+      <h2>Bonus: ajanına isim ver</h2>
+      <p>Bir karaktere ya da listedeki bir ajana tıkla, detay panelindeki <span class="kbd">✎</span>'ye bas. Yeni adı yaz, Enter. <b>"Yeni oturumlarına da ver"</b> kutusunu işaretlersen bir sonraki oturumda da aynı isimle gelir.</p>
+    </div>
+    <div class="g-visual">
+      <div class="mock-card" aria-hidden="true">
+        <canvas class="px-scene" id="scene-face"></canvas>
+        <div><div class="mc-name"><span id="rename-text">Grace</span><span class="caret"></span> <span class="mc-pen">✎</span></div><div class="mc-sub">📁 web-shop · <span class="st working">Çalışıyor</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="g-privacy reveal">
+    <h2>🔒 Gizlilik</h2>
+    <p>Promptların, kodun ve dosyaların <b>bilgisayarından çıkmaz</b>. Ofise yalnızca şunlar gider: ajanın durumu (çalışıyor, uyuyor…), araç adı (ör. <code>Bash</code>), proje klasörünün adı ve senin görünen adın. Kurulan küçük betiği çalıştırmadan önce okuyabilirsin; bağlantısı <b>Ajan bağla</b> penceresinde.</p>
+  </section>
+
+  <section class="g-faq reveal">
+    <h2>Sık sorulanlar</h2>
+    <details><summary>Karakterim ofiste görünmüyor</summary><p>Komutu çalıştırdıktan sonra Claude Code'u <b>tamamen kapatıp yeniden açtın mı?</b> Sonra ona bir şey sor; ilk mesajla birlikte kapıdan girer. Hâlâ yoksa <b>Ajan bağla → Sorun giderme</b>'deki <code>doctor</code> komutunu çalıştır.</p></details>
+    <details><summary>Ücretli mi?</summary><p>Hayır. Ofis ücretsiz planlarda çalışıyor, senden hiçbir şey istenmez.</p></details>
+    <details><summary>Hareketler neden bazen birkaç saniye gecikiyor?</summary><p>Ücretsiz limitler içinde kalmak için ofis birkaç saniyede bir güncellenir. Durum değişiklikleri en fazla yarım dakika içinde görünür.</p></details>
+    <details><summary>Bağlantıyı kaldırmak istiyorum</summary><p><b>Ajan bağla → Sorun giderme ve kaldırma</b>'daki kaldırma komutunu çalıştır. Claude Code ayarların eski hâline döner.</p></details>
+    <details><summary>Firefox kullanıyorum, mini pencere açılmıyor</summary><p>Her zaman üstte duran pencere Chrome ve Edge'de var. Diğer tarayıcılarda mini ofis normal bir küçük pencerede açılır; onu da köşeye sürükleyebilirsin.</p></details>
+  </section>
+
+  <section class="g-cta reveal">
+    <canvas class="px-scene" id="scene-cta" aria-hidden="true"></canvas>
+    <a class="btn accent big" href="./" data-back>Hadi ofise gir →</a>
+  </section>
+</main>
+
+<script type="module" src="js/guide.js"></script>
+</body>
+</html>

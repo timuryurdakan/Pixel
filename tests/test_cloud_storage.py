@@ -47,6 +47,11 @@ class MemoryStorageTests(unittest.TestCase):
             s = st.storage_from_env({u: "https://x.upstash.io", t: "tok-SECRET"})
             self.assertIsInstance(s, st.UpstashStorage)
             self.assertNotIn("tok-SECRET", repr(s))
+        # Custom Marketplace prefixes (e.g. STORAGE_) are found by suffix.
+        for u, t in (("STORAGE_KV_REST_API_URL", "STORAGE_KV_REST_API_TOKEN"),
+                     ("STORAGE_REST_API_URL", "STORAGE_REST_API_TOKEN")):
+            self.assertIsInstance(st.storage_from_env({u: "https://x.upstash.io", t: "tok"}), st.UpstashStorage)
+        self.assertIsInstance(st.storage_from_env({"STORAGE_REST_API_URL": "https://x"}), st.MemoryStorage)
         self.assertIsInstance(st.storage_from_env({"KV_REST_API_URL": "https://x"}), st.MemoryStorage)
         self.assertIsInstance(st.storage_from_env({"KV_REST_API_URL": "ftp://x", "KV_REST_API_TOKEN": "t"}),
                               st.UnconfiguredStorage)

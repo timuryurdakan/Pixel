@@ -408,12 +408,18 @@ async function bootLocal() {
 
 const BOOST_MS = 3 * 60 * 1000;
 
+// First visit → the setup guide (rehber.html). guide.js sets the flag when it is shown.
+const GUIDE_SEEN_KEY = 'po-guide-seen';
+function guideSeen() { try { return !!localStorage.getItem(GUIDE_SEEN_KEY); } catch { return true; } }
+function markGuideSeen() { try { localStorage.setItem(GUIDE_SEEN_KEY, '1'); } catch { /* ignore */ } }
+
 function bootCloud(config) {
   const roomParam = params.get('room');
   if (!roomParam) {
     // PWA launch (start_url /?source=pwa): reopen the last room directly.
     const lastRoom = params.get('source') === 'pwa' ? cloud.lastRoomId() : null;
     if (lastRoom) { location.replace(`/?room=${lastRoom}`); return; }
+    if (!guideSeen()) { location.replace('/rehber.html?ilk=1'); return; }
     ui.setMode('cloud');
     ui.setConnection('live');
     cloud.showLanding({ config });
@@ -426,6 +432,8 @@ function bootCloud(config) {
   }
   const key = cloud.takeKeyFromHash(roomParam);   // also strips #key= from the address bar
   cloud.rememberRoom(roomParam, {});
+  if (params.get('new') === '1') markGuideSeen();      // the room creator has already been through the landing
+  else if (!viewMini && !guideSeen()) { location.replace(`/rehber.html?room=${roomParam}&ilk=1`); return; }
   ui.setMode('cloud');
   // Fast first appearance (CLOUD.md §17.10): poll every 5 s while the "Ajan bağla" dialog is open and for
   // 3 min after it closes, and for the first 3 min after opening a room while it is still empty.
@@ -433,6 +441,7 @@ function bootCloud(config) {
     if (transport && transport.boost) transport.boost(open ? { hold: true } : { hold: false, ms: BOOST_MS });
   };
   const roomUi = cloud.setupRoomUI({ roomId: roomParam, key, ui, onSetupDialog });
+  document.getElementById('btn-guide').href = `/rehber.html?room=${roomParam}`;
   room = { id: roomParam, key, ui: roomUi };
   if (key) {
     ui.canRename = () => true;

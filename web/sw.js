@@ -3,11 +3,12 @@
 // /index.html. Other same-origin GETs: stale-while-revalidate.
 // Bump VERSION on every release (Phase 10 checklist).
 
-const VERSION = 'po-v2.0.1';
+const VERSION = 'po-v2.1.0';
 const SHELL = [
   '/', '/index.html', '/css/style.css',
   '/js/main.js', '/js/office.js', '/js/pathfinding.js', '/js/agents.js', '/js/renderer.js', '/js/ui.js',
   '/js/sprites.js', '/js/transport.js', '/js/cloud.js', '/js/pip.js',
+  '/rehber.html', '/css/guide.css', '/js/guide.js',
   '/manifest.webmanifest',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png', '/icons/apple-touch-icon.png',
 ];

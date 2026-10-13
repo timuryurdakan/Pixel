@@ -514,3 +514,6 @@ body.pip-open #stage::after {
   .toolbar { width: 100%; }
   .cmd pre { padding-right: 10px; padding-top: 34px; }
 }
+
+.landing-guide { margin: 0 0 12px; font-size: 12px; color: var(--muted); }
+.landing-guide a { color: var(--accent); }
