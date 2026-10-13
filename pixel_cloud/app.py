@@ -19,7 +19,7 @@ from typing import BinaryIO, Callable, Mapping
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from . import __version__
-from . import derive, ids
+from . import derive, ids, residents
 from . import settings as S
 from .ratelimit import RateLimiter, retry_after_seconds
 from .storage import StorageError, StorageNotConfigured, storage_from_env
@@ -255,6 +255,7 @@ class App:
             "/api/status": {"POST": self.h_status},
             "/api/cc_hook": {"POST": self.h_cc_hook},
             "/api/rename": {"POST": self.h_rename},
+            "/api/residents": {"POST": self.h_residents},
         }
 
     # -- helpers ----------------------------------------------------------------------------------
@@ -529,6 +530,26 @@ class App:
                 self._enforce_name_limit(room, field_name, now)
         self._invalidate(room)
         return _json_response(200, {"ok": True, "name": rr.name, "scope": rr.scope, "serverTime": now})
+
+    # -- POST /api/residents ----------------------------------------------------------------------
+    def h_residents(self, req: Request, q: dict) -> Response:
+        """Replace the room's always-present resident agents (pixel_cloud/residents.py); [] clears."""
+        room = self._room(q)
+        self._auth(req, room)
+        body = self._body(req, S.MAX_RENAME_BODY)
+        self._rate((self.limit_ip_write, req.client_ip or "?"), (self.limit_room_rename, room))
+        try:
+            items = residents.parse_residents(body)
+        except ValidationError as e:
+            raise HttpError(400, "bad_request", str(e)) from None
+        if items:
+            self.storage.put_agents(room, {residents.FIELD: residents.dump_residents(items)}, self._refresh_ttl(room))
+        else:
+            self.storage.delete(room, [residents.FIELD])
+        self._invalidate(room)
+        now = self.now_ms()
+        ids = [residents.resident_id(room, i, r.name) for i, r in enumerate(items)]
+        return _json_response(200, {"ok": True, "ids": ids, "serverTime": now})
 
     def _enforce_name_limit(self, room: str, new_field: str, now: int) -> None:
         keys = self.storage.keys(room)
