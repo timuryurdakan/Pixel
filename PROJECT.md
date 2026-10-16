@@ -1,6 +1,6 @@
 # Pixel Office 🖥️☕💤
 
-> **Proje durumu: v1.0 ✅ tamamlandı (yerel mod, 2026-10-11). v2 "Bulut Ofis" ✅ tamamlandı (Aşama 6–10 ✅, 2026-10-11); kullanıcının Vercel'e ilk dağıtımı bekleniyor (bkz. §5b "Kullanıcının elle yapması gerekenler").** Kullanım için bkz. [`README.md`](README.md), bulut tasarımı için [`docs/CLOUD.md`](docs/CLOUD.md).
+> **Proje durumu: v1.0 ✅ tamamlandı (yerel mod, 2026-10-11). v2 "Bulut Ofis" ✅ tamamlandı (Aşama 6–10 ✅, 2026-10-11) ve https://pixel-rouge-phi.vercel.app adresinde yayında. v3 "Ajan Kontrol Merkezi (Deneme Sürümü)": Aşama 11 (mimari) ✅ 2026-10-16, Aşama 12–15 bekliyor (bkz. §5c, [`docs/V3.md`](docs/V3.md)).** Kullanım için bkz. [`README.md`](README.md), bulut tasarımı için [`docs/CLOUD.md`](docs/CLOUD.md).
 >
 > Tarayıcıda çalışan, pixel-art tarzı sanal bir ofis. Bilgisayarınızda çalışan her **Claude Code** oturumu (ve alt-ajanları) ofiste küçük bir pixel karakter olarak görünür.
 
@@ -63,6 +63,11 @@ Teknik ayrıntılar: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — **tüm a
 | 8 | Ajan Entegrasyonu | Entegrasyon Mühendisi | `web/hook/` (Python + PowerShell istemci, kurulum betikleri, `pixel_agent.py`: kütüphane, `pixel-run`, `pixel-proxy`), testler | ✅ Tamamlandı |
 | 9 | Bulut Arayüzü & PWA | Frontend Mühendisi | `transport.js`, `cloud.js`, `pip.js`, manifest, `sw.js`, ikonlar | ✅ Tamamlandı |
 | 10 | QA & Yayına Hazırlık | QA Mühendisi | uçtan uca test, README dağıtım rehberi, `.gitignore`, `LICENSE` | ✅ Tamamlandı |
+| 11 | v3 Mimari | Yazılım/Güvenlik Mimarı | `docs/V3.md`, §5c | ✅ Tamamlandı |
+| 12 | Gerçek Zamanlı Röle | Gerçek Zamanlı/Edge Mühendisi | `relay/`, `tools/dev_relay.py`, `api/relay_ticket.py`, `web/js/relay.js` | ⬜ Bekliyor |
+| 13 | Bağlayıcı Uygulama | Bağlayıcı/Güvenlik Mühendisi | `pixel_connector/`, `web/js/e2e.js`, `web/connector/` | ⬜ Bekliyor |
+| 14 | Arayüz | Frontend Mühendisi | görev kutusu, cihazlar sayfası, token göstergesi, telefon düzeni | ⬜ Bekliyor |
+| 15 | Güvenlik İncelemesi & QA & Dokümantasyon | Güvenlik İnceleyici + QA | inceleme, uçtan uca test, README, rehber | ⬜ Bekliyor |
 
 Durum işaretleri: ⬜ Bekliyor · 🔄 Devam ediyor · ✅ Tamamlandı · ⚠️ Sorunlu
 
@@ -232,6 +237,127 @@ Teslimat: `web/js/transport.js`, `cloud.js`, `pip.js`, `main.js`/`agents.js`/`re
 - [ ] İsteğe bağlı: gerçek Ollama/LM Studio ile `pixel-proxy`, gerçek aider ile `pixel-run`; Chrome'da mini pencereyi sağ alta sürükleyip ana pencereyi küçültmek
 - [ ] İlk ay haftada bir Vercel **Usage** ve Upstash **Usage** kontrolü; gerekirse `PIXEL_POLL_ACTIVE_MS` / `PIXEL_POLL_CALM_MS`
 - [ ] Sonraki sürümlerde `web/sw.js` içindeki `VERSION` değerini artırmak
+
+## 5c. v3 — Ajan Kontrol Merkezi (Deneme Sürümü)
+
+**Amaç:** Ofisteki ajanları yalnızca izlemek değil, onlara görev vermek. Kendi bilgisayarında çalışan bir **bağlayıcı** (`pixel-connector`), oradaki Claude Code ve Ollama ajanlarını ofisten kontrol edilebilir yapar. Bir karaktere tıklayıp görev yazılır, yanıt ayrıntılar panelinde canlı akar. Yeni ajan oluşturulabilir, çalışan görev durdurulabilir. Ajan başına token ve tahmini maliyet sayacı vardır. Telefondan (PWA) cihazlardaki yerel yapay zeka ortamları (Ollama sunucusu, yüklü modeller) görülüp başlatılıp durdurulabilir. Bu bir **deneme sürümüdür**: sahibi ve birkaç arkadaşı için, ileride bir girişime dönüşebilir. Her şey ücretsiz planlarda ve kredi kartı olmadan kalır. **v1 yerel mod ve v2 bulut olduğu gibi çalışmaya devam eder**; v3 yalnızca ekleme yapar. v3 ortam değişkenleri yoksa site birebir v2 gibi davranır.
+
+Teknik sözleşme: [`docs/V3.md`](docs/V3.md). v3 aşamalarındaki tüm ajanlar uygulamadan önce bunu okumalı.
+
+**Temel kararlar (özet):**
+- **Gerçek zamanlı röle:** Cloudflare Workers Free üzerinde, oda başına bir **Durable Object** (yalnızca SQLite arka ucu ücretsiz planda var) ve WebSocket Hibernation API kullanılır. Ücretsiz limitler: günde 100 bin istek ve 13.000 GB-sn. Gelen WS mesajları 20:1 oranında sayılır, giden mesajlar ücretsizdir. 5 kullanıcı için istek kotasının ≈ %8'i, süre kotasının en kötü durumda ≈ %35'i kullanılır. Vercel WebSocket tutamadığı ve Upstash polling'i kotayı aşacağı için bu yol seçildi.
+- **Node.js gerekmez:** Röle JavaScript ile ve npm çalışma zamanı bağımlılığı olmadan yazılır. **Cloudflare Workers Builds**, GitHub deposundan (`relay/` klasörü) derleyip dağıtır. Worker testleri Cloudflare'in derleme ortamında `node --test` ile çalışır; test başarısızsa dağıtım olmaz. Yerelde aynı protokolü uygulayan stdlib Python rölesi (`tools/dev_relay.py`) ile test edilir. Aynı uyumluluk testleri hem bu röleye hem dağıtılmış Worker'a karşı çalışır. **`sudo apt install nodejs npm` gerekmez.**
+- **Röle kimlik doğrulaması:** Vercel, oda yazma anahtarını görünce 120 sn geçerli bir **röle bileti** üretir (`POST /api/relay_ticket`, HMAC-SHA256, `RELAY_SECRET`). Bu sır hem Vercel'de hem Cloudflare'de aynı değerle tanımlanır. Bilet adres çubuğunda değil `Sec-WebSocket-Protocol` başlığında taşınır. Tarayıcılar için `Origin` denetlenir. Cloudflare `PIXEL_SECRET`'i hiç görmez.
+- **Kontrol yetkisi yalnızca eşleşmiş tarayıcılarda:** Oda bağlantısı (yazma anahtarı) görev vermeye yetmez. Cihazla **tek kullanımlık kodla** eşleşmiş tarayıcı gerekir. Arkadaşlar karakterleri görür ama senin bilgisayarına komut veremez.
+- **Eşleştirme:** Cihaz terminalinde 12 karakterlik bir kod görünür (`K7Q2-M4X5-Z6A9`, 10 dk geçerli, tek deneme). Kodun gizli kısmı (40 bit) PBKDF2-SHA256 (600.000 tur) ile güçlendirilir ve P-256 açık anahtarlarının karşılıklı doğrulanmasında kullanılır. Sonra terminalde 6 haneli bir doğrulama kodu (SAS) onaylanır. Röle araya girse bile fark edilir; yanlış kod, kodu yakar.
+- **Uçtan uca şifreleme:** ECDH P-256 + HKDF-SHA256 + AES-256-GCM. Bağlantı başına el sıkışmada geçici ve kalıcı anahtarlar birlikte kullanılır (ileriye dönük gizlilik ve karşılıklı kimlik doğrulama). Yöne göre ayrı anahtar, sayaçlı nonce ve sıkı tekrar denetimi vardır. Tarayıcı yalnızca WebCrypto kullanır; özel anahtar dışa aktarılamaz biçimde IndexedDB'de durur. Bağlayıcı tarafında, RFC/NIST/Wycheproof test vektörleriyle ve WebCrypto ile çapraz test edilen **gömülü saf Python** gerçekleme kullanılır. `cryptography` paketi istenmez (stdlib sözü korunur). Röle yalnızca şifreli metni görür: istemler, çıktılar, klasör yolları, ortam adları ve kullanım sayıları rölede açık görünmez. Karakter durumu v2'deki gibi gider; buna yalnızca opak bir `ctl` alanı eklenir.
+- **Bağlayıcı:** `pixel_connector/` paketi, tek dosyalık bir stdlib zipapp (`pixel-connector.pyz`, Python ≥ 3.8) olarak dağıtılır. Linux'ta systemd **kullanıcı** servisi olarak çalışır; macOS (launchd) ve Windows (Görev Zamanlayıcı) belgelenir. Kendini buluttan asla güncellemez; kurulumda SHA-256 doğrulanır.
+- **Motorlar:** Claude Code `claude -p --output-format stream-json --verbose --include-partial-messages` ile çalıştırılır. İstem stdin'den verilir, oturum `--session-id`/`--resume` ile sürdürülür. Ollama `/api/chat` NDJSON akışıyla kullanılır (`prompt_eval_count`, `eval_count`). OpenAI uyumlu yerel sunucular (LM Studio, llama.cpp) da desteklenir.
+- **Claude Code izinleri (bilinçli seçim):** Varsayılan profil **Düzenleyebilir**: `--permission-mode dontAsk --allowedTools Edit,Write,NotebookEdit`. Klasör içinde okur ve düzenler, kabuk komutu çalıştıramaz. Diğer profiller "Sadece okuma", "Geliştirici" (cihazda tanımlı komut önekleri) ve "Otomatik"tir; Otomatik yalnızca cihaz ayarında açıksa kullanılabilir. `bypassPermissions` / `--dangerously-skip-permissions` **hiçbir zaman** kullanılmaz ve ayarlanamaz.
+- **Cihaz tarafı güvenlik:** İzinli çalışma klasörü listesi (realpath + ortak yol denetimi, sembolik bağ kaçışı engellenir, `~/.ssh` gibi yasak klasörler var), çalışma ortamları için izin listesi (buluttan yalnızca kimlik gelir, komutlar yerel dosyadan aynen çalışır, kabuk yok), hız limitleri, bütçeler, isteğe bağlı görev başına cihazda onay (127.0.0.1 sayfası, CLI ya da bildirim), eşleşme iptali ve cihazdaki denetim günlüğü (varsayılan olarak istemin yalnızca hash'i ve uzunluğu yazılır).
+- **Token ve maliyet:** Cihazda SQLite defteri tutulur. Claude için `modelUsage` ve `total_cost_usd` kullanılır; bunlar Claude Code'un kendi tahminidir ve devam ettirilen oturumlarda fark alınarak düzeltilir. Bütçe ajan, cihaz ya da motor başına; gün, hafta ya da ay için; token ya da tahmini dolar olarak verilebilir. Yüzde göstergesi yalnızca bir bütçe varsa görünür. **Dürüstlük kuralı:** Claude aboneliğinde kalan limit bilinemez. Yalnızca Claude Code `rate_limit_event` gönderirse, gönderdiği değer olduğu gibi ve saatiyle gösterilir. Abonelikte maliyet "API eşdeğeri tahmini" diye etiketlenir.
+- **Yerel mod:** `server.py` için istemle kontrol bu denemede **yok**. v3.1'de `dev_relay` yerel sunucuya bağlanarak eklenecek; protokol buna hazır.
+- **Anthropic kullanım koşulları:** Değiştirilmemiş `claude` programı kullanıcının kendi bilgisayarında ve kendi girişiyle çalışır. Kimlik bilgisine hiç dokunulmaz, ajanlar paylaşılmaz, görevleri yalnızca insan başlatır. Girişim aşamasında API anahtarıyla kimlik doğrulamaya geçilmesi ve Anthropic'e danışılması önerilir (V3.md §18.1).
+- **v4'e ertelenenler:** Otomasyon şablonları ve çok ajanlı iş akışları bu sürümde yok. Ayrı ve ayrıntılı bir **"v4 — Otomasyonlar"** çalışmasında ele alınacak.
+- **Yerleşik ajanlar:** Mete ve Saltuk odadan kaldırıldı (`POST /api/residents` ile `[]`). Kod (`pixel_cloud/residents.py`, `api/residents.py`) yerinde kalabilir; v3 ona dokunmaz.
+
+| # | Aşama | Sorumlu | Teslimatlar | Durum |
+|---|---|---|---|---|
+| 11 | v3 Mimari | Yazılım/Güvenlik Mimarı | `docs/V3.md`, bu bölüm | ✅ Tamamlandı |
+| 12 | Gerçek Zamanlı Röle | Gerçek Zamanlı/Edge Mühendisi | `relay/` (Worker + Durable Object), `tools/dev_relay.py`, `pixel_connector/ws.py`, `web/js/relay.js`, `api/relay_ticket.py`, `pixel_cloud` eklemeleri, `dev_server.py --relay`, testler | ⬜ Bekliyor |
+| 13 | Bağlayıcı Uygulama | Bağlayıcı/Güvenlik Mühendisi | `pixel_connector/`, `web/js/e2e.js`, `web/js/idb.js`, `tools/build_connector.py`, `web/connector/`, testler | ⬜ Bekliyor |
+| 14 | Arayüz | Frontend Mühendisi | `web/js/{control,prompt,devices,usage}.js`, `main.js`/`ui.js`/`cloud.js`/`index.html`/`style.css`/`sw.js` düzenlemeleri, `vercel.json` CSP | ⬜ Bekliyor |
+| 15 | Güvenlik İncelemesi & QA & Dokümantasyon | Güvenlik İnceleyici + QA Mühendisi | inceleme, düzeltmeler, uçtan uca testler, README, `rehber.html`, kullanıcının dağıtım listesi | ⬜ Bekliyor |
+
+Bağımlılıklar: **Aşamalar kesin sırayla yürür, her aşamayı tek bir uzman yapar:** 12 → 13 → 14 → 15. 13, 12'nin röle protokolünü ve `dev_relay`'i kullanır. 14, 13'ün `e2e.js` ve bağlayıcısıyla (sahte motorlar) geliştirilir. 15 en son yapılır. Bir aşama tüm testleri yeşil olmadan ve günlüğe kayıt düşülmeden bitmiş sayılmaz.
+
+### Aşama 11 — v3 Mimari (Yazılım/Güvenlik Mimarı)
+Teslimat: `docs/V3.md`, PROJECT.md §5c.
+- [x] Mevcut kodun incelenmesi (`pixel_cloud`, `api/`, `web/js`, `web/hook`, `server.py`); v3'ün yalnızca ekleme yapacak biçimde tasarlanması
+- [x] Röle araştırması: Cloudflare Workers Free ve Durable Objects (ücretsiz planda var, yalnızca SQLite), Hibernation, Workers Builds, Python Workers; alternatiflerin karşılaştırılması
+- [x] Node'suz derleme, test ve dağıtım yolu (Workers Builds + `dev_relay.py` + ortak uyumluluk testleri)
+- [x] Röle kimlik doğrulaması (bilet, `RELAY_SECRET`, Origin), tam mesaj protokolü (L1 röle çerçeveleri, L2 şifreli mesajlar) ve JSON şemaları
+- [x] Şifreleme tasarımı: algoritmalar, anahtar türetme, nonce, anahtar saklama, eşleştirme ve el sıkışma sıra diyagramları; saf Python mı `cryptography` mi kararı
+- [x] Tehdit modeli tablosu (22 satır)
+- [x] Claude Code stream-json ve Ollama akış ayrıştırma (token alanları dahil), izin profilleri
+- [x] Token ve maliyet modeli, bütçe ve gösterge kuralları, bilinemeyenler
+- [x] Çalışma ortamı izin listesi ve `connector.json` biçimi
+- [x] Türkçe arayüz tasarımı: görev kutusu, yeni ajan penceresi, cihazlar sayfası, telefon düzeni, hata metinleri
+- [x] Ücretsiz plan bütçe hesabı (Cloudflare, Vercel, Upstash; 5 kullanıcı)
+- [x] Kullanıcının elle yapacağı dağıtım adımları, test planı, riskler ve açık sorular (Anthropic koşulları dahil)
+
+**Kabul kriterleri:** V3.md, Aşama 12–15'in birbirinden bağımsız ve sırayla uygulanmasına yetecek kesinlikte olmalı. Her karar tek seçenek ve gerekçeyle verilmeli. Kaynaklar tarihli olmalı. Bütçe açık formüllerle yazılmalı. ✔️
+
+### Aşama 12 — Gerçek Zamanlı Röle (Gerçek Zamanlı/Edge Mühendisi)
+Teslimat: `relay/wrangler.jsonc`, `relay/package.json`, `relay/src/{index,room,lib}.js`, `relay/test/lib.test.js`, `tools/dev_relay.py`, `pixel_connector/__init__.py` + `ws.py`, `web/js/relay.js`, `api/relay_ticket.py`, `pixel_cloud/relay.py` ve `settings`/`validate`/`derive`/`app` eklemeleri, `dev_server.py --relay`, `.vercelignore`/`.gitignore`, `tests/test_relay_ticket.py`, `tests/relay_conformance.py`, `tests/test_dev_relay.py` (V3.md §3, §4, §6.2, §13, §17.1).
+- [ ] `lib.js`: bilet çözme ve doğrulama (`crypto.subtle.verify`), çerçeve doğrulama (rol başına), token bucket, kimlik biçimleri
+- [ ] `index.js`: `/health`, `/v1/rooms/<rid>/ws` yükseltmesi, bilet + Origin denetimi, Durable Object'e yönlendirme
+- [ ] `room.js`: `acceptWebSocket` ve etiketler, ek veri (attachment), `welcome`/`presence`/`msg`/`left`/`err`, `pair:` yuvaları, cihaz değiştirme (4009), oda sınırları, otomatik ping yanıtı; alarm ve zamanlayıcı yok, depolama yazımı yok
+- [ ] `wrangler.jsonc` (`exports` sqlite ya da eski `migrations` yedeği) ve sabitlenmiş `wrangler` sürümüyle `package.json`
+- [ ] `node:test` birim testleri (Workers Builds'te çalışır)
+- [ ] `pixel_connector/ws.py`: stdlib RFC 6455 istemci + sunucu çerçeveleme, TLS, ping/pong, kapatma kodları
+- [ ] `tools/dev_relay.py`: aynı protokol, limitler ve hata kodları; `dev_server.py --relay`
+- [ ] Vercel: `POST /api/relay_ticket` (yazma anahtarı, hız limiti, 0 Redis komutu), `/api/config` içinde `relay`, durum alanı `ctl` → Agent JSON `control`
+- [ ] `web/js/relay.js`: bilet, WebSocket, yeniden bağlanma, 50 sn ping, gizliyken bağlantıyı kapatma, `quota` durumu
+- [ ] `relay_conformance.py`; `dev_relay`'e karşı CI'da çalışır
+
+**Kabul kriterleri:** Yalnızca stdlib (Python) ve sıfır çalışma zamanı npm bağımlılığı (JS). `python3 -m unittest discover -s tests` geçer ve mevcut 251 test değişmeden geçmeye devam eder. Uyumluluk testleri `dev_relay`'e karşı tamamen geçer. Bilet olmadan, süresi geçmiş ya da sahte biletle bağlanma reddedilir. Origin'siz tarayıcı ve Origin'li cihaz reddedilir. Röle hiçbir zaman `b` alanını ayrıştırmaz, günlüğe yazmaz, saklamaz (testle doğrulanır). v3 ortam değişkenleri yokken `/api/config` `"relay": null` döner ve v2 davranışı birebir aynıdır. Kullanıcı Workers Builds'i kurduktan sonra Worker derlenir, `npm test` geçer, `/health` 200 döner ve uyumluluk testleri dağıtılmış Worker'a karşı da geçer (kullanıcıyla birlikte).
+
+### Aşama 13 — Bağlayıcı Uygulama (Bağlayıcı/Güvenlik Mühendisi)
+Teslimat: `pixel_connector/` (`__main__`, `relay`, `crypto`, `session`, `peers`, `config`, `workspaces`, `agents`, `tasks`, `engines/*`, `runtimes`, `usage`, `approvals`, `audit`, `service`), `web/js/e2e.js`, `web/js/idb.js`, `tools/build_connector.py`, `web/connector/{install.sh,install.ps1,pixel-connector.pyz,SHA256SUMS}`, `tests/test_crypto_vectors.py` + `tests/vectors/`, `tests/test_e2e_protocol.py`, `tests/test_connector_*.py`, `tests/fixtures/claude_stream_*.jsonl`, `tests/test_v3_browser.py` (V3.md §5–§10, §12, §17.2).
+- [ ] `crypto.py`: P-256 ECDH (nokta doğrulaması), HKDF, AES-256-GCM, PBKDF2 sarmalayıcı; RFC 5903, NIST CAVP, RFC 5869, RFC 7914, NIST GCM ve Wycheproof vektörleri
+- [ ] `e2e.js`: tarayıcı anahtarı (dışa aktarılamaz, IndexedDB), eşleştirme (PBKDF2, MAC, SAS), el sıkışma, `Channel.seal/open`, dolgu
+- [ ] Python ↔ WebCrypto çapraz testleri (headless Chrome, CDP) ve uçtan uca eşleştirme + el sıkışma
+- [ ] `session.py`: eşleştirme durum makinesi (tek deneme, 10 dk), terminalde SAS onayı, kanallar, seq/tekrar denetimi, 3 hatada kanalı kapatma
+- [ ] `config.py` + `workspaces.py`: şema, yasak klasörler, argv kuralları, `bypassPermissions` yasağı, `config-check`
+- [ ] `engines/claude.py`: argv kurucu (istem stdin'den), sürüm ve yetenek tespiti, `auth status`, stream-json ayrıştırma, oturum sürdürme, SIGINT → SIGTERM → SIGKILL ile iptal, `PIXEL_OFFICE_DISABLE=1`
+- [ ] `engines/ollama.py`, `engines/openai_compat.py`: akış, son token sayıları, geçmiş dosyası, bağlantıyı kapatarak iptal
+- [ ] `runtimes.py`: izin listesindeki argv, durum yoklaması, Ollama `/api/ps`, model yükleme ve boşaltma
+- [ ] `usage.py`: SQLite defteri, devam ettirilen oturumda fark alma, dönemler, ağırlıklı token ölçüsü, bütçe durumları, `--max-budget-usd` sınırlaması
+- [ ] `tasks.py`: ajan başına sıralama, cihaz eşzamanlılığı, hız limitleri, zaman aşımı; `agents.py`: ofis durumu (`ctl`, 20 dk keep-alive)
+- [ ] `approvals.py` (127.0.0.1 onay sayfası + CLI + bildirim), `audit.py` (JSONL, döndürme), `peers` iptali
+- [ ] `service.py`: systemd kullanıcı birimi, launchd plist, schtasks; `install-service`/`uninstall-service`/`doctor`
+- [ ] `build_connector.py`, kurulum betikleri (SHA-256 doğrulaması), CLI çıktıları Türkçe
+- [ ] Gizlilik kanarya testi: istem ve çıktı hiçbir röle çerçevesinde, `/api/status` gövdesinde ya da günlükte açık görünmez
+
+**Kabul kriterleri:** Bağlayıcı yalnızca stdlib kullanır (`ast` taramasıyla doğrulanır) ve Python 3.8 sözdizimiyle uyumludur. Tüm kripto vektörleri ve çapraz testler geçer. Röle MITM simülasyonu, yanlış kod, tekrar, sıra dışı ve kurcalanmış mesajlar reddedilir. Sahte `claude` ile her izin profili doğru argv'yi üretir. argv'de hiçbir zaman istem ya da `--dangerously-skip-permissions` yoktur. Klasör kaçışı (`..`, sembolik bağ) reddedilir. Çalışma ortamı isteğindeki hiçbir alan argv'ye ulaşmaz. İptal 15 sn içinde süreci sonlandırır. Bütçe `block` iken yeni görev reddedilir. Bu makinede `dev_server --relay` + bağlayıcı + headless Chrome ile eşleştirme ve sahte motorla görev akışı baştan sona çalışır. Gerçek `~/.claude` ve `~/.pixel-office` dizinlerine testlerde dokunulmaz.
+
+### Aşama 14 — Arayüz (Frontend Mühendisi)
+Teslimat: `web/js/control.js`, `prompt.js`, `devices.js`, `usage.js`; `main.js`, `ui.js`, `cloud.js`, `index.html`, `style.css`, `sw.js` (VERSION artırımı) düzenlemeleri; `vercel.json` CSP ve `/connector/*` başlıkları (V3.md §11, §13.5, §17.3).
+- [ ] `DeviceHub`: varlık (presence), cihaz başına kanal, istek/yanıt zaman aşımları, görev akışları, `agent.watch`
+- [ ] Ayrıntılar panelinde görev kutusu: gönder (Ctrl+Enter), "Yeni sohbet", izin profili rozeti, akan çıktı (yalnızca `textContent` ile çalışan markdown-lite), araç satırları, Durdur, "Son görevler"
+- [ ] Canlı token sayacı, ajan ve cihaz için günlük toplamlar, bütçe göstergesi (yalnızca bütçe varsa yüzde), dürüstlük açıklamaları, `tr-TR` sayı biçimi
+- [ ] "Yeni ajan" penceresi: cihaz, çalışma klasörü ve alt klasör, motor, model, ad, izin profili, bütçe
+- [ ] "Cihazlar" sayfası: cihaz listesi, ajanlar, çalışma ortamları (başlat/durdur, model yükle/boşalt), eşleşen tarayıcılar ve iptal, 3 adımlı "Cihaz ekle" sihirbazı
+- [ ] Telefon düzeni: alt sekme çubuğu (Ofis · Ajanlar · Cihazlar), tam ekran ajan sayfası, altta sabit görev kutusu, geri dönüşte yeniden bağlanma ve `task.list`
+- [ ] Hata kodlarının Türkçe karşılıkları; çevrimdışı, eşleşmemiş ve meşgul durumları
+- [ ] v3 kapalıyken (röle yok ya da izleme bağlantısı) hiçbir v3 denetimi görünmez; yerel mod değişmez
+
+**Kabul kriterleri:** Bağımlılık ve derleme adımı yok. `dev_server.py --demo --relay` ve gerçek bağlayıcı (sahte motorlar) ile headless Chrome'da şunlar çalışır: eşleştirme (doğru kod, yanlış kod, SAS reddi), ajan oluşturma, görev akışı, iptal, ikinci sekmeden izleme, çalışma ortamı denetimleri ve bütçe göstergesi. Çıktıdaki ve adlardaki XSS metinleri düz metin kalır. 390 ve 360 px genişlikte yatay kaydırma yoktur ve görev kutusu altta sabittir. Konsolda hata yoktur. `server.py --demo` ve v2 odası görsel ve davranışsal olarak değişmemiştir. Tüm testler geçer.
+
+### Aşama 15 — Güvenlik İncelemesi & QA & Dokümantasyon (Güvenlik İnceleyici + QA Mühendisi)
+- [ ] V3.md §14'teki her tehdit satırının bir testle ya da yazılı bir notla doğrulanması; kripto kodunun satır satır incelenmesi
+- [ ] Yasaklı bayrak ve kabuk kullanımı taraması (argv kurucular, `shell=True` yok), stdlib dışı import taraması, dosya izinleri (0700/0600)
+- [ ] Uçtan uca: dağıtılmış Worker + Vercel + gerçek bağlayıcı; gizlilik kanaryası; kota ölçümü
+- [ ] Gerçek Claude Code (abonelik girişi) ile her profil, oturum sürdürme, araç sırasında iptal, maliyet etiketleri (kullanıcıyla)
+- [ ] Gerçek Ollama: sohbet, model yükleme ve boşaltma, polkit kuralıyla başlatma ve durdurma (kullanıcıyla)
+- [ ] Gerçek telefon (mobil veri): PWA, eşleştirme, Ollama'yı başlatma, görev, arka plandan dönüş (kullanıcıyla)
+- [ ] `README.md` (Türkçe + İngilizce özet): bağlayıcı kurulumu, eşleştirme, profiller, `connector.json`, servis, gizlilik ve güvenlik uyarıları, Anthropic notu, ücretsiz plan limitleri, sorun giderme
+- [ ] `web/rehber.html`: v3 adımları (Cihaz ekle, eşleştirme, görev verme)
+- [ ] V3.md §20'ye sapmaların yazılması; `sw.js` sürümü; kullanıcının dağıtım listesinin son hâli
+
+**Kabul kriterleri:** Tüm testler geçer. Kritik ya da yüksek önem derecesinde açık bulgu kalmaz. Kullanıcıyla yapılan gerçek denemelerin sonuçları günlüğe yazılır, yapılamayanlar listede açıkça işaretlenir. README'deki komutlar denenmiştir. İlk haftanın kullanım sayıları V3.md §15 ile karşılaştırılmıştır.
+
+**Kullanıcının elle yapması gerekenler (v3)** (ayrıntılar: V3.md §16):
+- [ ] Cloudflare hesabı açmak (ücretsiz, kart gerekmez) ve `workers.dev` alt alan adını seçmek
+- [ ] Aşama 12'den sonra: Workers & Pages → Import a repository → GitHub (yalnızca `timuryurdakan/Pixel` deposuna izin). Ad `pixel-relay`, kök dizin `relay`, derleme komutu `npm install --no-audit --no-fund && npm test`, dağıtım komutu `npx wrangler deploy`, izlenen yol `relay/*`
+- [ ] `RELAY_SECRET` üretmek (`python3 -c "import secrets;print(secrets.token_urlsafe(32))"`) ve **aynı değeri** hem Cloudflare'de (Secret) hem Vercel'de girmek; Vercel'e `PIXEL_RELAY_URL=wss://pixel-relay.<alt-alan>.workers.dev` eklemek
+- [ ] `vercel.json` CSP'deki röle adresini doğrulamak, push etmek, `/health` ve `/api/config` kontrolü, uyumluluk testlerini dağıtılmış Worker'a karşı çalıştırmak
+- [ ] Her bilgisayarda: Cihazlar → Cihaz ekle → kurulum komutu → `pixel-connector pair` → kodu tarayıcıya girmek → SAS'ı karşılaştırıp `e` demek (telefon için ayrı kod)
+- [ ] İsteğe bağlı: `loginctl enable-linger $USER`, Ollama için polkit kuralı, `connector.json` içinde çalışma klasörleri ve ortamlar
+- [ ] Yerleşik ajanlar hâlâ odadaysa kaldırmak (`/api/residents` ile `[]`)
+- [ ] İlk ay haftada bir Cloudflare (Durable Objects istek ve süre), Vercel ve Upstash kullanımını kontrol etmek
+- [ ] Girişim aşamasından önce: Anthropic koşulları sorusunu netleştirmek (V3.md §18.1, Q1) ve API anahtarıyla kimlik doğrulamaya geçmeyi değerlendirmek
 
 ## 6. İlerleme Günlüğü
 
@@ -474,3 +600,33 @@ Her ajan işini bitirince buraya tarihli bir kayıt ekler (en yeni en altta).
   Gerçek Claude Code testi: `claude` CLI bu makinede PATH'te yok, test **yapılmadı**. Bunun yerine gerçekçi kanca olayları gerçek istemciden geçirildi.
 
   Kalan sınırlamalar: gerçek Vercel/Upstash dağıtımı, `x-vercel-cache: HIT` ve Upstash'in kota aşımındaki davranışı denenmedi; `pixel_hook.ps1` hiç çalıştırılmadı (`pwsh` yok) ve symlink düzeltmesi yalnızca Python istemcisinde var; gerçek aider/Ollama ve gerçek masaüstünde PiP sürükleme denenmedi; Python 3.8–3.13 yok. Bunlar §5b'deki elle yapılacaklar listesinde.
+
+- **2026-10-16 — Aşama 11 (Yazılım/Güvenlik Mimarı):** v3 "Ajan Kontrol Merkezi (Deneme Sürümü)" tasarlandı. `docs/V3.md` yazıldı ve bu dosyaya §5c eklendi. Kod yazılmadı; v1 ve v2 etkilenmedi.
+
+  Araştırma (2026-10-16, kaynaklar V3.md §21'de):
+  - **Cloudflare:** Durable Objects ücretsiz planda var, ama yalnızca SQLite arka ucuyla. Günlük limitler 100 bin istek, 13.000 GB-sn, 100 bin satır yazma ve 5 GB; sıfırlama 00:00 UTC'de. WebSocket bağlantısı 1 istek sayılıyor, gelen mesajlar 20:1 oranında sayılıyor, giden mesajlar ücretsiz, uyuyan nesne süre harcamıyor. Workers Free günde 100 bin istek veriyor, istek başına 10 ms CPU.
+  - **Workers Builds:** GitHub'dan derleyip dağıtıyor. Ayda 3.000 derleme dakikası var, aynı anda 1 derleme yapılabiliyor. Derleme ortamında Node 22 ve 24 kurulu. Durable Object kullanan Worker'lar için önizleme adresi oluşturulmuyor.
+  - **Python Workers:** yerelde uv ve Node istiyor, bu yüzden seçilmedi.
+  - **Claude Code:** `-p` ile stream-json, `--verbose`, `--include-partial-messages`, `--session-id`, `--resume`, `--permission-mode` (`dontAsk`, `auto`…), `--permission-prompts none`, `--max-budget-usd` ve `--max-turns` kullanılabiliyor. `--bare` abonelik girişini kullanmıyor. `-p`, klasördeki proje hook'larını güven sorusu sormadan çalıştırıyor. `modelUsage` ve `total_cost_usd` istemci tarafında hesaplanan tahminler; devam ettirilen oturumlarda toplam birikerek geliyor. `rate_limit_event` olayı var.
+  - **Ollama:** `/api/chat` NDJSON akışı (`prompt_eval_count`, `eval_count`, süreler nanosaniye), `/api/ps`, `keep_alive: 0` ile model boşaltma, sistem birimi `ollama.service`.
+  - **WebCrypto X25519:** Safari sürümü doğrulanamadı, bu yüzden P-256 seçildi.
+  - **Anthropic koşulları:** Değiştirilmemiş Claude Code programının kullanıcının kendi aboneliğiyle kullanılmasına açıkça izin var. Üçüncü tarafların abonelik kimlik bilgilerini taşıması yasak.
+
+  Kararlar:
+  - **Röle:** Cloudflare Worker ve oda başına bir Durable Object (Hibernation), JavaScript ile ve npm bağımlılığı olmadan yazılacak; Workers Builds ile dağıtılacak. **Node gerekmiyor.** Yerelde `tools/dev_relay.py` kullanılacak ve ortak uyumluluk testleri iki röleye karşı da çalışacak.
+  - **Röle kimliği:** Vercel 120 sn geçerli, `RELAY_SECRET` ile imzalı bir bilet üretiyor. Bilet `Sec-WebSocket-Protocol` başlığında taşınıyor ve Origin denetleniyor.
+  - **Kontrol yetkisi:** Yalnızca eşleşmiş tarayıcılar komut verebiliyor. Eşleştirme tek kullanımlık 12 karakterlik bir kodla yapılıyor (PBKDF2 600 bin tur, MAC ve terminalde SAS onayı).
+  - **Uçtan uca şifreleme:** P-256 + HKDF + AES-256-GCM. Bağlayıcı tarafında saf Python gerçekleme kullanılıyor, `cryptography` paketi istenmiyor.
+  - **Claude Code izinleri:** Varsayılan profil `dontAsk` ile Edit/Write izni. `bypassPermissions` hiç kullanılmıyor.
+  - **Çalışma ortamları:** Yalnızca cihazdaki izin listesinde tanımlı argv'ler çalıştırılıyor.
+  - **Yerel mod:** `server.py` üzerinden görev verme v3.1'e kaldı.
+  - Otomasyon şablonları "v4 — Otomasyonlar" çalışmasına ertelendi. Yerleşik ajanlar Mete ve Saltuk odadan kaldırıldı; kodları yerinde kalıyor.
+
+  Bütçe (5 kullanıcı, kötümser senaryo):
+  - **Cloudflare:** Durable Object istekleri günde ≈ 7,8 bin (%8), süre en kötü durumda ≤ 4.500 GB-sn (≤ %35), Worker istekleri %1'in altında.
+  - **Vercel:** CDN istekleri ayda ≈ 474 bin (%47).
+  - **Upstash:** ayda ≈ 326 bin komut (%65). Bu, v2'nin yükü artı v3'ün yaklaşık 12 puanlık eki; bağlayıcı kotası yine Upstash.
+
+  Açık sorular: Anthropic'ten yazılı teyit (girişim aşamasından önce), WebAuthn ile anahtar koruması, Web Push, QR ile eşleştirme.
+
+  Aşama 11 tamamlandı. Sıradaki adım: Aşama 12 (Gerçek Zamanlı Röle).
