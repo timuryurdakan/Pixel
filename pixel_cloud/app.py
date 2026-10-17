@@ -19,7 +19,7 @@ from typing import BinaryIO, Callable, Mapping
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from . import __version__
-from . import derive, ids, residents
+from . import derive, ids, relay, residents
 from . import settings as S
 from .ratelimit import RateLimiter, retry_after_seconds
 from .storage import StorageError, StorageNotConfigured, storage_from_env
@@ -243,6 +243,8 @@ class App:
         self.limit_ip_write = RateLimiter(*S.RATE_IP_WRITE, clock=clock)
         self.limit_ip_create = RateLimiter(*S.RATE_IP_CREATE, clock=clock)
         self.limit_room_rename = RateLimiter(*S.RATE_ROOM_RENAME, clock=clock)
+        self.limit_room_ticket = RateLimiter(*S.RATE_RELAY_TICKET, clock=clock)
+        self.limit_ip_ticket = RateLimiter(*S.RATE_RELAY_TICKET, clock=clock)
         self._lock = threading.Lock()
         self._ttl_refreshed: OrderedDict[str, float] = OrderedDict()   # room → last EXPIRE (this instance)
         self._prev: OrderedDict[str, tuple[str, int, int]] = OrderedDict()  # agent → (st, ss, sa)
@@ -256,6 +258,7 @@ class App:
             "/api/cc_hook": {"POST": self.h_cc_hook},
             "/api/rename": {"POST": self.h_rename},
             "/api/residents": {"POST": self.h_residents},
+            "/api/relay_ticket": {"POST": self.h_relay_ticket},
         }
 
     # -- helpers ----------------------------------------------------------------------------------
@@ -390,6 +393,8 @@ class App:
             "storage": self.storage.name,
             "poll": {"activeMs": st.poll_active_ms, "calmMs": st.poll_calm_ms, "emptyMs": st.poll_empty_ms},
             "limits": {"maxAgentsPerRoom": S.MAX_AGENTS_PER_ROOM, "maxBatch": S.MAX_BATCH},
+            "relay": {"url": st.relay_url, "v": 1} if st.relay_enabled else None,
+            "features": ["control"] if st.relay_enabled else [],
         }, cache=S.CONFIG_CACHE_CONTROL)
 
     def h_health(self, req: Request, q: dict) -> Response:
@@ -550,6 +555,27 @@ class App:
         now = self.now_ms()
         ids = [residents.resident_id(room, i, r.name) for i, r in enumerate(items)]
         return _json_response(200, {"ok": True, "ids": ids, "serverTime": now})
+
+    # -- POST /api/relay_ticket (v3, V3.md §6.2, §13.4) ----------------------------------------------
+    def h_relay_ticket(self, req: Request, q: dict) -> Response:
+        """Short-lived relay ticket for the room's write-key holder. 0 storage commands; nothing is logged."""
+        room = self._room(q)
+        st = self.settings
+        if not st.relay_enabled:
+            raise HttpError(503, "relay_not_configured", "The realtime relay is not configured on this server")
+        self._auth(req, room)
+        body = self._body(req, S.MAX_TICKET_BODY)
+        data = parse_json(body)
+        if not isinstance(data, dict):
+            raise HttpError(400, "bad_request", "body must be a JSON object")
+        role, pid = data.get("role"), data.get("id")
+        if role not in relay.ROLES:
+            raise HttpError(400, "bad_request", "'role' must be 'browser' or 'device'")
+        if not isinstance(pid, str) or not relay.PEER_ID_RE.match(pid):
+            raise HttpError(400, "bad_request", "'id' must be 16 characters [a-z2-7]")
+        self._rate((self.limit_ip_ticket, req.client_ip or "?"), (self.limit_room_ticket, room))
+        ticket, exp = relay.mint_ticket(st.relay_secret, room, role, pid, int(self.clock()))
+        return _json_response(200, {"url": f"{st.relay_url}/v1/rooms/{room}/ws", "ticket": ticket, "exp": exp})
 
     def _enforce_name_limit(self, room: str, new_field: str, now: int) -> None:
         keys = self.storage.keys(room)

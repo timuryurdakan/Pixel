@@ -73,7 +73,8 @@ class ConfigHealthTests(Base):
         self.assertEqual(r.status, 200)
         self.assertEqual(r.json(), {"mode": "cloud", "version": "2.0.0", "createRequiresToken": False,
                                     "storage": "memory", "poll": {"activeMs": 10000, "calmMs": 30000, "emptyMs": 60000},
-                                    "limits": {"maxAgentsPerRoom": 48, "maxBatch": 10}})
+                                    "limits": {"maxAgentsPerRoom": 48, "maxBatch": 10},
+                                    "relay": None, "features": []})
         self.assertEqual(r.header("Cache-Control"), "public, max-age=60, s-maxage=300")
         app, _ = mk_app({"PIXEL_CREATE_TOKEN": "pw", "PIXEL_POLL_ACTIVE_MS": "15000", "PIXEL_POLL_CALM_MS": "1"})
         d = self.call("GET", "/api/config", app=app).json()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import secrets
 from dataclasses import dataclass, field
 from typing import Mapping
@@ -40,6 +41,12 @@ RATE_ROOM_WRITE = (2.0, 30)
 RATE_IP_WRITE = (4.0, 60)
 RATE_IP_CREATE = (5 / 3600, 5)
 RATE_ROOM_RENAME = (10 / 60, 10)
+RATE_RELAY_TICKET = (0.5, 30)  # per room and per IP (V3.md §13.1): 30/min
+
+# -- v3 relay (V3.md §6.2, §13.1) -----------------------------------------------------------------
+MAX_TICKET_BODY = 256          # bytes
+_RELAY_URL_RE = re.compile(r"^(?:wss://[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::\d{1,5})?"
+                           r"|ws://127\.0\.0\.1(?::\d{1,5})?)\Z")
 
 # -- polling / caching (§5.4, §12) ----------------------------------------------------------------
 POLL_ACTIVE_MS, POLL_CALM_MS, POLL_EMPTY_MS = 10_000, 30_000, 60_000
@@ -70,7 +77,13 @@ class Settings:
     poll_active_ms: int = POLL_ACTIVE_MS
     poll_calm_ms: int = POLL_CALM_MS
     poll_empty_ms: int = POLL_EMPTY_MS
+    relay_secret: bytes | None = None     # RELAY_SECRET (≥ 32 chars); v3 is on only if both relay fields are set
+    relay_url: str | None = None          # PIXEL_RELAY_URL, e.g. wss://pixel-relay.<sub>.workers.dev
     extra: dict = field(default_factory=dict)
+
+    @property
+    def relay_enabled(self) -> bool:
+        return bool(self.relay_secret and self.relay_url)
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -93,4 +106,15 @@ class Settings:
             poll_active_ms=_int_env(env, "PIXEL_POLL_ACTIVE_MS", POLL_ACTIVE_MS, 3_000, 120_000),
             poll_calm_ms=_int_env(env, "PIXEL_POLL_CALM_MS", POLL_CALM_MS, 3_000, 120_000),
             poll_empty_ms=_int_env(env, "PIXEL_POLL_EMPTY_MS", POLL_EMPTY_MS, 3_000, 120_000),
+            **relay_from_env(env, on_vercel),
         )
+
+
+def relay_from_env(env: Mapping[str, str], on_vercel: bool = False) -> dict:
+    """{relay_secret, relay_url}: both valid or both None (a half-configured relay is off, V3.md §13.1).
+    `ws://127.0.0.1[:port]` is accepted for local development only, never on Vercel."""
+    raw = (env.get("RELAY_SECRET") or "").strip()
+    url = (env.get("PIXEL_RELAY_URL") or "").strip().rstrip("/")
+    if len(raw) < MIN_SECRET_LEN or not _RELAY_URL_RE.match(url) or (on_vercel and not url.startswith("wss://")):
+        return {"relay_secret": None, "relay_url": None}
+    return {"relay_secret": raw.encode("utf-8"), "relay_url": url}

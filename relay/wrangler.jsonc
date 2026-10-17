@@ -1,0 +1,19 @@
+// Cloudflare Workers Builds config for the Pixel Office relay (V3.md §4.2, §16.2).
+// Secrets are set in the dashboard only (Settings → Variables and Secrets): RELAY_SECRET.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "pixel-relay",                        // MUST equal the Worker name in the dashboard (Workers Builds)
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-15",           // ≥ 2026-04-07: Close frames are answered automatically
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "RoomRelay" }]
+  },
+  // Free plan: Durable Objects must use the SQLite backend. The relay never writes to storage.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RoomRelay"] }],
+  "vars": {
+    "ALLOWED_ORIGINS": "https://pixel-rouge-phi.vercel.app,https://www.pixeloffice.com.tr,https://pixeloffice.com.tr"
+  },
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": false }          // no request logs with metadata
+}

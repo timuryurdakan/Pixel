@@ -3,6 +3,7 @@
 
     python3 dev_server.py                 # http://127.0.0.1:8787 — web/ + /api/* (MemoryStorage, random PIXEL_SECRET)
     python3 dev_server.py --demo          # also creates room "Demo Oda" with 3 fake friends posting
+    python3 dev_server.py --relay         # v3: also starts tools/dev_relay.py on ws://127.0.0.1:8788 (V3.md §4.4)
     UPSTASH_REDIS_REST_URL=… UPSTASH_REDIS_REST_TOKEN=… PIXEL_SECRET=… python3 dev_server.py
 
 Mounts the same `pixel_cloud.app.dispatch` as the Vercel functions. Does not emulate the CDN cache; the
@@ -13,6 +14,8 @@ from __future__ import annotations
 
 import argparse
 import mimetypes
+import os
+import secrets
 import re
 import signal
 import sys
@@ -27,12 +30,21 @@ from pixel_cloud.vercel import ApiHandler
 WEB_ROOT = Path(__file__).resolve().parent / "web"
 DEFAULT_HOST, DEFAULT_PORT = "127.0.0.1", 8787
 
-SECURITY_HEADERS = [
-    ("X-Content-Type-Options", "nosniff"),
-    ("Referrer-Policy", "no-referrer"),
-    ("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
-                                "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"),
-]
+DEFAULT_RELAY_PORT = 8788
+
+
+def security_headers(connect_extra: str = "") -> list[tuple[str, str]]:
+    """Same headers as vercel.json; `connect_extra` adds the dev relay origin to connect-src (--relay)."""
+    connect = "'self'" + (f" {connect_extra}" if connect_extra else "")
+    return [
+        ("X-Content-Type-Options", "nosniff"),
+        ("Referrer-Policy", "no-referrer"),
+        ("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+                                    f"script-src 'self'; connect-src {connect}; frame-ancestors 'none'; base-uri 'none'"),
+    ]
+
+
+SECURITY_HEADERS = security_headers()
 MIME_TYPES = {
     ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8",
@@ -47,16 +59,20 @@ class DevServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, addr, app: App, web_root: Path) -> None:
+    def __init__(self, addr, app: App, web_root: Path, headers: list[tuple[str, str]] | None = None) -> None:
         self.app = app
         self.web_root = Path(web_root).resolve()
+        self.security_headers = headers or SECURITY_HEADERS
         super().__init__(addr, DevHandler)
 
 
 class DevHandler(ApiHandler):
     server: DevServer
     server_version = f"PixelCloudDev/{__version__}"
-    extra_headers = SECURITY_HEADERS
+
+    @property
+    def extra_headers(self) -> list[tuple[str, str]]:   # type: ignore[override]
+        return self.server.security_headers
 
     def dispatch_api(self, req: Request) -> Response:
         resp = self.server.app.dispatch(req)
@@ -131,6 +147,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--host", default=DEFAULT_HOST, help=f"bind address (default {DEFAULT_HOST})")
     p.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"port (default {DEFAULT_PORT})")
     p.add_argument("--demo", action="store_true", help='create room "Demo Oda" with 3 fake friends posting')
+    p.add_argument("--relay", action="store_true",
+                   help=f"v3: also run the local relay (tools/dev_relay.py) on 127.0.0.1:{DEFAULT_RELAY_PORT}")
+    p.add_argument("--relay-port", type=int, default=DEFAULT_RELAY_PORT, help="port for --relay (0 = any free port)")
     p.add_argument("--version", action="version", version=f"Pixel Office cloud {__version__}")
     return p.parse_args(argv)
 
@@ -139,18 +158,51 @@ def _sigterm(signum, frame) -> None:  # noqa: ANN001
     raise KeyboardInterrupt
 
 
+def start_relay(port: int, web_port: int):
+    """Start tools/dev_relay.py in-process for --relay; sets RELAY_SECRET / PIXEL_RELAY_URL for this process so the
+    Vercel-style app issues tickets for it. → (server, ws_url, secret)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "tools"))
+    import dev_relay
+    secret = os.environ.get("RELAY_SECRET") or ""
+    if len(secret) < 32:
+        secret = secrets.token_urlsafe(32)
+    relay = dev_relay.Relay(secret, dev_relay.default_origins(web_port))
+    srv, url = dev_relay.serve_in_thread(relay, "127.0.0.1", port)
+    srv.relay = relay
+    os.environ["RELAY_SECRET"] = secret
+    os.environ["PIXEL_RELAY_URL"] = url
+    return srv, url, secret
+
+
 def main(argv=None) -> int:
     args = parse_args(argv)
+    relay_srv = None
+    headers = SECURITY_HEADERS
+    if args.relay:
+        try:
+            relay_srv, relay_url, relay_secret = start_relay(args.relay_port, args.port)
+        except OSError as e:
+            print(f"Cannot start the relay on 127.0.0.1:{args.relay_port}: {e}", file=sys.stderr)
+            return 1
+        headers = security_headers(relay_url)
     app = App()
     try:
-        srv = DevServer((args.host, args.port), app, WEB_ROOT)
+        srv = DevServer((args.host, args.port), app, WEB_ROOT, headers)
     except OSError as e:
         print(f"Cannot listen on {args.host}:{args.port}: {e}", file=sys.stderr)
+        if relay_srv:
+            relay_srv.shutdown()
+            relay_srv.server_close()
         return 1
     port = srv.server_address[1]
     shown = "127.0.0.1" if args.host in ("0.0.0.0", "::", "") else args.host
     base = f"http://{shown}:{port}"
     print(f"Pixel Office cloud dev server at {base}  (storage: {app.storage.name})", flush=True)
+    if relay_srv:
+        from pixel_cloud.relay import parse_origins
+        relay_srv.relay.allowed = parse_origins(f"http://127.0.0.1:{port},http://localhost:{port},{base}")
+        print(f"Relay (dev_relay) at {relay_url}  — PIXEL_RELAY_URL={relay_url}", flush=True)
+        print(f"RELAY_SECRET={relay_secret}  (this run only)", flush=True)
     if app.settings.secret_generated:
         print("PIXEL_SECRET not set: using a random secret for this run (write keys change on restart).", flush=True)
     demo = None
@@ -173,6 +225,9 @@ def main(argv=None) -> int:
         if demo:
             demo.stop()
         srv.server_close()
+        if relay_srv:
+            relay_srv.shutdown()
+            relay_srv.server_close()
     return 0
 
 

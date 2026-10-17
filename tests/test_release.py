@@ -63,7 +63,8 @@ def load_api(path: Path):
 class VercelFunctionDetectionTests(unittest.TestCase):
     def test_every_api_file_is_detected_as_a_function(self):
         self.assertEqual({p.stem for p in API_FILES},
-                         {"config", "health", "rooms", "state", "status", "cc_hook", "rename", "residents"})
+                         {"config", "health", "rooms", "state", "status", "cc_hook", "rename", "residents",
+                          "relay_ticket"})
         for p in API_FILES:
             with self.subTest(file=p.name):
                 self.assertEqual(vercel_entrypoint_name(p.read_text(encoding="utf-8")), "handler")
@@ -101,6 +102,42 @@ class VercelFunctionDetectionTests(unittest.TestCase):
         self.assertEqual(body["mode"], "cloud")
 
 
+class RelayTicketFunctionTests(unittest.TestCase):
+    def test_relay_ticket_function_serves_tickets(self):
+        """api/relay_ticket.py behind an HTTP server, as on Vercel (V3.md §13.4)."""
+        from pixel_cloud import ids, relay
+        env = {"PIXEL_SECRET": "s" * 40, "RELAY_SECRET": "r" * 43, "PIXEL_RELAY_URL": "wss://pixel-relay.x.workers.dev"}
+        test_app = App(storage=MemoryStorage(), env=env)
+        rid = ids.new_room_id()
+        key = ids.write_key(b"s" * 40, rid)
+        with mock.patch.object(app_mod, "_default", test_app):
+            h = load_api(ROOT / "api" / "relay_ticket.py").handler
+            srv = ThreadingHTTPServer(("127.0.0.1", 0), h)
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            try:
+                c = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=5)
+                c.request("POST", f"/api/relay_ticket?room={rid}", body=b'{"role":"device","id":"abcdefghijklmnop"}',
+                          headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+                r = c.getresponse()
+                body = json.loads(r.read())
+                c.close()
+            finally:
+                srv.shutdown()
+                srv.server_close()
+        self.assertEqual(r.status, 200, body)
+        self.assertEqual(r.getheader("Cache-Control"), "no-store")
+        self.assertEqual(relay.verify_ticket(b"r" * 43, body["ticket"], body["exp"] - 120, rid)["ro"], "device")
+
+    def test_functions_import_nothing_that_vercel_ignores(self):
+        """/relay/, /pixel_connector/ and /tools/ are in .vercelignore: pixel_cloud and api/ must not import them."""
+        for p in list((ROOT / "pixel_cloud").glob("*.py")) + API_FILES:
+            tree = ast.parse(p.read_text(encoding="utf-8"))
+            mods = {a.name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
+            mods |= {(n.module or "").split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)}
+            with self.subTest(file=p.name):
+                self.assertFalse(mods & {"pixel_connector", "tools", "dev_relay", "relay"})
+
+
 class VercelConfigTests(unittest.TestCase):
     def setUp(self):
         self.cfg = json.loads((ROOT / "vercel.json").read_text(encoding="utf-8"))
@@ -132,7 +169,8 @@ class VercelConfigTests(unittest.TestCase):
 
     def test_vercelignore(self):
         lines = {ln.strip() for ln in (ROOT / ".vercelignore").read_text().splitlines()}
-        for need in ("/server.py", "/pixel_office/", "/tests/", "/names.json", "/dev_server.py", "**/__pycache__/"):
+        for need in ("/server.py", "/pixel_office/", "/tests/", "/names.json", "/dev_server.py", "**/__pycache__/",
+                     "/relay/", "/pixel_connector/", "/tools/"):
             self.assertIn(need, lines)
         for keep in ("/api/", "/pixel_cloud/", "/web/", "/vercel.json", "/.python-version"):
             self.assertNotIn(keep, lines)
@@ -150,7 +188,8 @@ class VercelConfigTests(unittest.TestCase):
 class ReleaseFilesTests(unittest.TestCase):
     def test_gitignore(self):
         lines = (ROOT / ".gitignore").read_text().splitlines()
-        for need in ("__pycache__/", "/names.json", ".vercel/", ".env", ".env.*", ".pixel-office/"):
+        for need in ("__pycache__/", "/names.json", ".vercel/", ".env", ".env.*", ".pixel-office/",
+                     "relay/node_modules/", ".dev.vars"):
             self.assertIn(need, lines)
 
     def test_license(self):

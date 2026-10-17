@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from . import settings as S
 from . import residents as R
 from .ids import AGENT_ID_RE
-from .validate import ACTIVE_STATES, Update
+from .validate import ACTIVE_STATES, CTL_RE, Update
 
 OWNER_COLORS = ["#e8564a", "#f29b38", "#f2d03b", "#8bc34a", "#3fb67d", "#2bb3b1", "#3a9be0", "#5b6ee1",
                 "#9b5de5", "#d65db1", "#ff8fa3", "#a1887f", "#78909c", "#ffffff", "#c0ca33", "#26a69a"]
@@ -77,7 +77,18 @@ def make_record(u: Update, *, owner_id: str, parent_id: str | None, now_ms: int,
         rec["nm"] = u.name
     if u.final:
         rec["fin"] = True
+    if u.ctl:
+        rec["ctl"] = u.ctl
     return rec
+
+
+def control_of(rec: dict) -> dict | None:
+    """v3 Agent JSON `control` (V3.md §13.2): {"device", "agent"} for connector agents, else None."""
+    ctl = rec.get("ctl")
+    if not isinstance(ctl, str) or not CTL_RE.match(ctl):
+        return None
+    device, _, agent = ctl.partition(".")
+    return {"device": device, "agent": agent}
 
 
 def dump_record(rec: dict) -> str:
@@ -289,6 +300,7 @@ def snapshot(room_id: str, fields: dict[str, str], now_ms: int, st: S.Settings |
             "owner": owner, "ownerId": oid, "ownerColor": colors.get(oid, OWNER_COLORS[0]),
             "source": _str(rec.get("src")) or "api",
             "nameSource": src, "defaultName": default,
+            "control": control_of(rec),
         })
     for aid, r, (state, since, tool, label, tc) in resident:
         oid = "r" + aid[1:]
@@ -303,6 +315,7 @@ def snapshot(room_id: str, fields: dict[str, str], now_ms: int, st: S.Settings |
             "startedAt": since, "stateSince": since, "updatedAt": now_ms,
             "owner": r.name, "ownerId": oid, "ownerColor": colors.get(oid, OWNER_COLORS[0]),
             "source": "claude-code", "nameSource": src, "defaultName": default,
+            "control": None,
         })
     agents.sort(key=lambda a: (a["startedAt"], a["id"]))
     # Residents never drive the poll rate: a room with only residents polls like an empty one (§12 budget).

@@ -19,6 +19,7 @@ ACTIVE_STATES = frozenset({"working", "thinking", "waiting_for_user"})
 
 TOOL_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,32}$")
 SOURCE_RE = re.compile(r"^[a-z0-9-]{1,16}$")
+CTL_RE = re.compile(r"^[a-z2-7]{16}\.[A-Za-z0-9_-]{1,24}\Z")   # v3: deviceId "." agentKey (V3.md §13.2)
 
 # Bidi overrides/isolates and zero-width / invisible format characters.
 _STRIP = {cp for cp in range(0x202A, 0x202F)} | {cp for cp in range(0x2066, 0x206A)} | {
@@ -137,6 +138,7 @@ class Update:
     tool_count: int | None
     name: str | None
     final: bool
+    ctl: str | None = None        # v3 connector agents only; v1/v2 clients never send it
 
 
 def parse_update(obj: object, *, default_owner: str | None = None) -> Update:
@@ -176,10 +178,11 @@ def parse_update(obj: object, *, default_owner: str | None = None) -> Update:
         raise ValidationError("'final' must be a boolean")
     if final and state != "sleeping":
         raise ValidationError("'final' is only allowed with state 'sleeping'")
+    ctl = _pattern(obj, "ctl", CTL_RE)
     return Update(session=session, sub=sub, owner=owner, owner_id=owner_id, project=project, state=state,
                   tool=tool, label=label, agent_type=agent_type, source=source, color=color,
                   state_age_ms=state_age, started_age_ms=started_age, tool_count=tool_count, name=name,
-                  final=final)
+                  final=final, ctl=ctl)
 
 
 def parse_json(body: bytes) -> object:

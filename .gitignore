@@ -12,6 +12,11 @@ names*.json
 .pixel-office/
 hook.log*
 
+# Cloudflare relay (Workers Builds installs wrangler in its own image)
+relay/node_modules/
+relay/.wrangler/
+.dev.vars
+
 # Deploy / secrets
 .vercel/
 .env

@@ -1,6 +1,6 @@
 # Pixel Office 🖥️☕💤
 
-> **Proje durumu: v1.0 ✅ tamamlandı (yerel mod, 2026-10-11). v2 "Bulut Ofis" ✅ tamamlandı (Aşama 6–10 ✅, 2026-10-11) ve https://pixel-rouge-phi.vercel.app adresinde yayında. v3 "Ajan Kontrol Merkezi (Deneme Sürümü)": Aşama 11 (mimari) ✅ 2026-10-16, Aşama 12–15 bekliyor (bkz. §5c, [`docs/V3.md`](docs/V3.md)).** Kullanım için bkz. [`README.md`](README.md), bulut tasarımı için [`docs/CLOUD.md`](docs/CLOUD.md).
+> **Proje durumu: v1.0 ✅ tamamlandı (yerel mod, 2026-10-11). v2 "Bulut Ofis" ✅ tamamlandı (Aşama 6–10 ✅, 2026-10-11) ve https://pixel-rouge-phi.vercel.app adresinde yayında. v3 "Ajan Kontrol Merkezi (Deneme Sürümü)": Aşama 11 (mimari) ✅ 2026-10-16, Aşama 12 (röle) ✅ 2026-10-17, Aşama 13–15 bekliyor (bkz. §5c, [`docs/V3.md`](docs/V3.md)).** Kullanım için bkz. [`README.md`](README.md), bulut tasarımı için [`docs/CLOUD.md`](docs/CLOUD.md).
 >
 > Tarayıcıda çalışan, pixel-art tarzı sanal bir ofis. Bilgisayarınızda çalışan her **Claude Code** oturumu (ve alt-ajanları) ofiste küçük bir pixel karakter olarak görünür.
 
@@ -64,7 +64,7 @@ Teknik ayrıntılar: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — **tüm a
 | 9 | Bulut Arayüzü & PWA | Frontend Mühendisi | `transport.js`, `cloud.js`, `pip.js`, manifest, `sw.js`, ikonlar | ✅ Tamamlandı |
 | 10 | QA & Yayına Hazırlık | QA Mühendisi | uçtan uca test, README dağıtım rehberi, `.gitignore`, `LICENSE` | ✅ Tamamlandı |
 | 11 | v3 Mimari | Yazılım/Güvenlik Mimarı | `docs/V3.md`, §5c | ✅ Tamamlandı |
-| 12 | Gerçek Zamanlı Röle | Gerçek Zamanlı/Edge Mühendisi | `relay/`, `tools/dev_relay.py`, `api/relay_ticket.py`, `web/js/relay.js` | ⬜ Bekliyor |
+| 12 | Gerçek Zamanlı Röle | Gerçek Zamanlı/Edge Mühendisi | `relay/`, `tools/dev_relay.py`, `api/relay_ticket.py`, `web/js/relay.js` | ✅ Tamamlandı |
 | 13 | Bağlayıcı Uygulama | Bağlayıcı/Güvenlik Mühendisi | `pixel_connector/`, `web/js/e2e.js`, `web/connector/` | ⬜ Bekliyor |
 | 14 | Arayüz | Frontend Mühendisi | görev kutusu, cihazlar sayfası, token göstergesi, telefon düzeni | ⬜ Bekliyor |
 | 15 | Güvenlik İncelemesi & QA & Dokümantasyon | Güvenlik İnceleyici + QA | inceleme, uçtan uca test, README, rehber | ⬜ Bekliyor |
@@ -264,7 +264,7 @@ Teknik sözleşme: [`docs/V3.md`](docs/V3.md). v3 aşamalarındaki tüm ajanlar 
 | # | Aşama | Sorumlu | Teslimatlar | Durum |
 |---|---|---|---|---|
 | 11 | v3 Mimari | Yazılım/Güvenlik Mimarı | `docs/V3.md`, bu bölüm | ✅ Tamamlandı |
-| 12 | Gerçek Zamanlı Röle | Gerçek Zamanlı/Edge Mühendisi | `relay/` (Worker + Durable Object), `tools/dev_relay.py`, `pixel_connector/ws.py`, `web/js/relay.js`, `api/relay_ticket.py`, `pixel_cloud` eklemeleri, `dev_server.py --relay`, testler | ⬜ Bekliyor |
+| 12 | Gerçek Zamanlı Röle | Gerçek Zamanlı/Edge Mühendisi | `relay/` (Worker + Durable Object), `tools/dev_relay.py`, `pixel_connector/ws.py`, `web/js/relay.js`, `api/relay_ticket.py`, `pixel_cloud` eklemeleri, `dev_server.py --relay`, testler | ✅ Tamamlandı |
 | 13 | Bağlayıcı Uygulama | Bağlayıcı/Güvenlik Mühendisi | `pixel_connector/`, `web/js/e2e.js`, `web/js/idb.js`, `tools/build_connector.py`, `web/connector/`, testler | ⬜ Bekliyor |
 | 14 | Arayüz | Frontend Mühendisi | `web/js/{control,prompt,devices,usage}.js`, `main.js`/`ui.js`/`cloud.js`/`index.html`/`style.css`/`sw.js` düzenlemeleri, `vercel.json` CSP | ⬜ Bekliyor |
 | 15 | Güvenlik İncelemesi & QA & Dokümantasyon | Güvenlik İnceleyici + QA Mühendisi | inceleme, düzeltmeler, uçtan uca testler, README, `rehber.html`, kullanıcının dağıtım listesi | ⬜ Bekliyor |
@@ -290,18 +290,18 @@ Teslimat: `docs/V3.md`, PROJECT.md §5c.
 
 ### Aşama 12 — Gerçek Zamanlı Röle (Gerçek Zamanlı/Edge Mühendisi)
 Teslimat: `relay/wrangler.jsonc`, `relay/package.json`, `relay/src/{index,room,lib}.js`, `relay/test/lib.test.js`, `tools/dev_relay.py`, `pixel_connector/__init__.py` + `ws.py`, `web/js/relay.js`, `api/relay_ticket.py`, `pixel_cloud/relay.py` ve `settings`/`validate`/`derive`/`app` eklemeleri, `dev_server.py --relay`, `.vercelignore`/`.gitignore`, `tests/test_relay_ticket.py`, `tests/relay_conformance.py`, `tests/test_dev_relay.py` (V3.md §3, §4, §6.2, §13, §17.1).
-- [ ] `lib.js`: bilet çözme ve doğrulama (`crypto.subtle.verify`), çerçeve doğrulama (rol başına), token bucket, kimlik biçimleri
-- [ ] `index.js`: `/health`, `/v1/rooms/<rid>/ws` yükseltmesi, bilet + Origin denetimi, Durable Object'e yönlendirme
-- [ ] `room.js`: `acceptWebSocket` ve etiketler, ek veri (attachment), `welcome`/`presence`/`msg`/`left`/`err`, `pair:` yuvaları, cihaz değiştirme (4009), oda sınırları, otomatik ping yanıtı; alarm ve zamanlayıcı yok, depolama yazımı yok
-- [ ] `wrangler.jsonc` (`exports` sqlite ya da eski `migrations` yedeği) ve sabitlenmiş `wrangler` sürümüyle `package.json`
-- [ ] `node:test` birim testleri (Workers Builds'te çalışır)
-- [ ] `pixel_connector/ws.py`: stdlib RFC 6455 istemci + sunucu çerçeveleme, TLS, ping/pong, kapatma kodları
-- [ ] `tools/dev_relay.py`: aynı protokol, limitler ve hata kodları; `dev_server.py --relay`
-- [ ] Vercel: `POST /api/relay_ticket` (yazma anahtarı, hız limiti, 0 Redis komutu), `/api/config` içinde `relay`, durum alanı `ctl` → Agent JSON `control`
-- [ ] `web/js/relay.js`: bilet, WebSocket, yeniden bağlanma, 50 sn ping, gizliyken bağlantıyı kapatma, `quota` durumu
-- [ ] `relay_conformance.py`; `dev_relay`'e karşı CI'da çalışır
+- [x] `lib.js`: bilet çözme ve doğrulama (`crypto.subtle.verify`), çerçeve doğrulama (rol başına), token bucket, kimlik biçimleri
+- [x] `index.js`: `/health`, `/v1/rooms/<rid>/ws` yükseltmesi, bilet + Origin denetimi, Durable Object'e yönlendirme
+- [x] `room.js`: `acceptWebSocket` ve etiketler, ek veri (attachment), `welcome`/`presence`/`msg`/`left`/`err`, `pair:` yuvaları, cihaz değiştirme (4009), oda sınırları, otomatik ping yanıtı; alarm ve zamanlayıcı yok, depolama yazımı yok
+- [x] `wrangler.jsonc` (`exports` sqlite ya da eski `migrations` yedeği) ve sabitlenmiş `wrangler` sürümüyle `package.json`
+- [x] `node:test` birim testleri (Workers Builds'te çalışır)
+- [x] `pixel_connector/ws.py`: stdlib RFC 6455 istemci + sunucu çerçeveleme, TLS, ping/pong, kapatma kodları
+- [x] `tools/dev_relay.py`: aynı protokol, limitler ve hata kodları; `dev_server.py --relay`
+- [x] Vercel: `POST /api/relay_ticket` (yazma anahtarı, hız limiti, 0 Redis komutu), `/api/config` içinde `relay`, durum alanı `ctl` → Agent JSON `control`
+- [x] `web/js/relay.js`: bilet, WebSocket, yeniden bağlanma, 50 sn ping, gizliyken bağlantıyı kapatma, `quota` durumu
+- [x] `relay_conformance.py`; `dev_relay`'e karşı CI'da çalışır
 
-**Kabul kriterleri:** Yalnızca stdlib (Python) ve sıfır çalışma zamanı npm bağımlılığı (JS). `python3 -m unittest discover -s tests` geçer ve mevcut 251 test değişmeden geçmeye devam eder. Uyumluluk testleri `dev_relay`'e karşı tamamen geçer. Bilet olmadan, süresi geçmiş ya da sahte biletle bağlanma reddedilir. Origin'siz tarayıcı ve Origin'li cihaz reddedilir. Röle hiçbir zaman `b` alanını ayrıştırmaz, günlüğe yazmaz, saklamaz (testle doğrulanır). v3 ortam değişkenleri yokken `/api/config` `"relay": null` döner ve v2 davranışı birebir aynıdır. Kullanıcı Workers Builds'i kurduktan sonra Worker derlenir, `npm test` geçer, `/health` 200 döner ve uyumluluk testleri dağıtılmış Worker'a karşı da geçer (kullanıcıyla birlikte).
+**Kabul kriterleri:** Yalnızca stdlib (Python) ve sıfır çalışma zamanı npm bağımlılığı (JS). `python3 -m unittest discover -s tests` geçer ve mevcut 251 test değişmeden geçmeye devam eder. Uyumluluk testleri `dev_relay`'e karşı tamamen geçer. Bilet olmadan, süresi geçmiş ya da sahte biletle bağlanma reddedilir. Origin'siz tarayıcı ve Origin'li cihaz reddedilir. Röle hiçbir zaman `b` alanını ayrıştırmaz, günlüğe yazmaz, saklamaz (testle doğrulanır). v3 ortam değişkenleri yokken `/api/config` `"relay": null` döner ve v2 davranışı birebir aynıdır. Kullanıcı Workers Builds'i kurduktan sonra Worker derlenir, `npm test` geçer, `/health` 200 döner ve uyumluluk testleri dağıtılmış Worker'a karşı da geçer (kullanıcıyla birlikte). ✔️ (yerelde; dağıtılmış Worker'a karşı kısım kullanıcının Workers Builds kurulumundan sonra yapılacak)
 
 ### Aşama 13 — Bağlayıcı Uygulama (Bağlayıcı/Güvenlik Mühendisi)
 Teslimat: `pixel_connector/` (`__main__`, `relay`, `crypto`, `session`, `peers`, `config`, `workspaces`, `agents`, `tasks`, `engines/*`, `runtimes`, `usage`, `approvals`, `audit`, `service`), `web/js/e2e.js`, `web/js/idb.js`, `tools/build_connector.py`, `web/connector/{install.sh,install.ps1,pixel-connector.pyz,SHA256SUMS}`, `tests/test_crypto_vectors.py` + `tests/vectors/`, `tests/test_e2e_protocol.py`, `tests/test_connector_*.py`, `tests/fixtures/claude_stream_*.jsonl`, `tests/test_v3_browser.py` (V3.md §5–§10, §12, §17.2).
@@ -630,3 +630,27 @@ Her ajan işini bitirince buraya tarihli bir kayıt ekler (en yeni en altta).
   Açık sorular: Anthropic'ten yazılı teyit (girişim aşamasından önce), WebAuthn ile anahtar koruması, Web Push, QR ile eşleştirme.
 
   Aşama 11 tamamlandı. Sıradaki adım: Aşama 12 (Gerçek Zamanlı Röle).
+
+- **2026-10-17 — Aşama 12 (Gerçek Zamanlı/Edge Mühendisi):** Gerçek zamanlı röle yazıldı. Python tarafı yalnızca stdlib, Worker tarafı sıfır çalışma zamanı npm bağımlılığı. v1 ve v2 davranışı değişmedi; röle değişkenleri yokken `/api/config` `"relay": null` döndürüyor.
+
+  Yazılanlar:
+  - **`relay/`** (Cloudflare Worker + Durable Object): `src/lib.js` (bilet doğrulama `crypto.subtle.verify` ile, çerçeve doğrulama, token bucket, kimlikler), `src/core.js` (Worker yönlendirmesi ve oda mantığı; Cloudflare'e bağımlı olmadan test edilebilsin diye ayrıldı), `src/room.js` ve `src/index.js` (ince Cloudflare katmanı), `wrangler.jsonc` (DO bağlaması `ROOMS`, SQLite sınıfı göçü, `ALLOWED_ORIGINS`), `package.json` (`wrangler` 4.145.0 sabit, yalnızca devDependency), `test/lib.test.js` + `test/core.test.js` (`node:test`, Workers Builds'te çalışır) ve ortak bilet vektörleri `test/ticket_vectors.json`. Alarm, zamanlayıcı ve depolama yazımı yok; `b` alanı hiç ayrıştırılmıyor, günlüğe yazılmıyor, saklanmıyor.
+  - **Vercel:** `POST /api/relay_ticket` (yazma anahtarı, oda ve IP başına dakikada 30, 0 Redis komutu, hiçbir şey günlüğe yazılmıyor), `RELAY_SECRET`/`PIXEL_RELAY_URL` ayarları (ikisi birden geçerli değilse v3 kapalı; Vercel'de yalnızca `wss://`), `/api/config` içinde `relay` ve `features`, durum alanı `ctl` → Agent JSON `control`. Önceki yarım kalan çalışma gözden geçirildi ve korundu; V3.md'deki kişisel ev dizini yolları `/home/user` yapıldı (sürüm testi bunu istiyor).
+  - **`pixel_connector/ws.py`:** stdlib RFC 6455 istemci + sunucu çerçeveleme (TLS, maskeleme, parçalı mesajlar, ping/pong, kapatma kodları, 1009 boyut sınırı, zaman aşımında akışı bozmayan okuma), Python 3.8 sözdizimi.
+  - **`tools/dev_relay.py`:** aynı protokolün stdlib Python gerçeklemesi; `python3 dev_server.py --relay` bunu 127.0.0.1:8788'de başlatıyor, rastgele `RELAY_SECRET` üretip `PIXEL_RELAY_URL`'i ayarlıyor ve röle adresini dev sunucunun CSP `connect-src`'ine ekliyor.
+  - **`web/js/relay.js`:** `RelayClient` (bilet, `Sec-WebSocket-Protocol` ile bağlantı, `hello`, varlık listesi, 50 sn ping, 1→30 sn geri çekilme ve her denemede yeni bilet, sayfa gizlenince 60 sn sonra kapatma, görev sürerken açık tutma, `quota` durumu). Arayüze henüz bağlanmadı (Aşama 14).
+  - **Testler:** `tests/test_relay_ticket.py`, `tests/relay_conformance.py` (25 protokol testi), `tests/test_dev_relay.py`, `tests/test_relay_js.py`, `tests/test_ws.py`, `tests/js/*.test.js`, `tests/js_shims/`.
+
+  Node.js olmadan doğrulama: Worker'ın JS kodu headless Chrome'da ES modülü olarak çalıştırıldı. `node:test` ve `node:assert` için küçük birer taklit yazıldı ve import map ile eşlendi; `cloudflare:workers` da aynı yolla taklit edildi. Böylece Workers Builds'in çalıştıracağı test dosyaları hiç değiştirilmeden yerelde koşuyor (26 test + `relay.js` ve Cloudflare katmanı için 8 test). Taklitlerin hatayı gerçekten yakaladığı bilerek bozulan bir testle denendi. Bilet HMAC'i Python ve JS'de bayt bayt aynı: `ticket_vectors.json` her iki tarafta da aynı biletleri üretiyor ve 24 olumsuz durumda aynı ret nedenini veriyor. `wrangler.jsonc` anahtarları, sabitlenen wrangler sürümünün `config-schema.json` dosyasına karşı denetlendi.
+
+  Canlı yerel deneme (boş portlarda `dev_relay.py` + `dev_server.py`, ardından `dev_server.py --relay`; yalnızca başlatılan süreçler durduruldu):
+  - Oda açıldı, iki bilet alındı; sahte cihaz ve sahte tarayıcı (stdlib WS istemcisi) bağlandı, mesajlar iki yönde bayt bayt aynı iletildi.
+  - Reddedilenler: sahte bilet, biletsiz bağlantı, adres çubuğunda bilet, başka odanın bileti (401); yanlış Origin, Origin'siz tarayıcı, Origin'li cihaz (403); 120 KB'lık çerçeve (1009); 60 mesajlık sel (önce `rate_limited`, sonra 4029); bilinmeyen ya da ayrılmış cihaza gönderim (`device_offline`); tarayıcıdan tarayıcıya gönderim (`forbidden`). Cihaz iptali röle düzeyinde değil cihazda yapılıyor (Aşama 13); röle yalnızca ayrılan cihazı varlık listesinden düşürüyor.
+  - Uyumluluk testleri komut satırından bilet sunucusu kipinde (`--server --room --key`, 23 geçti, 2 süre testi atlandı) ve secret kipinde (24 geçti, 1 atlandı) çalıştı.
+  - Gerçek headless Chrome (CDP) dev sunucunun sayfasında `/js/relay.js`'i yükledi: bilet aldı, CSP'ye uygun biçimde bağlandı, `live` oldu, cihazı varlık listesinde gördü, mesaj gönderip yanıt aldı; cihaz `left` bildirimini aldı. İzin verilmeyen bir adrese bağlantıyı CSP engelledi.
+
+  Sonuç: `python3 -m unittest discover -s tests` → 323 test, hepsi geçiyor (1 atlanan, önceki gibi). Sapmalar V3.md §20 "Phase 12 deviations" altında; kullanıcının Cloudflare adımları aynı bölümde Türkçe olarak yazıldı.
+
+  Kalan sınırlamalar: Worker gerçek Cloudflare'de henüz derlenmedi ve dağıtılmadı. Şunlar ancak kullanıcı Workers Builds'i kurduktan sonra doğrulanabilir: `npm install`/`node --test` (Node 22/24), `wrangler deploy` ve SQLite göçü, Hibernation davranışı ve otomatik ping yanıtı, 101 yanıtında alt protokol seçimi, dağıtılmış Worker'a karşı uyumluluk testleri, gerçek kota kullanımı. `vercel.json` CSP'si Aşama 14'e kaldı (kullanıcının alt alan adı gerekiyor).
+
+  Aşama 12 tamamlandı. Sıradaki adım: kullanıcı Cloudflare kurulumunu yapar (V3.md §20), ardından Aşama 13 (Bağlayıcı Uygulama).
