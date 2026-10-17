@@ -165,6 +165,7 @@ class WebSocket:
         self.closed = False                 # our close frame was sent or the socket is gone
         self.close_code: Optional[int] = None
         self.close_reason = ""
+        self.last_rx = time.monotonic()     # any bytes received (pongs included); the connector's dead-link check
 
     # -- low level --
     def _send_frame(self, opcode: int, payload: bytes, fin: bool = True) -> None:
@@ -190,6 +191,7 @@ class WebSocket:
         chunk = self.sock.recv(65536)
         if not chunk:
             raise ConnectionClosed(CLOSE_ABNORMAL, "eof")
+        self.last_rx = time.monotonic()
         self._buf += chunk
 
     def _read_frame(self) -> Tuple[bool, int, bytes]:

@@ -1,6 +1,6 @@
 # Pixel Office 🖥️☕💤
 
-> **Proje durumu: v1.0 ✅ tamamlandı (yerel mod, 2026-10-11). v2 "Bulut Ofis" ✅ tamamlandı (Aşama 6–10 ✅, 2026-10-11) ve https://pixel-rouge-phi.vercel.app adresinde yayında. v3 "Ajan Kontrol Merkezi (Deneme Sürümü)": Aşama 11 (mimari) ✅ 2026-10-16, Aşama 12 (röle) ✅ 2026-10-17, Aşama 13–15 bekliyor (bkz. §5c, [`docs/V3.md`](docs/V3.md)).** Kullanım için bkz. [`README.md`](README.md), bulut tasarımı için [`docs/CLOUD.md`](docs/CLOUD.md).
+> **Proje durumu: v1.0 ✅ tamamlandı (yerel mod, 2026-10-11). v2 "Bulut Ofis" ✅ tamamlandı (Aşama 6–10 ✅, 2026-10-11) ve https://pixel-rouge-phi.vercel.app adresinde yayında. v3 "Ajan Kontrol Merkezi (Deneme Sürümü)": Aşama 11 (mimari) ✅ 2026-10-16, Aşama 12 (röle) ✅ 2026-10-17, Aşama 13 (bağlayıcı) ✅ 2026-10-17, Aşama 14–15 bekliyor (bkz. §5c, [`docs/V3.md`](docs/V3.md)).** Kullanım için bkz. [`README.md`](README.md), bulut tasarımı için [`docs/CLOUD.md`](docs/CLOUD.md).
 >
 > Tarayıcıda çalışan, pixel-art tarzı sanal bir ofis. Bilgisayarınızda çalışan her **Claude Code** oturumu (ve alt-ajanları) ofiste küçük bir pixel karakter olarak görünür.
 
@@ -265,7 +265,7 @@ Teknik sözleşme: [`docs/V3.md`](docs/V3.md). v3 aşamalarındaki tüm ajanlar 
 |---|---|---|---|---|
 | 11 | v3 Mimari | Yazılım/Güvenlik Mimarı | `docs/V3.md`, bu bölüm | ✅ Tamamlandı |
 | 12 | Gerçek Zamanlı Röle | Gerçek Zamanlı/Edge Mühendisi | `relay/` (Worker + Durable Object), `tools/dev_relay.py`, `pixel_connector/ws.py`, `web/js/relay.js`, `api/relay_ticket.py`, `pixel_cloud` eklemeleri, `dev_server.py --relay`, testler | ✅ Tamamlandı |
-| 13 | Bağlayıcı Uygulama | Bağlayıcı/Güvenlik Mühendisi | `pixel_connector/`, `web/js/e2e.js`, `web/js/idb.js`, `tools/build_connector.py`, `web/connector/`, testler | ⬜ Bekliyor |
+| 13 | Bağlayıcı Uygulama | Bağlayıcı/Güvenlik Mühendisi | `pixel_connector/`, `web/js/e2e.js`, `web/js/idb.js`, `tools/build_connector.py`, `web/connector/`, testler | ✅ Tamamlandı |
 | 14 | Arayüz | Frontend Mühendisi | `web/js/{control,prompt,devices,usage}.js`, `main.js`/`ui.js`/`cloud.js`/`index.html`/`style.css`/`sw.js` düzenlemeleri, `vercel.json` CSP | ⬜ Bekliyor |
 | 15 | Güvenlik İncelemesi & QA & Dokümantasyon | Güvenlik İnceleyici + QA Mühendisi | inceleme, düzeltmeler, uçtan uca testler, README, `rehber.html`, kullanıcının dağıtım listesi | ⬜ Bekliyor |
 
@@ -305,22 +305,22 @@ Teslimat: `relay/wrangler.jsonc`, `relay/package.json`, `relay/src/{index,room,l
 
 ### Aşama 13 — Bağlayıcı Uygulama (Bağlayıcı/Güvenlik Mühendisi)
 Teslimat: `pixel_connector/` (`__main__`, `relay`, `crypto`, `session`, `peers`, `config`, `workspaces`, `agents`, `tasks`, `engines/*`, `runtimes`, `usage`, `approvals`, `audit`, `service`), `web/js/e2e.js`, `web/js/idb.js`, `tools/build_connector.py`, `web/connector/{install.sh,install.ps1,pixel-connector.pyz,SHA256SUMS}`, `tests/test_crypto_vectors.py` + `tests/vectors/`, `tests/test_e2e_protocol.py`, `tests/test_connector_*.py`, `tests/fixtures/claude_stream_*.jsonl`, `tests/test_v3_browser.py` (V3.md §5–§10, §12, §17.2).
-- [ ] `crypto.py`: P-256 ECDH (nokta doğrulaması), HKDF, AES-256-GCM, PBKDF2 sarmalayıcı; RFC 5903, NIST CAVP, RFC 5869, RFC 7914, NIST GCM ve Wycheproof vektörleri
-- [ ] `e2e.js`: tarayıcı anahtarı (dışa aktarılamaz, IndexedDB), eşleştirme (PBKDF2, MAC, SAS), el sıkışma, `Channel.seal/open`, dolgu
-- [ ] Python ↔ WebCrypto çapraz testleri (headless Chrome, CDP) ve uçtan uca eşleştirme + el sıkışma
-- [ ] `session.py`: eşleştirme durum makinesi (tek deneme, 10 dk), terminalde SAS onayı, kanallar, seq/tekrar denetimi, 3 hatada kanalı kapatma
-- [ ] `config.py` + `workspaces.py`: şema, yasak klasörler, argv kuralları, `bypassPermissions` yasağı, `config-check`
-- [ ] `engines/claude.py`: argv kurucu (istem stdin'den), sürüm ve yetenek tespiti, `auth status`, stream-json ayrıştırma, oturum sürdürme, SIGINT → SIGTERM → SIGKILL ile iptal, `PIXEL_OFFICE_DISABLE=1`
-- [ ] `engines/ollama.py`, `engines/openai_compat.py`: akış, son token sayıları, geçmiş dosyası, bağlantıyı kapatarak iptal
-- [ ] `runtimes.py`: izin listesindeki argv, durum yoklaması, Ollama `/api/ps`, model yükleme ve boşaltma
-- [ ] `usage.py`: SQLite defteri, devam ettirilen oturumda fark alma, dönemler, ağırlıklı token ölçüsü, bütçe durumları, `--max-budget-usd` sınırlaması
-- [ ] `tasks.py`: ajan başına sıralama, cihaz eşzamanlılığı, hız limitleri, zaman aşımı; `agents.py`: ofis durumu (`ctl`, 20 dk keep-alive)
-- [ ] `approvals.py` (127.0.0.1 onay sayfası + CLI + bildirim), `audit.py` (JSONL, döndürme), `peers` iptali
-- [ ] `service.py`: systemd kullanıcı birimi, launchd plist, schtasks; `install-service`/`uninstall-service`/`doctor`
-- [ ] `build_connector.py`, kurulum betikleri (SHA-256 doğrulaması), CLI çıktıları Türkçe
-- [ ] Gizlilik kanarya testi: istem ve çıktı hiçbir röle çerçevesinde, `/api/status` gövdesinde ya da günlükte açık görünmez
+- [x] `crypto.py`: P-256 ECDH (nokta doğrulaması), HKDF, AES-256-GCM, PBKDF2 sarmalayıcı; RFC 5903, NIST CAVP, RFC 5869, RFC 7914, NIST GCM ve Wycheproof vektörleri
+- [x] `e2e.js`: tarayıcı anahtarı (dışa aktarılamaz, IndexedDB), eşleştirme (PBKDF2, MAC, SAS), el sıkışma, `Channel.seal/open`, dolgu
+- [x] Python ↔ WebCrypto çapraz testleri (headless Chrome, CDP) ve uçtan uca eşleştirme + el sıkışma
+- [x] `session.py`: eşleştirme durum makinesi (tek deneme, 10 dk), terminalde SAS onayı, kanallar, seq/tekrar denetimi, 3 hatada kanalı kapatma
+- [x] `config.py` + `workspaces.py`: şema, yasak klasörler, argv kuralları, `bypassPermissions` yasağı, `config-check`
+- [x] `engines/claude.py`: argv kurucu (istem stdin'den), sürüm ve yetenek tespiti, `auth status`, stream-json ayrıştırma, oturum sürdürme, SIGINT → SIGTERM → SIGKILL ile iptal, `PIXEL_OFFICE_DISABLE=1`
+- [x] `engines/ollama.py`, `engines/openai_compat.py`: akış, son token sayıları, geçmiş dosyası, bağlantıyı kapatarak iptal
+- [x] `runtimes.py`: izin listesindeki argv, durum yoklaması, Ollama `/api/ps`, model yükleme ve boşaltma
+- [x] `usage.py`: SQLite defteri, devam ettirilen oturumda fark alma, dönemler, ağırlıklı token ölçüsü, bütçe durumları, `--max-budget-usd` sınırlaması
+- [x] `tasks.py`: ajan başına sıralama, cihaz eşzamanlılığı, hız limitleri, zaman aşımı; `agents.py`: ofis durumu (`ctl`, 20 dk keep-alive)
+- [x] `approvals.py` (127.0.0.1 onay sayfası + CLI + bildirim), `audit.py` (JSONL, döndürme), `peers` iptali
+- [x] `service.py`: systemd kullanıcı birimi, launchd plist, schtasks; `install-service`/`uninstall-service`/`doctor`
+- [x] `build_connector.py`, kurulum betikleri (SHA-256 doğrulaması), CLI çıktıları Türkçe
+- [x] Gizlilik kanarya testi: istem ve çıktı hiçbir röle çerçevesinde, `/api/status` gövdesinde ya da günlükte açık görünmez
 
-**Kabul kriterleri:** Bağlayıcı yalnızca stdlib kullanır (`ast` taramasıyla doğrulanır) ve Python 3.8 sözdizimiyle uyumludur. Tüm kripto vektörleri ve çapraz testler geçer. Röle MITM simülasyonu, yanlış kod, tekrar, sıra dışı ve kurcalanmış mesajlar reddedilir. Sahte `claude` ile her izin profili doğru argv'yi üretir. argv'de hiçbir zaman istem ya da `--dangerously-skip-permissions` yoktur. Klasör kaçışı (`..`, sembolik bağ) reddedilir. Çalışma ortamı isteğindeki hiçbir alan argv'ye ulaşmaz. İptal 15 sn içinde süreci sonlandırır. Bütçe `block` iken yeni görev reddedilir. Bu makinede `dev_server --relay` + bağlayıcı + headless Chrome ile eşleştirme ve sahte motorla görev akışı baştan sona çalışır. Gerçek `~/.claude` ve `~/.pixel-office` dizinlerine testlerde dokunulmaz.
+**Kabul kriterleri:** Bağlayıcı yalnızca stdlib kullanır (`ast` taramasıyla doğrulanır) ve Python 3.8 sözdizimiyle uyumludur. Tüm kripto vektörleri ve çapraz testler geçer. Röle MITM simülasyonu, yanlış kod, tekrar, sıra dışı ve kurcalanmış mesajlar reddedilir. Sahte `claude` ile her izin profili doğru argv'yi üretir. argv'de hiçbir zaman istem ya da `--dangerously-skip-permissions` yoktur. Klasör kaçışı (`..`, sembolik bağ) reddedilir. Çalışma ortamı isteğindeki hiçbir alan argv'ye ulaşmaz. İptal 15 sn içinde süreci sonlandırır. Bütçe `block` iken yeni görev reddedilir. Bu makinede `dev_server --relay` + bağlayıcı + headless Chrome ile eşleştirme ve sahte motorla görev akışı baştan sona çalışır. Gerçek `~/.claude` ve `~/.pixel-office` dizinlerine testlerde dokunulmaz. ✔️ (gerçek Claude Code ve gerçek Ollama ile deneme Aşama 15'te, kullanıcıyla)
 
 ### Aşama 14 — Arayüz (Frontend Mühendisi)
 Teslimat: `web/js/control.js`, `prompt.js`, `devices.js`, `usage.js`; `main.js`, `ui.js`, `cloud.js`, `index.html`, `style.css`, `sw.js` (VERSION artırımı) düzenlemeleri; `vercel.json` CSP ve `/connector/*` başlıkları (V3.md §11, §13.5, §17.3).
@@ -654,3 +654,23 @@ Her ajan işini bitirince buraya tarihli bir kayıt ekler (en yeni en altta).
   Kalan sınırlamalar: Worker gerçek Cloudflare'de henüz derlenmedi ve dağıtılmadı. Şunlar ancak kullanıcı Workers Builds'i kurduktan sonra doğrulanabilir: `npm install`/`node --test` (Node 22/24), `wrangler deploy` ve SQLite göçü, Hibernation davranışı ve otomatik ping yanıtı, 101 yanıtında alt protokol seçimi, dağıtılmış Worker'a karşı uyumluluk testleri, gerçek kota kullanımı. `vercel.json` CSP'si Aşama 14'e kaldı (kullanıcının alt alan adı gerekiyor).
 
   Aşama 12 tamamlandı. Sıradaki adım: kullanıcı Cloudflare kurulumunu yapar (V3.md §20), ardından Aşama 13 (Bağlayıcı Uygulama).
+
+- **2026-10-17 — Aşama 13 (Bağlayıcı/Güvenlik Mühendisi):** Bağlayıcı uygulaması yazıldı. Yalnızca stdlib, Python 3.8 sözdizimi; v1 ve v2 davranışı değişmedi.
+
+  Yazılanlar:
+  - **`pixel_connector/`:** `crypto.py` (saf Python P-256 ECDH, tam nokta doğrulaması, sabit 256 adımlı Montgomery merdiveni; HKDF, PBKDF2, HMAC; AES-256-GCM, dallanmasız GHASH; eşleştirme ve el sıkışma hesapları; `Channel` ile yöne göre ayrı anahtar, sayaçlı nonce, sıkı sıra denetimi, 3 hatada kapanma), `session.py` (eşleştirme durum makinesi: tek deneme, 10 dk, terminalde SAS onayı; el sıkışma; şifreli kanallar), `relay.py` (bilet, yeniden bağlanma, 30 sn ping, 75 sn ölü bağlantı), `peers.py`, `config.py`, `workspaces.py`, `agents.py` (ofis durumu `ctl` ile, 20 dk keep-alive), `tasks.py` (ajan başına sıra, cihaz eşzamanlılığı, hız limitleri, zaman aşımı, parça birleştirme), `engines/` (Claude Code stream-json, Ollama NDJSON, OpenAI uyumlu SSE), `runtimes.py`, `usage.py` (SQLite defteri, bütçeler), `approvals.py` (onay, 127.0.0.1 onay sayfası, yerel denetim API'si, bildirim), `audit.py`, `service.py` (systemd, launchd, schtasks), `app.py` (her şeyi bağlayan süreç), `__main__.py` (Türkçe CLI).
+  - **Tarayıcı tarafı:** `web/js/e2e.js` (yalnızca WebCrypto: dışa aktarılamaz tarayıcı anahtarı, eşleştirme, el sıkışma, `Channel.seal/open`, dolgu) ve `web/js/idb.js`. Arayüze Aşama 14'te bağlanacak.
+  - **Dağıtım:** `tools/build_connector.py` (tekrar üretilebilir zipapp), `web/connector/{pixel-connector.pyz, SHA256SUMS, install.sh, install.ps1}`. Kurulum betiği SHA-256'yı doğruluyor; değiştirilmiş dosyayı reddettiği testle görüldü.
+  - **Testler:** `test_crypto_vectors.py` + `tests/vectors/`, `test_e2e_protocol.py`, `test_connector_{config,claude,ollama,runtimes,usage,service,tasks,agents,build}.py`, `test_v3_browser.py`, `tests/fixtures/claude_stream_*.jsonl` (11 kayıt), yardımcılar `tests/_v3_env.py` ve `tests/_v3_fakes.py`.
+
+  Kripto doğrulaması: resmi kaynaklardan indirilen vektörlerin hepsi geçiyor. Bunlar RFC 5903 §8.1, NIST CAVP ECC CDH P-256 (25), Wycheproof ECDH (355; geçersiz eğri noktaları dahil hepsi doğru sonuç verdi), NIST GCM (150; 34'ü bozuk etiket), Wycheproof AES-GCM (66; 27 değiştirilmiş etiket), RFC 5869, RFC 7914 ve RFC 4231. Headless Chrome'da iki yönlü çapraz test yapıldı: Python'un ürettiği anahtarlar, MAC'ler, SAS ve şifreli mesajlar WebCrypto'da aynı çıktıyı verdi; tarayıcının ürettikleri de Python'da açıldı. Gerçek sayfa ile gerçek bağlayıcı `dev_relay` üzerinden eşleşti (doğru kod, yanlış kod, SAS reddi) ve el sıkıştı. Çapraz test `e2e.js`'te bir hata yakaladı (el sıkışma onay anahtarı kullanılmadan önce siliniyordu); düzeltildi. Sabit zamanlı olmayan kısımlar `crypto.py` ve V3.md §20'de açıkça yazıldı.
+
+  Motor doğrulaması: Claude Code bu makinede yalnızca VS Code eklentisinin içindeki ikili dosya olarak var (2.1.301). Ona yalnızca `--help`, `--version` ve geçici bir HOME ile `auth status` çalıştırıldı; gerçek istem gönderilmedi. Bayraklar yardım çıktısından ve resmi belgelerden doğrulandı. Sahte `claude` 11 kayıtlı akışı oynatıyor: araçlar, izin reddi, rate_limit_event, api_retry, bütçe sınırı, tur sınırı, birikimli toplamlarla oturum sürdürme, sonuçsuz çökme, bozuk satırlar, alt ajan. Testler argv'yi (istem argv'de yok, yasaklı bayrak yok, her profil doğru), stdin'i, ortamı (`PIXEL_OFFICE_DISABLE=1`, başka `PIXEL_OFFICE_*` yok), maliyet farkını ve iptalin SIGINT → SIGTERM → SIGKILL basamaklarını doğruluyor. Ollama ve OpenAI uyumlu sunucular, gerçekçi NDJSON/SSE akıtan sahte stdlib sunucularla test edildi.
+
+  Canlı deneme (boş portlar, geçici HOME, yalnızca başlatılan süreçler durduruldu): `dev_server.py --relay` ayrı bir süreç olarak başladı. `pixel-connector.pyz setup` ve `run` çalıştı, `pixel-connector pair` kod verdi. Sahte tarayıcı kodu girdi, terminaldeki SAS tarayıcınınkiyle aynıydı, `e` ile onaylandı. Ardından el sıkışma, `device.info`, Ollama ajanı oluşturma ve görev geldi. Akan parçalar ve kullanım (26 giriş + 14 çıkış token, maliyet 0, "local") şifre çözülmüş olarak ulaştı. Ofiste karakter `control` alanıyla ve "Görev bitti" etiketiyle göründü. Denetim günlüğünde istemin yalnızca özeti ve uzunluğu vardı.
+
+  Sonuç: `python3 -m unittest discover -s tests` → 450 test, hepsi geçiyor (1 atlanan, önceki gibi). Sapmalar V3.md §20 "Phase 13 deviations" altında; kullanıcının adımları aynı bölümde Türkçe olarak yazıldı.
+
+  Kalan sınırlamalar: gerçek Claude Code (abonelik girişi) ve gerçek Ollama ile deneme Aşama 15'te kullanıcıyla yapılacak. Şunlar ancak orada doğrulanabilir: gerçek stream-json alanlarının kayıtlarla birebir uyumu, SIGINT'te turun düzgün kapanıp kapanmadığı, `--resume` hata metni, `rate_limit_event.resetsAt` birimi, `modelUsage` farkının gerçek oturumlarda doğruluğu, polkit kuralıyla Ollama başlatma ve durdurma, macOS launchd ve Windows Görev Zamanlayıcı. `sw.js` ve `vercel.json` içindeki `/connector/*` ayarları Aşama 14'e kaldı.
+
+  Aşama 13 tamamlandı. Sıradaki adım: Aşama 14 (Arayüz).

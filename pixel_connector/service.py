@@ -1,0 +1,184 @@
+"""Background service files (V3.md §12): systemd user unit (Linux), launchd agent (macOS), Task Scheduler (Windows).
+
+Every function that touches the system takes `dry_run`; tests only use the text generators and dry runs.
+"""
+
+from __future__ import annotations
+
+import os
+import plistlib
+import subprocess
+import sys
+from typing import Callable, List, Optional, Tuple
+
+UNIT_NAME = "pixel-connector.service"
+LAUNCHD_LABEL = "tr.pixeloffice.connector"
+SCHTASK_NAME = "PixelOffice\\Connector"
+
+
+def _quote_systemd(arg: str) -> str:
+    """Quote one ExecStart argument (systemd.syntax): spaces/quotes/backslashes escaped inside double quotes;
+    `%` doubled so it is not taken as a specifier."""
+    a = arg.replace("%", "%%")
+    if a and all(c.isalnum() or c in "/._-+:=@," for c in a):
+        return a
+    return '"' + a.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def systemd_unit(python: str, pyz: str, home_override: Optional[str] = None) -> str:
+    """The unit text. `pyz` may be "%h/…" (kept as a specifier) or an absolute path."""
+    pyz_arg = pyz if pyz.startswith("%h/") else _quote_systemd(pyz)
+    exec_start = "%s %s run" % (_quote_systemd(python), pyz_arg)
+    env = ["Environment=PYTHONUNBUFFERED=1"]
+    if home_override:
+        env.append("Environment=%s" % _quote_systemd("PIXEL_OFFICE_HOME=" + home_override))
+    return "\n".join([
+        "[Unit]",
+        "Description=Pixel Office bağlayıcı",
+        "After=network-online.target",
+        "Wants=network-online.target",
+        "",
+        "[Service]",
+        "Type=simple",
+        "ExecStart=" + exec_start,
+        "Restart=on-failure",
+        "RestartSec=5",
+        "UMask=0077",
+        "NoNewPrivileges=yes",
+        *env,
+        "# PATH is minimal under systemd; engine paths are absolute in connector.json.",
+        "",
+        "[Install]",
+        "WantedBy=default.target",
+        "",
+    ])
+
+
+def launchd_plist(python: str, pyz: str, log_dir: str) -> bytes:
+    return plistlib.dumps({
+        "Label": LAUNCHD_LABEL,
+        "ProgramArguments": [python, pyz, "run"],
+        "RunAtLoad": True,
+        "KeepAlive": {"SuccessfulExit": False},
+        "StandardOutPath": os.path.join(log_dir, "connector.out.log"),
+        "StandardErrorPath": os.path.join(log_dir, "connector.err.log"),
+        "ProcessType": "Background",
+    })
+
+
+def schtasks_create_argv(pythonw: str, pyz: str) -> List[str]:
+    tr = '"%s" "%s" run' % (pythonw, pyz)
+    return ["schtasks", "/Create", "/TN", SCHTASK_NAME, "/SC", "ONLOGON", "/RL", "LIMITED", "/F", "/TR", tr]
+
+
+def default_pyz(connector_dir: str) -> str:
+    return os.path.join(connector_dir, "pixel-connector.pyz")
+
+
+def _run(argv: List[str], dry_run: bool, log: Callable[[str], None], runner=subprocess.run) -> int:
+    log("$ " + " ".join(argv))
+    if dry_run:
+        return 0
+    try:
+        return runner(argv, stdin=subprocess.DEVNULL).returncode
+    except OSError as e:
+        log("  hata: %s" % e)
+        return 127
+
+
+def install(connector_dir: str, pyz: Optional[str] = None, python: Optional[str] = None, dry_run: bool = False,
+            log: Callable[[str], None] = print, platform: Optional[str] = None, user_home: Optional[str] = None,
+            runner=subprocess.run) -> Tuple[int, Optional[str]]:
+    """Write the service definition and enable it. → (exit code, path of the written file)."""
+    platform = platform or sys.platform
+    python = python or sys.executable
+    home = user_home or os.path.expanduser("~")
+    pyz = pyz or default_pyz(connector_dir)
+    if platform.startswith("linux"):
+        unit_dir = os.path.join(home, ".config", "systemd", "user")
+        path = os.path.join(unit_dir, UNIT_NAME)
+        rel = os.path.relpath(pyz, home) if pyz.startswith(home + os.sep) else None
+        office = os.path.dirname(connector_dir)
+        override = None if os.path.realpath(office) == os.path.realpath(os.path.join(home, ".pixel-office")) else office
+        text = systemd_unit(python, "%h/" + rel if rel else pyz, override)
+        log("systemd kullanıcı birimi: %s" % path)
+        if dry_run:
+            log(text)
+        else:
+            os.makedirs(unit_dir, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
+        rc = _run(["systemctl", "--user", "daemon-reload"], dry_run, log, runner)
+        if rc == 0:
+            rc = _run(["systemctl", "--user", "enable", "--now", "pixel-connector"], dry_run, log, runner)
+        return rc, path
+    if platform == "darwin":
+        path = os.path.join(home, "Library", "LaunchAgents", LAUNCHD_LABEL + ".plist")
+        data = launchd_plist(python, pyz, connector_dir)
+        log("launchd ajanı: %s" % path)
+        if dry_run:
+            log(data.decode())
+        else:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "wb") as f:
+                f.write(data)
+        rc = _run(["launchctl", "bootstrap", "gui/%d" % os.getuid() if hasattr(os, "getuid") else "gui/0", path],
+                  dry_run, log, runner)
+        return rc, path
+    if platform == "win32":
+        pythonw = python.replace("python.exe", "pythonw.exe")
+        rc = _run(schtasks_create_argv(pythonw, pyz), dry_run, log, runner)
+        if rc == 0:
+            rc = _run(["schtasks", "/Run", "/TN", SCHTASK_NAME], dry_run, log, runner)
+        return rc, None
+    log("Bu işletim sistemi için servis kurulumu yok: %s" % platform)
+    return 2, None
+
+
+def uninstall(dry_run: bool = False, log: Callable[[str], None] = print, platform: Optional[str] = None,
+              user_home: Optional[str] = None, runner=subprocess.run) -> int:
+    platform = platform or sys.platform
+    home = user_home or os.path.expanduser("~")
+    if platform.startswith("linux"):
+        path = os.path.join(home, ".config", "systemd", "user", UNIT_NAME)
+        _run(["systemctl", "--user", "disable", "--now", "pixel-connector"], dry_run, log, runner)
+        log("siliniyor: %s" % path)
+        if not dry_run:
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
+        return _run(["systemctl", "--user", "daemon-reload"], dry_run, log, runner)
+    if platform == "darwin":
+        path = os.path.join(home, "Library", "LaunchAgents", LAUNCHD_LABEL + ".plist")
+        uid = os.getuid() if hasattr(os, "getuid") else 0
+        rc = _run(["launchctl", "bootout", "gui/%d/%s" % (uid, LAUNCHD_LABEL)], dry_run, log, runner)
+        if not dry_run:
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
+        return rc
+    if platform == "win32":
+        return _run(["schtasks", "/Delete", "/TN", SCHTASK_NAME, "/F"], dry_run, log, runner)
+    return 2
+
+
+def status(runner=subprocess.run, platform: Optional[str] = None) -> str:
+    platform = platform or sys.platform
+    try:
+        if platform.startswith("linux"):
+            r = runner(["systemctl", "--user", "is-active", "pixel-connector"], capture_output=True, text=True,
+                       timeout=5, stdin=subprocess.DEVNULL)
+            return (r.stdout or "").strip() or "unknown"
+        if platform == "darwin":
+            r = runner(["launchctl", "list", LAUNCHD_LABEL], capture_output=True, text=True, timeout=5,
+                       stdin=subprocess.DEVNULL)
+            return "active" if r.returncode == 0 else "inactive"
+        if platform == "win32":
+            r = runner(["schtasks", "/Query", "/TN", SCHTASK_NAME], capture_output=True, text=True, timeout=5,
+                       stdin=subprocess.DEVNULL)
+            return "active" if r.returncode == 0 else "inactive"
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return "unknown"
