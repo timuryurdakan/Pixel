@@ -203,7 +203,8 @@ class ReleaseFilesTests(unittest.TestCase):
             self.skipTest("no personal home directory on this machine")
         bad = re.compile(re.escape(home + "/") + "|" + re.escape(home.replace("/", "-") + "-"))
         for p in ROOT.rglob("*"):
-            if not p.is_file() or "__pycache__" in p.parts or p.suffix in (".png", ".pyc") or p.name == Path(__file__).name:
+            if (not p.is_file() or "__pycache__" in p.parts or ".git" in p.parts or p.suffix in (".png", ".pyc")
+                    or p.name == Path(__file__).name):
                 continue
             if p.name == "names.json":
                 continue
