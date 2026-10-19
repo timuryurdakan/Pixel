@@ -10,12 +10,17 @@ from __future__ import annotations
 
 import os
 import re
+import stat
 import sys
 from typing import Dict, List, Optional
 
 ID_RE = re.compile(r"^[a-z0-9_-]{1,24}\Z")
 MAX_SUB = 200
 MAX_CHILDREN = 50
+
+# Phase 17: the default workspace that `setup` creates (SECURITY_AUDIT.md §5). On Windows `~` is %USERPROFILE%.
+DEFAULT_DIR = "PixelOfficeIsler"
+DEFAULT_ENTRY = {"id": "isler", "name": "Pixel Office İşleri", "path": "~/" + DEFAULT_DIR, "children": True}
 
 
 class WorkspaceDenied(Exception):
@@ -71,6 +76,49 @@ def check_denied(real: str, home: Optional[str] = None) -> Optional[str]:
     if sys.platform == "win32" and re.match(r"^[A-Za-z]:\\Program Files", real, re.I):
         return "denied path Program Files"
     return None
+
+
+def ensure_default_dir(home: Optional[str] = None) -> str:
+    """Create `~/PixelOfficeIsler` with mode 0700, or reuse it if it already is a plain directory (Phase 17).
+
+    Refused (WorkspaceDenied): a symlink or junction, a non-directory, an existing git repository, or anything the
+    deny/ancestor rules reject. Returns the realpath.
+    """
+    home_r = os.path.realpath(home or os.path.expanduser("~"))
+    path = os.path.join(home_r, DEFAULT_DIR)
+    created = False
+    try:
+        os.mkdir(path, 0o700)
+        created = True
+    except FileExistsError:
+        pass
+    try:
+        st = os.lstat(path)
+        if stat.S_ISLNK(st.st_mode):
+            raise WorkspaceDenied("%s is a symbolic link" % path)
+        if not stat.S_ISDIR(st.st_mode):
+            raise WorkspaceDenied("%s exists and is not a directory" % path)
+        real = os.path.realpath(path)
+        if _fold(real) != _fold(path):                  # Windows junctions, reparse points
+            raise WorkspaceDenied("%s resolves to %s" % (path, real))
+        if not created and os.path.lexists(os.path.join(path, ".git")):
+            raise WorkspaceDenied("%s is an existing git repository" % path)
+        reason = check_denied(real, home)
+        if reason:
+            raise WorkspaceDenied("%s is not allowed (%s)" % (path, reason))
+    except BaseException:
+        if created:
+            try:
+                os.rmdir(path)
+            except OSError:
+                pass
+        raise
+    if created:
+        try:
+            os.chmod(path, 0o700)                       # mkdir's mode is masked by the umask; make it exact
+        except OSError:
+            pass
+    return real
 
 
 def expand_path(path: str, home: Optional[str] = None) -> str:

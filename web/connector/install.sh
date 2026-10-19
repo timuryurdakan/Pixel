@@ -8,6 +8,9 @@
 # 3. ~/.pixel-office/connector/ (0700) içine kurar, ~/.pixel-office/bin/pixel-connector kısayolunu yazar
 # 4. `pixel-connector setup …` (connector.json + cihaz anahtarı), ardından `install-service` (systemd kullanıcı servisi
 #    ya da launchd). `--no-service` servis adımını atlar.
+# 5. Çalışma klasörü listesi boşsa setup ~/PixelOfficeIsler klasörünü (0700) oluşturup varsayılan çalışma klasörü
+#    yapar; var olan liste değiştirilmez. `--no-default-workspace` bu adımı atlar. Başka klasör:
+#    pixel-connector workspace add ~/projem
 # Bağlayıcı kendini asla buluttan güncellemez; güncellemek için bu betiği yeniden çalıştırın.
 # Ortam: PIXEL_OFFICE_HOME (varsayılan ~/.pixel-office).
 #
@@ -118,6 +121,7 @@ fi
 echo ""
 echo "Kurulum tamam. Sıradaki adım (bu tarayıcıyı eşleştirmek için):"
 echo "  $OFFICE/bin/pixel-connector pair"
+echo "Çalışma klasörleri: $OFFICE/bin/pixel-connector workspace list"
 case ":$PATH:" in
   *":$OFFICE/bin:"*) ;;
   *) echo "İpucu: kısayolun her yerde çalışması için PATH'e ekleyin: export PATH=\"$OFFICE/bin:\$PATH\"" ;;

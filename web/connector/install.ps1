@@ -8,13 +8,16 @@
 # 3. %USERPROFILE%\.pixel-office\connector\ icine kurar, %USERPROFILE%\.pixel-office\bin\pixel-connector.cmd yazar
 # 4. `pixel-connector setup ...`, ardindan `install-service` (Gorev Zamanlayici, yonetici izni gerekmez).
 #    -NoService servis adimini atlar. Baglayici kendini asla buluttan guncellemez.
+# 5. Calisma klasoru listesi bossa setup %USERPROFILE%\PixelOfficeIsler klasorunu olusturup varsayilan calisma
+#    klasoru yapar; var olan liste degistirilmez. -NoDefaultWorkspace bu adimi atlar.
 param(
   [Parameter(Mandatory = $true)][string]$Server,
   [Parameter(Mandatory = $true)][string]$Room,
   [Parameter(Mandatory = $true)][string]$Key,
   [Parameter(Mandatory = $true)][string]$Name,
   [string]$DeviceName = "",
-  [switch]$NoService
+  [switch]$NoService,
+  [switch]$NoDefaultWorkspace
 )
 $ErrorActionPreference = "Stop"
 $Server = $Server.TrimEnd("/")
@@ -70,6 +73,7 @@ Write-Host "pixel-connector.pyz SHA-256: $actual (README'deki surum ozetiyle kar
 
 $setup = @($target, "setup", "--server", $Server, "--room", $Room, "--key", $Key, "--name", $Name)
 if ($DeviceName) { $setup += @("--device-name", $DeviceName) }
+if ($NoDefaultWorkspace) { $setup += @("--no-default-workspace") }
 & $py @setup
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -80,3 +84,4 @@ if (-not $NoService) {
 
 Write-Host ""
 Write-Host "Kurulum tamam. Siradaki adim: $bin\pixel-connector.cmd pair"
+Write-Host "Calisma klasorleri: $bin\pixel-connector.cmd workspace list"

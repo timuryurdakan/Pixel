@@ -315,31 +315,50 @@ içine kurar, `~/.pixel-office/bin/pixel-connector` kısayolunu ve ayar dosyası
 Ekrana yazdığı özeti bu sürümün özetiyle karşılaştırın:
 
 ```
-pixel-connector.pyz SHA-256: 93e5697f1e34e545fd5fd0148202a219315ad761a2cc56c3db89ee8f889a94e3
+pixel-connector.pyz SHA-256: 3d7f98613028a50474950c803a0b6743fa77b199cd40cc8e06852e38232eed53
 ```
 
 Windows (PowerShell): komut kutusundaki **Windows** sekmesini kullanın (`irm …/install.ps1 -OutFile install.ps1`, sonra
 `powershell -ExecutionPolicy Bypass -File install.ps1 -Server … -Room … -Key … -Name '…'`).
 
-Sonra (bir kez) kısayolu her yerde kullanmak için: `echo 'export PATH="$HOME/.pixel-office/bin:$PATH"' >> ~/.bashrc` ve yeni bir terminal.
+Sonra (bir kez) kısayolu her yerde kullanmak için: `echo 'export PATH="$HOME/.pixel-office/bin:$PATH"' >> ~/.bashrc`,
+ardından `source ~/.bashrc` (ya da yeni bir terminal). O zamana kadar komutu tam yoluyla çalıştırın:
+`~/.pixel-office/bin/pixel-connector …` (Windows: `%USERPROFILE%\.pixel-office\bin\pixel-connector.cmd …`).
 
-**Çalışma klasörleri** (`~/.pixel-office/connector/connector.json`): Claude Code yalnızca buraya eklediğiniz klasörlerde
-çalışır. Yalnızca **güvendiğiniz** projeleri ekleyin; Claude Code bu klasörlerdeki proje ayarlarını (hook'lar, `.mcp.json`)
-soru sormadan çalıştırır.
+**Çalışma klasörleri:** Claude Code yalnızca izin listesindeki klasörlerde çalışır. Kurulum, liste boşsa
+**`~/PixelOfficeIsler`** klasörünü (Windows: `%USERPROFILE%\PixelOfficeIsler`, izin 0700) oluşturur ve varsayılan çalışma
+klasörü olarak ekler (kimlik `isler`, alt klasörler seçilebilir). Kurulumu yeniden çalıştırmak var olan listenize dokunmaz.
+İstemiyorsanız kurulum komutuna `--no-default-workspace` (Windows: `-NoDefaultWorkspace`) ekleyin. Klasörleri komut
+satırından yönetin (yalnızca o bilgisayarda; tarayıcı izin listesini genişletemez):
+
+```sh
+pixel-connector workspace list                                   # kimlik, ad, alt klasör, yol
+pixel-connector workspace add ~/projem --name "Projem" --children  # --id ile kimlik de verilebilir
+pixel-connector workspace remove projem
+systemctl --user restart pixel-connector                         # değişiklik yeniden başlatınca geçerli olur
+```
+
+`add`, `config-check` ile aynı kuralları uygular: klasör var olmalı; ev dizininin kendisi, onu içeren üst klasörler
+(`/home`, `/`), `~/.ssh`, `~/.config`, `~/.pixel-office` gibi yasaklı yollar reddedilir; sembolik bağlar gerçek yola
+çözülüp öyle kaydedilir. Yalnızca **güvendiğiniz** projeleri ekleyin; Claude Code bu klasörlerdeki proje ayarlarını
+(hook'lar, `.mcp.json`) soru sormadan çalıştırır. Ofiste bir cihazın listesi boşsa **Yeni ajan** penceresi ve **Cihazlar**
+sayfası bunu söyler ve çalıştırılacak komutu gösterir. Elle düzenlemek de mümkündür
+(`~/.pixel-office/connector/connector.json`):
 
 ```json
 "workspaces": [
-  {"id": "pixel", "name": "Pixel", "path": "~/Desktop/Pixel", "children": false},
-  {"id": "projeler", "name": "Projeler", "path": "~/projeler", "children": true}
+  {"id": "isler", "name": "Pixel Office İşleri", "path": "~/PixelOfficeIsler", "children": true},
+  {"id": "pixel", "name": "Pixel", "path": "~/Desktop/Pixel", "children": false}
 ]
 ```
 
-`children: true` o klasörün alt klasörlerini de seçilebilir yapar. Kaydettikten sonra `pixel-connector config-check`, ardından
-`systemctl --user restart pixel-connector`. Claude Code yalnızca VS Code eklentisindeyse terminal sürümünü kurup bir kez
+`children: true` o klasörün alt klasörlerini de seçilebilir yapar. Elle düzenledikten sonra `pixel-connector config-check`,
+ardından `systemctl --user restart pixel-connector`. Claude Code yalnızca VS Code eklentisindeyse terminal sürümünü kurup bir kez
 `claude` ile giriş yapın ve `which claude` çıktısını `"engines": {"claude": {"path": "…"}}` alanına yazın.
 
 **Servis (Linux):** durum `systemctl --user status pixel-connector`, günlük `journalctl --user -u pixel-connector`.
-Oturum açmadan da çalışsın isterseniz `loginctl enable-linger $USER`. Her şeyi kontrol etmek için `pixel-connector doctor`.
+Oturum açmadan da çalışsın isterseniz `loginctl enable-linger $USER`. Her şeyi kontrol etmek için `pixel-connector doctor`
+(çalışma klasörü yoksa ya da saat farkı varsa söyler; saat farkını önbelleğe alınmayan `/api/health` yanıtından ölçer).
 Güncellemek için kurulum komutunu yeniden çalıştırın (servis yeni sürümle yeniden başlar). Kaldırmak için
 `pixel-connector uninstall-service`, ardından `~/.pixel-office/connector/` klasörünü silin.
 

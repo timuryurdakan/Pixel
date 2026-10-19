@@ -133,6 +133,12 @@ class InstallScriptTests(unittest.TestCase):
                                 capture_output=True, text=True, timeout=60)
             self.assertEqual(r2.returncode, 0, r2.stdout + r2.stderr)
             self.assertIn("Sunucu: %s" % base, r2.stdout)
+            # Phase 17: a clean install has the default workspace (0700) and config-check lists it
+            ws = os.path.join(h, "PixelOfficeIsler")
+            self.assertEqual(os.stat(ws).st_mode & 0o777, 0o700)
+            self.assertIn("isler", r2.stdout)
+            self.assertIn(os.path.realpath(ws), r2.stdout)
+            self.assertIn("workspace list", r.stdout)
 
     def test_tampered_download_is_refused(self):
         with tempfile.TemporaryDirectory() as web, tempfile.TemporaryDirectory() as h:

@@ -51,6 +51,25 @@ function gb(bytes) {
 
 const confirmBox = (text) => window.confirm(text);
 
+// Phase 17: a paired device with an empty workspace allow-list. Static text plus the local command; nothing here
+// comes from the browser or the device, and the allow-list can only be widened on the computer itself.
+export const NO_WORKSPACE_CMD = 'pixel-connector workspace add ~/projem';
+export const NO_WORKSPACE_HINT = `Bu cihazda izinli klasör yok. Bilgisayarda şunu çalıştırın: ${NO_WORKSPACE_CMD} `
+  + '(ya da varsayılan ~/PixelOfficeIsler klasörünü kullanmak için bağlayıcıyı güncelleyin).';
+
+/** True when a device's `workspace.list` result is known and empty. */
+export function noWorkspaces(list) { return Array.isArray(list) && list.length === 0; }
+
+/** The hint as a <p>, built with textContent only (the command in a <code>). */
+export function workspaceHintEl(cls = 'muted small') {
+  const p = el('p', cls);
+  p.dataset.wsHint = '';
+  p.append(document.createTextNode('Bu cihazda izinli klasör yok. Bilgisayarda şunu çalıştırın: '),
+    el('code', null, NO_WORKSPACE_CMD),
+    document.createTextNode(' (ya da varsayılan ~/PixelOfficeIsler klasörünü kullanmak için bağlayıcıyı güncelleyin).'));
+  return p;
+}
+
 // =====================================================================================================
 // Devices page
 // =====================================================================================================
@@ -128,6 +147,11 @@ export class DevicesPage {
       h.request(id, { type: 'usage.get', period: 'day', agent: null }).then((u) => { st.usage = u; this._renderUsage(id); }).catch(() => {}),
       h.request(id, { type: 'runtime.list' }).then((r) => { st.runtimes = r.runtimes || []; this._renderRuntimes(id); }).catch(() => {}),
       h.request(id, { type: 'peer.list' }).then((r) => { st.peers = r.peers || []; this._renderPeers(id); }).catch(() => {}),
+      h.request(id, { type: 'workspace.list' }).then((r) => {
+        st.workspaces = Array.isArray(r.workspaces) ? r.workspaces : [];
+        if (this.newAgent && this.newAgent.wsCache) this.newAgent.wsCache.set(id, st.workspaces);
+        this._renderAgents(id);
+      }).catch(() => {}),
       h.refreshAgents(id).catch(() => {}),
     ]);
   }
@@ -311,6 +335,8 @@ export class DevicesPage {
     add.disabled = !d.ready;
     head.appendChild(add);
     c.agents.appendChild(head);
+    const claudeOk = !!(d.info && d.info.engines && d.info.engines.claude && d.info.engines.claude.available);
+    if (d.ready && claudeOk && noWorkspaces(this._d(id).workspaces)) c.agents.appendChild(workspaceHintEl('dev-hint muted small'));
     if (!d.agents.size) {
       c.agents.appendChild(el('p', 'muted small', d.ready ? 'Bu cihazda henüz ajan yok.' : 'Cihaz çevrimiçi olunca ajanlar görünür.'));
       return;
@@ -642,6 +668,10 @@ export class NewAgentDialog {
     this.engineBox = dialog.querySelector('#agent-engines');
     this.subRow = dialog.querySelector('#agent-sub-row');
     this.subList = dialog.querySelector('#agent-sub-list');
+    this.wsHint = workspaceHintEl();
+    this.wsHint.hidden = true;
+    const wsLabel = this.f.workspace.closest('label');
+    if (wsLabel) wsLabel.after(this.wsHint);
     this.wsCache = new Map();
     this.f.device.addEventListener('change', () => this._loadDevice());
     this.f.workspace.addEventListener('change', () => this._ws());
@@ -731,12 +761,12 @@ export class NewAgentDialog {
     const wsSel = this.f.workspace;
     wsSel.replaceChildren(el('option', null, 'Yükleniyor…'));
     let list = this.wsCache.get(d.id);
-    if (!list) {
+    if (!list || !list.length) {         // an empty list is re-asked: the user may have just run `workspace add`
       try {
         list = (await this.hub.request(d.id, { type: 'workspace.list' })).workspaces || [];
         this.wsCache.set(d.id, list);
       } catch (e) {
-        list = [];
+        list = null;                     // unknown, not empty: no "no workspaces" hint
         this._error(e instanceof ControlError ? e.text : 'Klasörler alınamadı');
       }
     }
@@ -773,7 +803,9 @@ export class NewAgentDialog {
     wsSel.replaceChildren();
     if (!isClaude) { const o = el('option', null, '(yok, yalnızca sohbet)'); o.value = ''; wsSel.appendChild(o); }
     for (const w of this.workspaces || []) { const o = el('option', null, w.name); o.value = w.id; wsSel.appendChild(o); }
-    if (isClaude && !(this.workspaces || []).length) { const o = el('option', null, 'İzinli klasör yok (connector.json)'); o.value = ''; wsSel.appendChild(o); }
+    const none = isClaude && noWorkspaces(this.workspaces);
+    if (none) { const o = el('option', null, 'İzinli klasör yok'); o.value = ''; wsSel.appendChild(o); }
+    this.wsHint.hidden = !none;
     if ([...wsSel.options].some((o) => o.value === keep)) wsSel.value = keep;
     this.f.profile.disabled = !isClaude;
     this.dialog.querySelector('#agent-profile-row').hidden = !isClaude;
@@ -809,7 +841,10 @@ export class NewAgentDialog {
     const model = this.f.model.value || null;
     if (engine !== 'claude' && !model) { this._error('Bir model seçin.'); return; }
     const wsId = this.f.workspace.value;
-    if (engine === 'claude' && !wsId) { this._error(errorText('workspace_denied')); return; }
+    if (engine === 'claude' && !wsId) {
+      this._error(noWorkspaces(this.workspaces) ? NO_WORKSPACE_HINT : 'Claude Code ajanı için bir çalışma klasörü seçin.');
+      return;
+    }
     const sub = this.f.sub.value.trim() || null;
     let budget = null;
     if (this.f.useBudget.checked) {

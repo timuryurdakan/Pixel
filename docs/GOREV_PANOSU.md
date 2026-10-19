@@ -40,13 +40,13 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 
 | # | Görev | Sahibi | Durum |
 |---|---|---|---|
-| C1 | Aşama 17: klasör kurulum düzeltmesi, `workspace` CLI, `doctor` saat düzeltmesi | Claude | ⬜ (kullanıcı onayı bekleniyor) |
+| C1 | Aşama 17: klasör kurulum düzeltmesi, `workspace` CLI, `doctor` saat düzeltmesi | Claude | ✅ |
 | C2 | Yayına alma, eşleştirme, gerçek Claude testi, birleştirmeler | Claude | ⬜ |
 | A1 | Telefon görünümü görsel cilası | Antigravity | ✅ Teslim edildi |
 | A2 | Tanıtım (landing) sayfası | Antigravity | ✅ Teslim edildi |
 | A3 | Rehber sayfası iyileştirmesi | Antigravity | ✅ Teslim edildi |
 | A4 | v4 Otomasyonlar ön araştırması | Antigravity | ✅ Teslim edildi |
-| A5 | Frontend Maksimum Seviye Cila & Animasyonlar (4 Ajan) | Antigravity | ✅ Teslim edildi |
+| A5 | Ofis efektleri: parçacık, ışık, tıklama tepkisi, ses (kullanıcı isteği) | Antigravity | 🔄 |
 
 ---
 
@@ -106,6 +106,21 @@ bir şablon seçer, ajanlar ofiste birbirine iş devreder (ör. frontend bitince
 - Önerilen ilk 3 şablon ve kaba bir uygulama planı.
 **Kabul:** Kaynaklar tarihle belirtilir; kod değişikliği yok.
 
+### A5: Ofis efektleri (kullanıcı isteği)
+**Amaç:** Ofise parçacıklar, atmosferik ışık, ajana tıklayınca küçük tepkiler ve isteğe bağlı ses eklemek.
+**Dokunulabilecek dosyalar:** `web/js/fx.js`, `web/js/audio.js` (yeni), `web/js/renderer.js`, `web/js/sprites.js`
+(yalnızca yeni çizimler eklenir, mevcut çizimler ve API değişmez), `web/js/main.js` (yalnızca efekt/ses bağlantısı),
+`web/index.html` (yalnızca ses düğmesi), `web/css/style.css` (yalnızca efekt/ses düğmesi stilleri).
+**Kurallar:**
+- **Ses varsayılan olarak KAPALI.** Kullanıcı bir düğmeyle açar, tercih `localStorage`'da (try/catch ile) saklanır.
+  Sesler kodla (WebAudio) üretilir ya da `web/` altındaki küçük dosyalardan gelir; dış kaynak yok.
+- `prefers-reduced-motion` açıksa parçacık ve titreşim efektleri kapanır.
+- Performans: mini pencerede (PiP) ve telefonda 60 fps'i bozmamalı. Görünmeyen sekmede efekt döngüsü durur.
+- Mevcut davranış bozulmaz: v1 yerel mod, v2 bulut, v3 kontrol paneli ve `tests/test_v3_ui.py` geçer.
+- `sprites.js` için `validateSprites()` hatasız kalmalı (`web/sprite-preview.html`).
+**Teslim:** Önce `git merge main` ile güncel `main`'i dalına al (Aşama 17 ve bağlayıcı düzeltmesi geldi), sonra `[A5]`
+commit'i. Ekran görüntüsü ve fps gözlemi teslim notuna yazılır.
+
 ---
 
 ## 3. Teslim notları
@@ -114,14 +129,25 @@ görüntüleri, bilinen sorunlar.
 
 - **2026-10-19, Claude:** Pano oluşturuldu. Aşama 16 commit'lendi (`d3ea97d`).
   `~/Desktop/Pixel-antigravity` worktree'si `antigravity/gorevler` dalında açıldı.
+- **2026-10-19, Claude (C1, Aşama 17):** Kurulumda varsayılan `~/PixelOfficeIsler` çalışma klasörü,
+  `pixel-connector workspace list|add|remove`, arayüzde "izinli klasör yok" ipucu, `doctor` saat farkı düzeltmesi.
+  Değişen web dosyası yalnızca `web/js/devices.js` (CSS yok; `sw.js` sürümü birleştirmede artırılacak). Bağlayıcı
+  yeniden derlendi (`.pyz` SHA-256 `5d060022…`). 504 test geçiyor (1 atlandı). A3 için doğru metin:
+  `pixel-connector workspace add ~/projem`, varsayılan klasör `~/PixelOfficeIsler`, kurulumu yeniden çalıştırmak listesi
+  boş cihaza varsayılan klasörü ekler.
 - **2026-10-19, Antigravity:** A1, A2, A3 ve A4 tamamlandı:
   - **A1:** `web/css/style.css` (boş görev çıktısı telefonda kompakt dashed çizgi yapıldı, `.ctl-compose` alt kenara yapıştırıldı, tüm düğmeler ve tıklama alanları ≥44 px yapıldı, `prefers-reduced-motion` desteklendi). 430, 390 ve 360 px'te test edildi, yatay kaydırma 0, `test_v3_ui.py` geçti.
   - **A2:** `web/tanitim.html`, `web/css/tanitim.css`, `web/js/tanitim.js` (girişim için ana tanıtım sayfası; `sprites.js` ile çalışan prosedürel canlı mini ofis sahnesi, 5 duruma tıklanabilir interaktif durum demosu, 6 özellik kartı, 3 adımlı rehber, gizlilik ve SSS). 1280, 390 ve 360 px'te Chrome CDP ile doğrulandı (0 konsol hatası, 0 yatay kaydırma).
   - **A3:** `web/rehber.html` (7. adımda oda izleme linki ile eşleştirme kumandası ayrımı sade dille açıklandı; SSS'e `pixel-connector` bulunamadı çözümü ve `workspace add` klasör izin çözümü eklendi). Geri dönüş bağlantısı ve animasyonlar korundu.
   - **A4:** `docs/V4_OTOMASYON_ARASTIRMA.md` (9 detaylı şablon fikri, DAG devir teslim durum makinesi, v3 şifreli protokol entegrasyonu, n8n/CrewAI/Lindy karşılaştırması, YouTube Data API kotası ve Anthropic kullanım koşulları risk analizi, önerilen ilk 3 MVP şablonu). Kod değişikliği yok.
-- **2026-10-19, Antigravity:** A5 (Frontend Maksimum Seviye Cila & Animasyonlar — 4 Ajanlık Paket) tamamlandı:
-  - **Ajan 1 (Pixel FX & Atmosfer):** `web/js/fx.js`, `web/js/sprites.js`, `web/js/renderer.js`, `web/js/main.js` (Ayak tozu, kod yazarken kodlama piksel ışıltısı, gece mavisi ve pencerelerde yanıp sönen yıldızlar, aktif monitör halo ışığı, tıklandığında kalp/mutlu baloncuklu zıplama tepkileri).
-  - **Ajan 2 (Retro Chiptune Ses Motoru):** `web/js/audio.js` (Web Audio API ile sıfır harici asset/0 KB, blip, hop, victory jingle, alert ve mola sesleri; topbar'da 🔊/🔇 ses açma/kapama butonu).
-  - **Ajan 3 (Kamera, Zoom & Ofis Maskotu):** Kırmızı halı üzerinde uyuyan, gerinen, uyanıp miyavlayan ve kalp çıkaran 16x16 turuncu ofis kedisi (`mascot-cat`); canvas sağ altında `[-] 1x [+]` piksel keskinliğinde kademeli zoom kontrolleri.
-  - **Ajan 4 (UI/HUD & Canlı Portreler):** Müfettiş (details) panelinde seçili ajanın kendi ten, saç ve kıyafet paletiyle oluşturulan 32x48 canlı animasyonlu piksel portresi; ajan listesi üstünde dinamik sayaçlı durum filtre çubuğu (`[Tümü] [Çalışan] [Bekleyen] [Kahve] [Uyuyan]`).
-  - **Doğrulama:** Chrome CDP ile 1280 px, 390 px ve 360 px ekranlarda test edildi; 0 konsol hatası, 0 yatay taşma (scrollWidth === clientWidth). Unit testleri ve sprite validation tam başarıyla geçti.
+- **2026-10-19, Claude (birleştirme):** A1–A4 `main`'e birleştirildi (`fa76328`); çakışan günlük kayıtlarının ikisi de korundu,
+  `sw.js` → `po-v3.0.4`. Tanıtım sayfasındaki "kodların bilgisayarından çıkmaz" cümlesi "Pixel Office sunucularına
+  gönderilmez" olarak düzeltildi (Claude Code kullanılırken kod Anthropic'e gider). Görev dışı `4d2c348` (bağlayıcı yeniden
+  başlatma yarışı) uyarlanarak alındı: `SO_REUSEADDR` Windows'ta kapalı (orada portun ele geçirilmesine izin verir); test:
+  `tests/test_connector_restart.py`. `fa6b28c` (parçacık/ışık efektleri), çalışma klasöründeki `audio.js` ve kökteki
+  `agents.md` **birleştirilmedi**: panoda atanmış görev değiller ve korunan dosyalara (`main.js`, `renderer.js`,
+  `sprites.js`) dokunuyorlar. Kullanıcı onayı bekleniyor. Not: birleştirme `~/Desktop/Pixel` içinde başlatılmıştı; kurala
+  göre birleştirmeyi yalnızca Claude yapar.
+- **2026-10-19, Claude:** Kullanıcı efektleri onayladı, **A5** olarak panoya eklendi (kurallar yukarıda; ses varsayılan kapalı).
+  Kökteki `agents.md` temizlenip `AGENTS.md` olarak eklendi: Google yönlendirme bağlantıları doğrudan bağlantıya çevrildi,
+  sembolik bağlantı önerisi kaldırıldı, §8 proje değerleriyle dolduruldu. Panoyla çelişirse pano geçerlidir.

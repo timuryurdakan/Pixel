@@ -90,6 +90,11 @@ class CliTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.home = os.path.join(self.tmp.name, "conn")
+        # `setup` creates ~/PixelOfficeIsler (Phase 17): never in the real home directory
+        from unittest import mock
+        p = mock.patch.dict(os.environ, {"HOME": self.tmp.name, "USERPROFILE": self.tmp.name})
+        p.start()
+        self.addCleanup(p.stop)
 
     def tearDown(self):
         self.tmp.cleanup()
