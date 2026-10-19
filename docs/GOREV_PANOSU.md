@@ -42,10 +42,10 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 |---|---|---|---|
 | C1 | Aşama 17: klasör kurulum düzeltmesi, `workspace` CLI, `doctor` saat düzeltmesi | Claude | ⬜ (kullanıcı onayı bekleniyor) |
 | C2 | Yayına alma, eşleştirme, gerçek Claude testi, birleştirmeler | Claude | ⬜ |
-| A1 | Telefon görünümü görsel cilası | Antigravity | ⬜ |
-| A2 | Tanıtım (landing) sayfası | Antigravity | ⬜ |
-| A3 | Rehber sayfası iyileştirmesi | Antigravity | ⬜ |
-| A4 | v4 Otomasyonlar ön araştırması | Antigravity | ⬜ |
+| A1 | Telefon görünümü görsel cilası | Antigravity | ✅ Teslim edildi |
+| A2 | Tanıtım (landing) sayfası | Antigravity | ✅ Teslim edildi |
+| A3 | Rehber sayfası iyileştirmesi | Antigravity | ✅ Teslim edildi |
+| A4 | v4 Otomasyonlar ön araştırması | Antigravity | ✅ Teslim edildi |
 
 ---
 
@@ -113,3 +113,8 @@ görüntüleri, bilinen sorunlar.
 
 - **2026-10-19, Claude:** Pano oluşturuldu. Aşama 16 commit'lendi (`d3ea97d`).
   `~/Desktop/Pixel-antigravity` worktree'si `antigravity/gorevler` dalında açıldı.
+- **2026-10-19, Antigravity:** A1, A2, A3 ve A4 tamamlandı:
+  - **A1:** `web/css/style.css` (boş görev çıktısı telefonda kompakt dashed çizgi yapıldı, `.ctl-compose` alt kenara yapıştırıldı, tüm düğmeler ve tıklama alanları ≥44 px yapıldı, `prefers-reduced-motion` desteklendi). 430, 390 ve 360 px'te test edildi, yatay kaydırma 0, `test_v3_ui.py` geçti.
+  - **A2:** `web/tanitim.html`, `web/css/tanitim.css`, `web/js/tanitim.js` (girişim için ana tanıtım sayfası; `sprites.js` ile çalışan prosedürel canlı mini ofis sahnesi, 5 duruma tıklanabilir interaktif durum demosu, 6 özellik kartı, 3 adımlı rehber, gizlilik ve SSS). 1280, 390 ve 360 px'te Chrome CDP ile doğrulandı (0 konsol hatası, 0 yatay kaydırma).
+  - **A3:** `web/rehber.html` (7. adımda oda izleme linki ile eşleştirme kumandası ayrımı sade dille açıklandı; SSS'e `pixel-connector` bulunamadı çözümü ve `workspace add` klasör izin çözümü eklendi). Geri dönüş bağlantısı ve animasyonlar korundu.
+  - **A4:** `docs/V4_OTOMASYON_ARASTIRMA.md` (9 detaylı şablon fikri, DAG devir teslim durum makinesi, v3 şifreli protokol entegrasyonu, n8n/CrewAI/Lindy karşılaştırması, YouTube Data API kotası ve Anthropic kullanım koşulları risk analizi, önerilen ilk 3 MVP şablonu). Kod değişikliği yok.

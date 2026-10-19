@@ -779,3 +779,9 @@ Her ajan işini bitirince buraya tarihli bir kayıt ekler (en yeni en altta).
   4. İsteğe bağlı: GitHub noreply e-postası, secret scanning, kullanım uyarıları.
 
   Sıradaki: Aşama 17 (çalışma klasörü kurulum düzeltmesi).
+- **2026-10-19 — Antigravity (Görev Panosu A1–A4):** Görev panosundaki dört görev tamamlandı:
+  - **A1 (Telefon Görünümü Cilası):** `web/css/style.css` düzenlendi. Boş görev çıktısı telefonda kompakt dashed çizgi hâline getirildi; form (`.ctl-compose`) sayfa kısa olsa bile alt kenara sabitlendi; butonlar, bağlantılar ve dokunma hedefleri en az 44 px yapıldı; `prefers-reduced-motion` desteklendi. 430, 390 ve 360 px genişliklerinde yatay kaydırma olmadan test edildi, `test_v3_ui.py` geçti.
+  - **A2 (Tanıtım Landing Sayfası):** `web/tanitim.html`, `web/css/tanitim.css`, `web/js/tanitim.js` yazıldı. Harici bağımlılık ve CDN olmadan, CSP kurallarına tam uyumlu. `sprites.js` procedürel sprite motoru kullanılarak canlı mini ofis animasyonu, 5 durumu etkileşimli gösteren mini demo, 6 özellik kartı, 3 adımlı rehber, gizlilik ve SSS bölümleri eklendi. Headless Chrome ile 1280, 390 ve 360 px'te test edildi (0 konsol hatası, 0 yatay kaydırma).
+  - **A3 (Rehber Sayfası İyileştirmesi):** `web/rehber.html` güncellendi. 7. adımda oda izleme bağlantısı ile kumanda eşleştirmesi arasındaki fark açıklandı; SSS'e `pixel-connector: komut bulunamadı` ve çalışma klasörü izin hatası (`pixel-connector workspace add`) maddeleri eklendi.
+  - **A4 (v4 Otomasyonlar Ön Araştırması):** `docs/V4_OTOMASYON_ARASTIRMA.md` hazırlandı. 9 adet çok ajanlı otomasyon şablonu, DAG devir teslim durum makinesi, insan onay noktaları, v3 şifreli protokol entegrasyonu, n8n/CrewAI/Lindy rakip analizi, YouTube Data API ve Anthropic kullanım şartları riskleri belgelendi; MVP için ilk 3 şablon önerildi.
+
