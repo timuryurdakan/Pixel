@@ -158,7 +158,7 @@ def load_control(home: str) -> Optional[dict]:
 
 class ControlServer(ThreadingHTTPServer):
     daemon_threads = True
-    allow_reuse_address = False
+    allow_reuse_address = True
 
     def __init__(self, port: int, routes: Dict[Tuple[str, str], Route], approvals: Approvals,
                  token: Optional[str] = None) -> None:
