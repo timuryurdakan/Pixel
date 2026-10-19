@@ -69,7 +69,7 @@ Teknik ayrıntılar: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — **tüm a
 | 14 | Arayüz | Frontend Mühendisi | görev kutusu, cihazlar sayfası, token göstergesi, telefon düzeni | ✅ Tamamlandı |
 | 15 | Güvenlik İncelemesi & QA & Dokümantasyon | Güvenlik İnceleyici + QA | inceleme, uçtan uca test, README, rehber | ✅ Tamamlandı (gerçek dünya denemeleri yayına almadan sonra, kullanıcıyla) |
 | 16 | Siber Güvenlik Denetimi | Uygulama Güvenliği Mühendisi | `docs/SECURITY_AUDIT.md`, düzeltmeler, `tests/test_phase16_security.py` | ✅ Tamamlandı |
-| 17 | Çalışma klasörü kurulum düzeltmesi | Bağlayıcı Mühendisi | kurulumda `~/PixelOfficeIsler`, `pixel-connector workspace` komutu, arayüz ipucu, `doctor` saat farkı | ⬜ Bekliyor |
+| 17 | Çalışma klasörü kurulum düzeltmesi | Bağlayıcı Mühendisi | kurulumda `~/PixelOfficeIsler`, `pixel-connector workspace` komutu, arayüz ipucu, `doctor` saat farkı | ✅ Tamamlandı |
 
 Durum işaretleri: ⬜ Bekliyor · 🔄 Devam ediyor · ✅ Tamamlandı · ⚠️ Sorunlu
 
@@ -368,13 +368,13 @@ Teslimat: `docs/SECURITY_AUDIT.md` (İngilizce: kapsam, yöntem, bulgu tablosu, 
 
 **Kabul kriterleri:** Tüm testler geçer (481, 1 atlandı: `pwsh` yok). Kritik ya da yüksek önem derecesinde açık bulgu kalmaz; her düzeltmenin bir regresyon testi vardır. Herkese açık geçmişte döndürülmesi gereken gizli bilgi yoktur (varsa kullanıcı listesinde açıkça yazılır). Canlı denetimler salt okunurdur (oda oluşturma, kaba kuvvet, yük testi yok). Kabul edilen ve kullanıcıya kalan maddeler gerekçeleriyle belgededir. ✔️
 
-### Aşama 17 — Çalışma klasörü kurulum düzeltmesi (Bağlayıcı Mühendisi) ⬜
+### Aşama 17 — Çalışma klasörü kurulum düzeltmesi (Bağlayıcı Mühendisi) ✅
 Sorun: yeni kurulan bir bağlayıcıda hiç çalışma klasörü olmadığı için Claude Code ajanı oluşturulamıyor; kullanıcı `connector.json` dosyasını elle düzenlemek zorunda kalıyor. Ayrıca `doctor`, CDN önbelleğinden gelen yanıtın `Date` başlığıyla saat farkı hesapladığı için yanlış alarm veriyor.
-- [ ] Kurulum betikleri (`install.sh`, `install.ps1`) `~/PixelOfficeIsler` klasörünü oluşturur ve varsayılan çalışma klasörü olarak ekler (zaten varsa yeniden kullanır)
-- [ ] `pixel-connector workspace add|list|remove` komutu (yalnızca yerel komut satırı)
-- [ ] Cihazda hiç çalışma klasörü yoksa arayüzde açık bir ipucu (ne yapılacağı ve yerel komut)
-- [ ] `doctor` saat farkı yanlış alarmı: `no-store` bir uçtan ölçmek ya da `Age` başlığını çıkarmak
-- [ ] Testler; bağlayıcı yeniden derlenir, `SHA256SUMS` ve README özeti güncellenir; `sw.js` sürümü artırılır (web dosyaları değişirse)
+- [x] Kurulum betikleri (`install.sh`, `install.ps1`) `~/PixelOfficeIsler` klasörünü oluşturur ve varsayılan çalışma klasörü olarak ekler (zaten varsa yeniden kullanır)
+- [x] `pixel-connector workspace add|list|remove` komutu (yalnızca yerel komut satırı)
+- [x] Cihazda hiç çalışma klasörü yoksa arayüzde açık bir ipucu (ne yapılacağı ve yerel komut)
+- [x] `doctor` saat farkı yanlış alarmı: `no-store` bir uçtan ölçmek ya da `Age` başlığını çıkarmak
+- [x] Testler; bağlayıcı yeniden derlenir, `SHA256SUMS` ve README özeti güncellenir; `sw.js` sürümü artırılır (web dosyaları değişirse; `web/js/devices.js` değişti, sürümü koordinatör birleştirmede artırır)
 
 **Güvenlik kısıtları (Aşama 16'dan, ayrıntı: `docs/SECURITY_AUDIT.md` §5):** klasör `mkdir` ile 0700 oluşturulur, sembolik bağ ya da dosya ise reddedilir, `realpath` ile kaydedilir; ev dizini, üst klasörleri ve var olan depolar varsayılan olamaz. `workspace add` yalnızca yerel komut satırından çalışır: E2E komutu ya da `/onay` sayfa jetonuyla ulaşılabilen bir `/ctl` yolu olamaz, yani tarayıcı izin listesini genişletemez. `check_denied()` ve `realpath` kuralları aynen uygulanır, `connector.json` atomik ve 0600 yazılır. Arayüz ipucu tarayıcıdan yol almaz, metinler yalnızca `textContent` ile gösterilir. `EXEC_SENSITIVE_DENY`/`SECRET_READ_DENY` değişmez, kurulum `~/.claude`'a dokunmaz. Bilet `iat` toleransı (30 sn) saat farkını gizlemek için genişletilmez.
 
@@ -779,3 +779,10 @@ Her ajan işini bitirince buraya tarihli bir kayıt ekler (en yeni en altta).
   4. İsteğe bağlı: GitHub noreply e-postası, secret scanning, kullanım uyarıları.
 
   Sıradaki: Aşama 17 (çalışma klasörü kurulum düzeltmesi).
+- **2026-10-19 — Aşama 17 (Bağlayıcı Mühendisi):** Çalışma klasörü kurulum düzeltmesi tamamlandı.
+  - **Varsayılan klasör:** `setup` (kurulum betikleri bunu çağırır), çalışma klasörü listesi boşsa `~/PixelOfficeIsler` klasörünü (Windows: `%USERPROFILE%\PixelOfficeIsler`) 0700 izniyle oluşturur ve `{"id": "isler", "name": "Pixel Office İşleri", "path": "~/PixelOfficeIsler", "children": true}` olarak ekler. Klasör zaten düz bir klasörse yeniden kullanılır. Sembolik bağ, dosya ya da var olan bir git deposu ise reddedilir; kurulum yine biter, yalnızca uyarı yazar. Dolu bir listeye hiç dokunulmaz, bu yüzden kurulumu yeniden çalıştırmak güvenlidir. Kapatmak için `--no-default-workspace` (Windows: `-NoDefaultWorkspace`).
+  - **`pixel-connector workspace list|add|remove`:** yalnızca yerel komut satırı. E2E komutu ya da `/ctl` yolu yok, tarayıcı izin listesini genişletemez. `add`, `config-check` ile aynı kuralları uygular (yasaklı yollar, ev dizini, kök, ev dizininin üst klasörleri), klasörün var olmasını ister ve gerçek yolu (`realpath`) kaydeder. `connector.json` atomik ve 0600 yazılır. Servis listeyi açılışta okuduğu için komut, platforma göre yeniden başlatma komutunu yazar (canlı yeniden yükleme eklenmedi).
+  - **Arayüz:** listesi boş bir cihazda "Yeni ajan" penceresi ve Cihazlar sayfası şu ipucunu gösterir: "Bu cihazda izinli klasör yok. Bilgisayarda şunu çalıştırın: `pixel-connector workspace add ~/projem` (ya da varsayılan `~/PixelOfficeIsler` klasörünü kullanmak için bağlayıcıyı güncelleyin)." Metin sabittir ve yalnızca `textContent` ile basılır. CSS değişmedi.
+  - **`doctor`:** saat farkı artık `Cache-Control: no-store` olan `/api/health` yanıtından ölçülüyor (`Date + Age`, isteğin orta anı). CDN önbelleğindeki `/api/config` yalnızca yedek, onda da `Age` hesaba katılıyor. Böylece 259 sn'lik yanlış alarm gidiyor. Çalışma klasörü yoksa `doctor` düzeltme komutunu da yazıyor.
+  - Bağlayıcı yeniden derlendi: `.pyz` SHA-256 `5d060022d19ba20b94ab40abe14b96ded9362a4c97c62e997b2f2127feedaaf7` (README ve `SHA256SUMS` güncel, `--check` geçiyor). Belgeler: README v3 bölümü, `docs/V3.md` §5.3, §5.4, §6.4, §9.2 ve "Phase 17 deviations". Testler: `tests/test_phase17_workspaces.py`, `tests/js/devices_hint.test.js` ve kurulum uçtan uca testine ek denetim. **504 test geçiyor** (1 atlandı: `pwsh` yok).
+  - Her cihazda yapılacak: kurulum komutunu (Cihazlar → Cihaz ekle) yeniden çalıştırmak, ardından `pixel-connector workspace list` ile `isler` klasörünü görmek. `web/sw.js` sürümü birleştirmede artırılacak.

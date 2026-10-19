@@ -40,7 +40,7 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 
 | # | Görev | Sahibi | Durum |
 |---|---|---|---|
-| C1 | Aşama 17: klasör kurulum düzeltmesi, `workspace` CLI, `doctor` saat düzeltmesi | Claude | ⬜ (kullanıcı onayı bekleniyor) |
+| C1 | Aşama 17: klasör kurulum düzeltmesi, `workspace` CLI, `doctor` saat düzeltmesi | Claude | ✅ |
 | C2 | Yayına alma, eşleştirme, gerçek Claude testi, birleştirmeler | Claude | ⬜ |
 | A1 | Telefon görünümü görsel cilası | Antigravity | ⬜ |
 | A2 | Tanıtım (landing) sayfası | Antigravity | ⬜ |
@@ -113,3 +113,9 @@ görüntüleri, bilinen sorunlar.
 
 - **2026-10-19, Claude:** Pano oluşturuldu. Aşama 16 commit'lendi (`d3ea97d`).
   `~/Desktop/Pixel-antigravity` worktree'si `antigravity/gorevler` dalında açıldı.
+- **2026-10-19, Claude (C1, Aşama 17):** Kurulumda varsayılan `~/PixelOfficeIsler` çalışma klasörü,
+  `pixel-connector workspace list|add|remove`, arayüzde "izinli klasör yok" ipucu, `doctor` saat farkı düzeltmesi.
+  Değişen web dosyası yalnızca `web/js/devices.js` (CSS yok; `sw.js` sürümü birleştirmede artırılacak). Bağlayıcı
+  yeniden derlendi (`.pyz` SHA-256 `5d060022…`). 504 test geçiyor (1 atlandı). A3 için doğru metin:
+  `pixel-connector workspace add ~/projem`, varsayılan klasör `~/PixelOfficeIsler`, kurulumu yeniden çalıştırmak listesi
+  boş cihaza varsayılan klasörü ekler.
