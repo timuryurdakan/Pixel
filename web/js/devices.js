@@ -144,8 +144,9 @@ export class DevicesPage {
 
   _relayLine() {
     const s = this.hub.relayStatus;
-    const t = { live: 'Röle: bağlı', connecting: 'Röle: bağlanıyor…', reconnecting: 'Röle: yeniden bağlanıyor…',
-      quota: 'Röle şu an meşgul ya da günlük kota doldu', idle: 'Röle: bağlı değil' }[s] || s;
+    const t = s === 'idle' && this.hub.relayError === 'csp' ? 'Röle: güvenlik politikası (CSP) röle adresini engelliyor'
+      : { live: 'Röle: bağlı', connecting: 'Röle: bağlanıyor…', reconnecting: 'Röle: yeniden bağlanıyor…',
+        quota: 'Röle şu an meşgul ya da günlük kota doldu', idle: 'Röle: bağlı değil' }[s] || s;
     this.relayEl.textContent = t;
     this.relayEl.dataset.status = s;
   }

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 import socket
 import threading
 import time
@@ -23,6 +24,10 @@ PING_S = 30.0
 DEAD_S = 75.0
 BACKOFF = (1, 2, 4, 8, 16, 30)
 LONG_BACKOFF = 300.0
+# The relay URL from the ticket answer: wss:// anywhere, plain ws:// only to the local dev relay (same rule as the
+# browser's relay.js), and always the room's own WebSocket path (Phase 15: the ticket never goes out in clear text).
+RELAY_URL_RE = re.compile(r"^(?:wss://[A-Za-z0-9.-]+(?::\d{1,5})?|ws://127\.0\.0\.1(?::\d{1,5})?)"
+                          r"/v1/rooms/([a-z2-7]{26})/ws\Z")
 
 
 class TicketError(Exception):
@@ -48,6 +53,9 @@ def fetch_ticket(server: str, room: str, key: str, device_id: str, timeout: floa
         raise TicketError(e.code, msg) from None
     if not isinstance(d, dict) or not isinstance(d.get("url"), str) or not isinstance(d.get("ticket"), str):
         raise TicketError(0, "bad ticket answer")
+    m = RELAY_URL_RE.match(d["url"])
+    if m is None or m.group(1) != room:
+        raise TicketError(0, "bad relay url")
     return d
 
 

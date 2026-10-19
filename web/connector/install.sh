@@ -10,7 +10,17 @@
 #    ya da launchd). `--no-service` servis adımını atlar.
 # Bağlayıcı kendini asla buluttan güncellemez; güncellemek için bu betiği yeniden çalıştırın.
 # Ortam: PIXEL_OFFICE_HOME (varsayılan ~/.pixel-office).
+#
+# Betiğin tamamı main() içindedir ve yalnızca en son satırda çağrılır: `curl … | sh` sırasında bağlantı koparsa
+# yarım inen betik hiçbir şey çalıştırmaz.
 set -eu
+
+# Bir değeri sh için tek tırnaklı, güvenli bir sözcüğe çevirir (yollarda ' $ ` " gibi karakterler olabilir).
+sq() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+main() {
 
 SERVER=""
 NO_SERVICE=0
@@ -28,6 +38,13 @@ if [ -z "$SERVER" ]; then
   exit 2
 fi
 SERVER="${SERVER%/}"
+case "$SERVER" in
+  https://*|http://127.0.0.1|http://127.0.0.1:*|http://localhost|http://localhost:*) ;;
+  *)
+    echo "Hata: --server https:// ile başlamalı (yalnızca yerel deneme için http://127.0.0.1)." >&2
+    exit 2
+    ;;
+esac
 
 PY=""
 for c in python3 python; do
@@ -75,10 +92,10 @@ fi
 
 mv "$TMP/pixel-connector.pyz" "$CONN/pixel-connector.pyz"
 chmod 600 "$CONN/pixel-connector.pyz"
-cat > "$OFFICE/bin/pixel-connector" <<EOF
-#!/bin/sh
-exec "$PY" "$CONN/pixel-connector.pyz" "\$@"
-EOF
+{
+  echo '#!/bin/sh'
+  echo "exec $(sq "$PY") $(sq "$CONN/pixel-connector.pyz") \"\$@\""
+} > "$OFFICE/bin/pixel-connector"
 chmod 700 "$OFFICE/bin/pixel-connector"
 
 echo "pixel-connector.pyz SHA-256: $ACTUAL"
@@ -105,3 +122,6 @@ case ":$PATH:" in
   *":$OFFICE/bin:"*) ;;
   *) echo "İpucu: kısayolun her yerde çalışması için PATH'e ekleyin: export PATH=\"$OFFICE/bin:\$PATH\"" ;;
 esac
+}
+
+main "$@"

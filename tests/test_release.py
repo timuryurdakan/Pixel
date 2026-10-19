@@ -257,5 +257,54 @@ class FastFirstAppearanceTests(unittest.TestCase):
         self.assertIn("transport.boost({ emptyMs: BOOST_MS })", main)
 
 
+class RelayCspHost(unittest.TestCase):
+    """Phase 15: the relay host in the static CSP (vercel.json cannot read env vars) and tools/set_relay_host.py."""
+
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location("set_relay_host", ROOT / "tools" / "set_relay_host.py")
+        self.tool = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.tool)
+
+    def test_vercel_csp_names_exactly_one_relay_host_without_wildcards(self):
+        cfg = json.loads((ROOT / "vercel.json").read_text())
+        csp = {h["key"]: h["value"] for e in cfg["headers"] if e["source"] == "/(.*)"
+               for h in e["headers"]}["Content-Security-Policy"]
+        connect = [d.strip() for d in csp.split(";") if d.strip().startswith("connect-src")]
+        self.assertEqual(len(connect), 1)
+        srcs = connect[0].split()[1:]
+        self.assertEqual(srcs[0], "'self'")
+        self.assertEqual(len(srcs), 2, srcs)
+        self.assertRegex(srcs[1], r"^wss://[a-z0-9.-]+$")
+        self.assertNotIn("*", csp)
+
+    def test_tool_normalises_and_rejects(self):
+        t = self.tool
+        self.assertEqual(t.relay_url("timur"), "wss://pixel-relay.timur.workers.dev")
+        self.assertEqual(t.relay_url(" WSS://Pixel-Relay.Ab-1.workers.dev/ "), "wss://pixel-relay.ab-1.workers.dev")
+        self.assertEqual(t.relay_url("https://relay.example.com"), "wss://relay.example.com")
+        for bad in ("", "*.workers.dev", "wss://*.workers.dev", "ws://pixel-relay.x.workers.dev", "-x",
+                    "wss://a b.dev", "wss://x.dev;script-src *", "javascript:alert(1)", "wss://x.dev/path"):
+            with self.assertRaises(ValueError, msg=bad):
+                t.relay_url(bad)
+
+    def test_tool_rewrites_only_connect_src_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "vercel.json"
+            original = (ROOT / "vercel.json").read_text()
+            f.write_text(original)
+            with mock.patch("sys.stdout"):
+                self.assertEqual(self.tool.main(["ornek-1", "--file", str(f)]), 0)
+                once = f.read_text()
+                self.assertEqual(self.tool.main(["wss://pixel-relay.ornek-1.workers.dev", "--file", str(f)]), 0)
+            self.assertEqual(f.read_text(), once)
+            self.assertIn("connect-src 'self' wss://pixel-relay.ornek-1.workers.dev;", once)
+            strip = lambda s: re.sub(r"connect-src [^;]*;", "", s)   # noqa: E731
+            self.assertEqual(strip(once), strip(original))          # nothing else changed
+            json.loads(once)
+            with mock.patch("sys.stderr"):
+                self.assertEqual(self.tool.main(["wss://*.workers.dev", "--file", str(f)]), 2)
+            self.assertEqual(f.read_text(), once)
+
+
 if __name__ == "__main__":
     unittest.main()

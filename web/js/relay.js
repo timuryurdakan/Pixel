@@ -9,6 +9,9 @@
 // Status: idle | connecting | live | reconnecting | quota. `quota` = close 4029, or two consecutive failed
 // attempts without a welcome (a browser cannot see the HTTP 429 of a refused upgrade), shown as
 // "Röle şu an meşgul ya da günlük kota doldu".
+// If the page's Content-Security-Policy does not list the relay host (vercel.json `connect-src`, see
+// tools/set_relay_host.py), the browser fires `securitypolicyviolation`; the client then stops for good with
+// status `idle` and detail {error: 'csp', host} instead of retrying forever (V3.md §20, Phase 15).
 
 export const SUBPROTOCOL = 'pixel-relay.v1';
 export const APP = 'web/3.0.0';
@@ -57,7 +60,13 @@ export class RelayClient {
     this._ping = null;
     this._gen = 0;               // invalidates callbacks of older sockets / attempts
     this._onVis = () => this._visibilityChanged();
-    if (doc && doc.addEventListener) doc.addEventListener('visibilitychange', this._onVis);
+    this._onCsp = (ev) => this._cspViolation(ev);
+    this._lastUrl = null;        // relay URL of the latest attempt (CSP violation matching)
+    this.lastError = null;       // 'csp' after a CSP block (cleared by the next welcome)
+    if (doc && doc.addEventListener) {
+      doc.addEventListener('visibilitychange', this._onVis);
+      doc.addEventListener('securitypolicyviolation', this._onCsp);
+    }
   }
 
   get status() { return this._status; }
@@ -90,7 +99,10 @@ export class RelayClient {
   /** Close for good (removes the visibility listener). */
   destroy() {
     this.stop();
-    if (this.doc && this.doc.removeEventListener) this.doc.removeEventListener('visibilitychange', this._onVis);
+    if (this.doc && this.doc.removeEventListener) {
+      this.doc.removeEventListener('visibilitychange', this._onVis);
+      this.doc.removeEventListener('securitypolicyviolation', this._onCsp);
+    }
   }
 
   /** Send one L1 frame (object). → false when the socket is not open. */
@@ -152,6 +164,7 @@ export class RelayClient {
     }
     if (gen !== this._gen) return;
     let ws;
+    this._lastUrl = ticket.url;
     try {
       ws = new this.WebSocketImpl(ticket.url, [SUBPROTOCOL, 'tk.' + ticket.ticket]);
     } catch {
@@ -172,6 +185,7 @@ export class RelayClient {
       if (!f || typeof f.t !== 'string') return;
       if (f.t === 'welcome') {
         welcomed = true;
+        this.lastError = null;
         this.conn = typeof f.conn === 'string' ? f.conn : null;
         this._attempt = 0;
         this._failures = 0;
@@ -239,6 +253,21 @@ export class RelayClient {
       if (!this.isVisible() && !this._needs.has('task')) { this._teardown(1000); this._setStatus('idle'); return; }
       this._connect();
     }, delay);
+  }
+
+  _cspViolation(ev) {
+    if (!ev || !this._lastUrl) return;
+    const dir = String(ev.effectiveDirective || ev.violatedDirective || '');
+    if (!dir.startsWith('connect-src')) return;
+    let host = null;
+    let blocked = null;
+    try { host = new URL(this._lastUrl).host; } catch { return; }
+    try { blocked = new URL(String(ev.blockedURI || '')).host; } catch { blocked = null; }
+    if (blocked !== host) return;
+    this._wanted = false;
+    this.lastError = 'csp';
+    this._teardown(1000);
+    this._setStatus('idle', { error: 'csp', host });
   }
 
   _visibilityChanged() {

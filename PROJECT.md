@@ -1,6 +1,6 @@
 # Pixel Office 🖥️☕💤
 
-> **Proje durumu: v1.0 ✅ tamamlandı (yerel mod, 2026-10-11). v2 "Bulut Ofis" ✅ tamamlandı (Aşama 6–10 ✅, 2026-10-11) ve https://pixel-rouge-phi.vercel.app adresinde yayında. v3 "Ajan Kontrol Merkezi (Deneme Sürümü)": Aşama 11 (mimari) ✅ 2026-10-16, Aşama 12 (röle) ✅ 2026-10-17, Aşama 13 (bağlayıcı) ✅ 2026-10-17, Aşama 14 (arayüz) ✅ 2026-10-19, Aşama 15 bekliyor (bkz. §5c, [`docs/V3.md`](docs/V3.md)).** Kullanım için bkz. [`README.md`](README.md), bulut tasarımı için [`docs/CLOUD.md`](docs/CLOUD.md).
+> **Proje durumu: v1.0 ✅ tamamlandı (yerel mod, 2026-10-11). v2 "Bulut Ofis" ✅ tamamlandı (Aşama 6–10 ✅, 2026-10-11) ve https://pixel-rouge-phi.vercel.app adresinde yayında. v3 "Ajan Kontrol Merkezi (Deneme Sürümü)": Aşama 11 (mimari) ✅ 2026-10-16, Aşama 12 (röle) ✅ 2026-10-17, Aşama 13 (bağlayıcı) ✅ 2026-10-17, Aşama 14 (arayüz) ✅ 2026-10-19, Aşama 15 (güvenlik incelemesi, QA, dokümantasyon) ✅ 2026-10-19 — **kod tamamlandı, yayına alma bekliyor** (bkz. §5c "Yayına alma kontrol listesi (v3)", [`docs/V3.md`](docs/V3.md)).** Kullanım için bkz. [`README.md`](README.md), bulut tasarımı için [`docs/CLOUD.md`](docs/CLOUD.md).
 >
 > Tarayıcıda çalışan, pixel-art tarzı sanal bir ofis. Bilgisayarınızda çalışan her **Claude Code** oturumu (ve alt-ajanları) ofiste küçük bir pixel karakter olarak görünür.
 
@@ -67,7 +67,7 @@ Teknik ayrıntılar: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — **tüm a
 | 12 | Gerçek Zamanlı Röle | Gerçek Zamanlı/Edge Mühendisi | `relay/`, `tools/dev_relay.py`, `api/relay_ticket.py`, `web/js/relay.js` | ✅ Tamamlandı |
 | 13 | Bağlayıcı Uygulama | Bağlayıcı/Güvenlik Mühendisi | `pixel_connector/`, `web/js/e2e.js`, `web/connector/` | ✅ Tamamlandı |
 | 14 | Arayüz | Frontend Mühendisi | görev kutusu, cihazlar sayfası, token göstergesi, telefon düzeni | ✅ Tamamlandı |
-| 15 | Güvenlik İncelemesi & QA & Dokümantasyon | Güvenlik İnceleyici + QA | inceleme, uçtan uca test, README, rehber | ⬜ Bekliyor |
+| 15 | Güvenlik İncelemesi & QA & Dokümantasyon | Güvenlik İnceleyici + QA | inceleme, uçtan uca test, README, rehber | ✅ Tamamlandı (gerçek dünya denemeleri yayına almadan sonra, kullanıcıyla) |
 
 Durum işaretleri: ⬜ Bekliyor · 🔄 Devam ediyor · ✅ Tamamlandı · ⚠️ Sorunlu
 
@@ -336,23 +336,44 @@ Teslimat: `web/js/control.js`, `prompt.js`, `devices.js`, `usage.js`; `main.js`,
 **Kabul kriterleri:** Bağımlılık ve derleme adımı yok. `dev_server.py --demo --relay` ve gerçek bağlayıcı (sahte motorlar) ile headless Chrome'da şunlar çalışır: eşleştirme (doğru kod, yanlış kod, SAS reddi), ajan oluşturma, görev akışı, iptal, ikinci sekmeden izleme, çalışma ortamı denetimleri ve bütçe göstergesi. Çıktıdaki ve adlardaki XSS metinleri düz metin kalır. 390 ve 360 px genişlikte yatay kaydırma yoktur ve görev kutusu altta sabittir. Konsolda hata yoktur. `server.py --demo` ve v2 odası görsel ve davranışsal olarak değişmemiştir. Tüm testler geçer. ✔️
 
 ### Aşama 15 — Güvenlik İncelemesi & QA & Dokümantasyon (Güvenlik İnceleyici + QA Mühendisi)
-- [ ] V3.md §14'teki her tehdit satırının bir testle ya da yazılı bir notla doğrulanması; kripto kodunun satır satır incelenmesi
-- [ ] Yasaklı bayrak ve kabuk kullanımı taraması (argv kurucular, `shell=True` yok), stdlib dışı import taraması, dosya izinleri (0700/0600)
-- [ ] Uçtan uca: dağıtılmış Worker + Vercel + gerçek bağlayıcı; gizlilik kanaryası; kota ölçümü
-- [ ] Gerçek Claude Code (abonelik girişi) ile her profil, oturum sürdürme, araç sırasında iptal, maliyet etiketleri (kullanıcıyla)
-- [ ] Gerçek Ollama: sohbet, model yükleme ve boşaltma, polkit kuralıyla başlatma ve durdurma (kullanıcıyla)
-- [ ] Gerçek telefon (mobil veri): PWA, eşleştirme, Ollama'yı başlatma, görev, arka plandan dönüş (kullanıcıyla)
-- [ ] `README.md` (Türkçe + İngilizce özet): bağlayıcı kurulumu, eşleştirme, profiller, `connector.json`, servis, gizlilik ve güvenlik uyarıları, Anthropic notu, ücretsiz plan limitleri, sorun giderme
-- [ ] `web/rehber.html`: v3 adımları (Cihaz ekle, eşleştirme, görev verme)
-- [ ] V3.md §20'ye sapmaların yazılması; `sw.js` sürümü; kullanıcının dağıtım listesinin son hâli
+- [x] V3.md §14'teki her tehdit satırının bir testle ya da yazılı bir notla doğrulanması; kripto kodunun satır satır incelenmesi (V3.md §20 "Phase 15 findings")
+- [x] Yasaklı bayrak ve kabuk kullanımı taraması (argv kurucular, `shell=True` yok), stdlib dışı import taraması, dosya izinleri (0700/0600)
+- [x] Uçtan uca (yerel): ayrı süreçlerle `dev_server.py --relay` + gerçek `python3 -m pixel_connector run` (geçici HOME) + sahte Ollama + sahte `claude` + headless Chrome; gizlilik kanaryası (röle çerçeveleri, Vercel durum gövdeleri, `/api/state`, bağlayıcı günlüğü, denetim günlüğü)
+- [ ] Uçtan uca (dağıtılmış): Worker + Vercel + gerçek bağlayıcı; kota ölçümü — **yayına almadan sonra, kullanıcıyla** (kontrol listesi 9–12)
+- [ ] Gerçek Claude Code (abonelik girişi) ile her profil, oturum sürdürme, araç sırasında iptal, maliyet etiketleri — **kullanıcıyla bekliyor**
+- [ ] Gerçek Ollama: sohbet, model yükleme ve boşaltma, polkit kuralıyla başlatma ve durdurma — **kullanıcıyla bekliyor**
+- [ ] Gerçek telefon (mobil veri): PWA, eşleştirme, Ollama'yı başlatma, görev, arka plandan dönüş — **kullanıcıyla bekliyor**
+- [x] `README.md` (Türkçe + İngilizce özet): bağlayıcı kurulumu, eşleştirme, profiller, `connector.json`, servis, gizlilik ve güvenlik uyarıları, Anthropic notu, ücretsiz plan limitleri, sorun giderme, sınırlamalar, `.pyz` SHA-256 özeti
+- [x] `web/rehber.html`: v3 adımı (eşleştir → ajan oluştur → görev ver, hareketli telefon maketi) ve SSS maddesi; 1280/390/360 px'te headless Chrome ekran görüntüsüyle doğrulandı
+- [x] V3.md §20'ye bulgular ve sapmalar; `sw.js` sürümü `po-v3.0.1`; kullanıcının dağıtım listesinin son hâli (aşağıda ve README'de)
+- [x] CSP röle adresi kararı: `tools/set_relay_host.py` (tek doğrulanmış komut, joker yok) + tarayıcıda CSP ihlali algılama
 
-**Kabul kriterleri:** Tüm testler geçer. Kritik ya da yüksek önem derecesinde açık bulgu kalmaz. Kullanıcıyla yapılan gerçek denemelerin sonuçları günlüğe yazılır, yapılamayanlar listede açıkça işaretlenir. README'deki komutlar denenmiştir. İlk haftanın kullanım sayıları V3.md §15 ile karşılaştırılmıştır.
+**Kabul kriterleri:** Tüm testler geçer. Kritik ya da yüksek önem derecesinde açık bulgu kalmaz. Kullanıcıyla yapılan gerçek denemelerin sonuçları günlüğe yazılır, yapılamayanlar listede açıkça işaretlenir. README'deki komutlar denenmiştir. İlk haftanın kullanım sayıları V3.md §15 ile karşılaştırılmıştır. ✔️ (kod tarafı; gerçek denemeler ve ilk hafta sayıları yayına almadan sonra kullanıcıyla)
+
+### Yayına alma kontrol listesi (v3)
+
+Koordinatör kullanıcıyla **bu sırayla** yürür. Ayrıntılı, başlangıç düzeyi anlatım: README → "Yayına alma kontrol listesi (v3)".
+
+1. [ ] Röle adresini sabitle: `python3 tools/set_relay_host.py <workers.dev-alt-alan>` (Cloudflare hesabı yoksa önce 3. adımın ilk maddesi). Çıktıdaki `wss://pixel-relay.<alt-alan>.workers.dev` adresini not et.
+2. [ ] `git add -A && git commit -m "v3 yayına alma" && git push` (Vercel kendiliğinden dağıtır).
+3. [ ] Cloudflare: hesap + `workers.dev` alt alan adı → Workers & Pages → Create → Import a repository → GitHub (yalnızca `timuryurdakan/Pixel`). Ad `pixel-relay`, dal `main`, kök dizin `relay`, derleme `npm install --no-audit --no-fund && npm test`, dağıtım `npx wrangler deploy`, izlenen yol `relay/*` → Save and Deploy → günlükte `fail 0`.
+4. [ ] `RELAY_SECRET` üret: `python3 -c "import secrets;print(secrets.token_urlsafe(32))"`.
+5. [ ] Cloudflare: pixel-relay → Settings → Variables and Secrets → Add → Secret `RELAY_SECRET` → Deploy (`ALLOWED_ORIGINS` panele eklenmez).
+6. [ ] Vercel (Production): `RELAY_SECRET` = aynı değer; `PIXEL_RELAY_URL` = `wss://pixel-relay.<alt-alan>.workers.dev` (sonda `/` yok).
+7. [ ] CSP kontrolü: `python3 tools/set_relay_host.py --show` 6. adımdaki adresi göstermeli (göstermiyorsa 1–2'yi tekrarla).
+8. [ ] Vercel → Deployments → son dağıtım → Redeploy.
+9. [ ] Doğrula: `curl https://pixel-relay.<alt-alan>.workers.dev/health` → `{"ok":true,"v":1}`; `curl https://pixel-rouge-phi.vercel.app/api/config` → `"relay":{"url":"wss://…","v":1}` + `"features":["control"]`; `curl -sI https://pixel-rouge-phi.vercel.app/ | grep -i content-security` → doğru `connect-src`; `curl -sI https://pixel-rouge-phi.vercel.app/connector/pixel-connector.pyz | grep -i content-type` → `application/zip` (değilse not et); `RELAY_SECRET='<değer>' python3 tests/relay_conformance.py --url wss://pixel-relay.<alt-alan>.workers.dev` → `OK`.
+10. [ ] Bu makinede bağlayıcı: Cihazlar → Cihaz ekle → Linux komutu → SHA-256'yı README'deki özetle karşılaştır → `connector.json` → `workspaces` → `pixel-connector config-check` → `systemctl --user restart pixel-connector` → `pixel-connector doctor`.
+11. [ ] Eşleştir: `pixel-connector pair` → kod → doğrulama kodları aynıysa `e`; telefon için yeni kodla tekrar.
+12. [ ] Claude Code ile ilk gerçek deneme: Yeni ajan (Claude Code, Düzenleyebilir) → küçük görev → akış, karakter, "tahmini" maliyet; bir görevi Durdur; `pixel-connector usage`, `tail -3 ~/.pixel-office/connector/audit.log`.
+13. [ ] İsteğe bağlı Ollama: kurulum, `ollama pull qwen2.5-coder:7b`, polkit kuralı + `runtimes` kaydı, telefondan Başlat/Durdur ve model Yükle/Boşalt, Ollama ajanına görev.
+14. [ ] İlk ay haftada bir: Cloudflare (Metrics, Durable Objects), Vercel Usage, Upstash Usage; ilk haftanın sayılarını V3.md §15 ile karşılaştır.
 
 **Kullanıcının elle yapması gerekenler (v3)** (ayrıntılar: V3.md §16):
 - [ ] Cloudflare hesabı açmak (ücretsiz, kart gerekmez) ve `workers.dev` alt alan adını seçmek
 - [ ] Aşama 12'den sonra: Workers & Pages → Import a repository → GitHub (yalnızca `timuryurdakan/Pixel` deposuna izin). Ad `pixel-relay`, kök dizin `relay`, derleme komutu `npm install --no-audit --no-fund && npm test`, dağıtım komutu `npx wrangler deploy`, izlenen yol `relay/*`
 - [ ] `RELAY_SECRET` üretmek (`python3 -c "import secrets;print(secrets.token_urlsafe(32))"`) ve **aynı değeri** hem Cloudflare'de (Secret) hem Vercel'de girmek; Vercel'e `PIXEL_RELAY_URL=wss://pixel-relay.<alt-alan>.workers.dev` eklemek
-- [ ] `vercel.json` CSP'deki röle adresini doğrulamak, push etmek, `/health` ve `/api/config` kontrolü, uyumluluk testlerini dağıtılmış Worker'a karşı çalıştırmak
+- [ ] `python3 tools/set_relay_host.py <alt-alan>` ile CSP'deki röle adresini ayarlamak, push etmek, `/health` ve `/api/config` kontrolü, uyumluluk testlerini dağıtılmış Worker'a karşı çalıştırmak (sıralı liste: §5c "Yayına alma kontrol listesi (v3)")
 - [ ] Her bilgisayarda: Cihazlar → Cihaz ekle → kurulum komutu → `pixel-connector pair` → kodu tarayıcıya girmek → SAS'ı karşılaştırıp `e` demek (telefon için ayrı kod)
 - [ ] İsteğe bağlı: `loginctl enable-linger $USER`, Ollama için polkit kuralı, `connector.json` içinde çalışma klasörleri ve ortamlar
 - [ ] Yerleşik ajanlar hâlâ odadaysa kaldırmak (`/api/residents` ile `[]`)
@@ -691,3 +712,25 @@ Her ajan işini bitirince buraya tarihli bir kayıt ekler (en yeni en altta).
   Bilinen sınırlamalar: CSP'deki röle adresi (`wss://pixel-relay.timur.workers.dev`) örnek alt alan adıdır; kullanıcı kendi `workers.dev` adresini doğrulamalıdır. Kuyruk/meşgul, klasör reddi ve çevrimdışı cihaz metinleri kodda var ama Chrome'da uçtan uca sürülmedi. `/connector/*.pyz` başlık sırası ve gerçek telefonda PWA arka plandan dönüşü Aşama 15'te dağıtılmış ortamda denenecek.
 
   Aşama 14 tamamlandı. Sıradaki adım: Aşama 15 (Güvenlik İncelemesi & QA & Dokümantasyon).
+- **2026-10-19 — Aşama 15 (Güvenlik İnceleyici + QA Mühendisi):** v3 kodu güvenlik açısından baştan sona incelendi: röle (`relay/`), bilet üretimi ve doğrulaması, `dev_relay.py`, bağlayıcının tamamı, kurulum betikleri, v3 arayüz modülleri, `vercel.json` ve `sw.js`. `crypto.py`, `session.py` ve `e2e.js` satır satır okundu. Kripto tarafında açık bulunmadı: nokta doğrulaması, HKDF bağlamı (transkript özeti tuz olarak), yön başına ayrı anahtar, her bağlantıda yeni geçici anahtar (yeniden bağlanınca tekrar saldırısı yok), sıkı sıra numarası, 6 haneli SAS, tek denemelik eşleştirme kodu, PBKDF2 600.000, 0600/0700 dosya izinleri ve tarayıcıda dışa aktarılamaz anahtarlar doğru.
+
+  Bulunan ve düzeltilen sorunlar (her biri için `tests/test_phase15_security.py` içinde regresyon testi var):
+  1. **Orta:** `/onay` çerezi tam denetim anahtarını taşıyordu. Tarayıcılar `127.0.0.1` çerezlerini her yerel porta gönderdiği için başka bir yerel sunucu bu anahtarı alıp yabancı bir tarayıcıyı eşleştirebilirdi. Artık yalnızca onay sayfasında geçen ayrı bir sayfa anahtarı var (`Path=/onay`); `/ctl` API'si onu kabul etmiyor.
+  2. **Orta:** `install.sh` `curl | sh` ile yarım inerse yarım çalışabiliyordu, `http://` sunucuyu kabul ediyordu ve kısayol dosyasına yolları tırnaksız yazıyordu. Artık betik `main()` içinde, yalnızca son satırda çağrılıyor; sunucu `https://` olmalı (testler için yalnızca `http://127.0.0.1`); yollar güvenli tırnaklanıyor.
+  3. **Orta:** Kurulum betiğini yeniden çalıştırmak (güncelleme yolu) çalışan eski bağlayıcıyı yeniden başlatmıyordu. Artık systemd `restart`, launchd önce `bootout`, Windows önce `/End` kullanıyor; systemd birimindeki `$` kaçışlanıyor.
+  4. **Düşük:** Bağlayıcı bilet yanıtındaki her röle adresine bağlanıyordu (`ws://` ile bilet açık metin gidebilirdi). Artık yalnızca `wss://` (ya da yerel geliştirme rölesi) ve odanın kendi yolu.
+  5. **Düşük:** Claude Code'un ortamında `RELAY_SECRET`, `PIXEL_*` ve Upstash anahtarları kalabiliyordu; artık siliniyor.
+  6. **Düşük:** `pixel-connector approve` uzaktan gelen ad ve istemi terminale ham yazıyordu (kaçış dizileri). Artık kontrol karakterleri boşluğa çevriliyor.
+  7. **Düşük:** `install.ps1` ASCII dışı metin içeriyordu (Windows PowerShell 5.1'de bozuk görünür) ve otomatik `$args` değişkenine atama yapıyordu; düzeltildi, `-Server` için `https://` denetimi eklendi.
+  8. **Yapılandırma:** CSP'de örnek röle adresi duruyordu. Vercel `vercel.json` başlıklarında ortam değişkeni kullanamadığı için karar: `tools/set_relay_host.py <alt-alan>` tek doğrulanmış komutla `connect-src`'yi yazar (joker yok). Adres yine de yanlışsa `relay.js` CSP ihlalini yakalar, sonsuz denemeyi bırakır ve Cihazlar sayfası "CSP" uyarısı gösterir.
+  9. **Test:** `test_pairing_slots` yük altında yarış durumuna düşüyordu (ilk tam koşuda görüldü); senkronize edildi. Odalar arası yalıtım için yeni uyumluluk testi eklendi (dağıtılmış Worker'a karşı da çalışır). Claude yolu için gizlilik kanaryası genişletildi.
+
+  Kabul edilip belgelenenler (V3.md §20 "Phase 15 findings", A1–A7): oda üyesi (katılma bağlantısı olan) cihaz kimliğini taklit ederek bağlantıyı kesintiye uğratabilir ama içerik göremez ve görev veremez; biletler 120 sn içinde yeniden kullanılabilir (tasarım gereği); site ele geçirilirse eşleşmiş tarayıcı adına görev verilebilir (README'de `confirm.task: "always"` önerisi).
+
+  Dokümantasyon: README'ye v3 bölümü (ne yapar, güvenlik/gizlilik özeti, kurulum, eşleştirme, ajan oluşturma, görev, token ve bütçeler, telefondan çalışma ortamları, sorun giderme, sınırlamalar, röle adresi, `.pyz` SHA-256 özeti) ve sıralı "Yayına alma kontrol listesi (v3)" eklendi; aynı liste §5c'de. `web/rehber.html`'e hareketli telefon maketli "Yeni: ajanına uzaktan görev ver" adımı ve bir SSS maddesi eklendi (1280, 390 ve 360 px'te headless Chrome ekran görüntüsüyle kontrol edildi; yatay kaydırma ve konsol hatası yok). `sw.js` sürümü `po-v3.0.1`. Bağlayıcı yeniden derlendi (`build_connector.py --check` geçiyor, `SHA256SUMS` ve README özeti güncel).
+
+  Testler: `python3 -m unittest discover -s tests` → 467 test, hepsi geçiyor (1 atlanan: `pwsh` yok). Headless Chrome v3 arayüz senaryosu geçiyor. Ayrı süreçlerle elle uçtan uca deneme (`dev_server.py --demo --relay`, geçici HOME ile gerçek `python3 -m pixel_connector run`, sahte Ollama, sahte `claude`, headless Chrome): eşleştirme (yanlış kod, SAS reddi, doğru kod), Ollama ve Claude ajanları, akış, iptal, bütçe, çalışma ortamları, ikinci sekme, telefon düzeni çalıştı; `/api/state` ve bağlayıcı günlüğünde istem/çıktı kanaryası yok; `doctor`, `peers`, `agents`, `usage`, `approve --link`, `runtimes` komutları çalışan servise karşı doğru çıktı verdi.
+
+  Kullanıcıyla yapılacaklar (yalnızca yayına almadan sonra doğrulanabilir): Workers Builds derlemesi, Durable Object uyku modu ve ping yanıtı, dağıtılmış uyumluluk testi, Vercel'de `.pyz` içerik türü ve CSP başlığı, gerçek Claude Code (her profil, sürdürme, araç sırasında iptal, maliyet etiketleri), gerçek Ollama (polkit ile başlat/durdur, model yükle/boşalt), gerçek telefonla mobil veride deneme, ilk haftanın kota sayıları.
+
+  Aşama 15 tamamlandı. v3: **kod tamamlandı, yayına alma bekliyor.** Sıradaki adım: §5c "Yayına alma kontrol listesi (v3)".

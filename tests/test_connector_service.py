@@ -59,7 +59,8 @@ class ServiceTextTests(unittest.TestCase):
             self.assertFalse(os.path.exists(os.path.join(h, ".config")))
             text = "\n".join(logs)
             self.assertIn("ExecStart=/usr/bin/python3 %h/.pixel-office/connector/pixel-connector.pyz run", text)
-            self.assertIn("$ systemctl --user enable --now pixel-connector", text)
+            self.assertIn("$ systemctl --user enable pixel-connector", text)
+            self.assertIn("$ systemctl --user restart pixel-connector", text)
             self.assertIn("$ schtasks /Create", text)
             self.assertIn("launchctl bootstrap", text)
             self.assertEqual(S.uninstall(dry_run=True, log=logs.append, platform="linux", user_home=h,
@@ -79,7 +80,8 @@ class ServiceTextTests(unittest.TestCase):
             self.assertEqual(path, os.path.join(h, ".config", "systemd", "user", "pixel-connector.service"))
             self.assertIn("%h/.pixel-office/connector/pixel-connector.pyz", Path(path).read_text())
             self.assertEqual(calls, [["systemctl", "--user", "daemon-reload"],
-                                     ["systemctl", "--user", "enable", "--now", "pixel-connector"]])
+                                     ["systemctl", "--user", "enable", "pixel-connector"],
+                                     ["systemctl", "--user", "restart", "pixel-connector"]])
             S.uninstall(platform="linux", user_home=h, log=lambda s: None, runner=lambda argv, **k: calls.append(argv) or R())
             self.assertFalse(os.path.exists(path))
 

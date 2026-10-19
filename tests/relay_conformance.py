@@ -387,6 +387,26 @@ class ConformanceTests(unittest.TestCase):
         br.send({"t": "pair.open", "slot": "K7Q2"})
         self.assertEqual(br.next("err")["code"], "forbidden")
 
+    def test_rooms_are_isolated(self):
+        """Phase 15: a browser in another room cannot reach this room's device, its pairing slot or its presence."""
+        if self.t.fixed_room:
+            self.skipTest("needs tickets for a second room (RELAY_SECRET)")
+        dev = self.client("device")
+        dev.send({"t": "pair.open", "slot": "QX7Z"})
+        dev.next("pair.opened")
+        other = rand_room()
+        br = self.client("browser", room=other)
+        self.assertEqual(br.next("presence")["devices"], [])
+        br.send(self.send_frame(dev.id, 1))
+        e = br.next("err")
+        self.assertEqual((e["code"], e["ref"]), ("device_offline", 1))
+        br.send(self.send_frame("pair:QX7Z", 2, k="hs"))
+        e = br.next("err")
+        self.assertEqual((e["code"], e["ref"]), ("slot_unknown", 2))
+        dev.send({"t": "ping"})
+        dev.next("pong")
+        self.assertFalse([f for f in dev.backlog if f.get("t") == "msg"])
+
     def test_left_notification(self):
         dev = self.client("device")
         br = self.client("browser")
@@ -410,14 +430,14 @@ class ConformanceTests(unittest.TestCase):
         dev2 = self.client("device")
         dev2.send({"t": "pair.open", "slot": slot})
         self.assertEqual(dev2.next("err")["code"], "slot_taken")
-        dev.send({"t": "pair.close", "slot": slot})
+        dev.send({"t": "pair.close", "slot": slot})            # success is silent …
+        dev.send({"t": "pair.close", "slot": "ZZZZ"})          # … so sync on this error (same socket, in order)
+        self.assertEqual(dev.next("err")["code"], "slot_unknown")
         br.send(self.send_frame("pair:" + slot, 1, k="hs"))
         e = br.next("err")
         self.assertEqual((e["code"], e["ref"]), ("slot_unknown", 1))
         dev2.send({"t": "pair.open", "slot": slot})            # free again
         self.assertEqual(dev2.next("pair.opened")["slot"], slot)
-        dev.send({"t": "pair.close", "slot": "ZZZZ"})
-        self.assertEqual(dev.next("err")["code"], "slot_unknown")
 
     def test_pairing_rate_limit(self):
         dev = self.client("device")

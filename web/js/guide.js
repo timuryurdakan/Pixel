@@ -147,6 +147,14 @@ scene('scene-cta', 8, 2, (ctx, t) => {
   bubble(ctx, getBubbleSprite('speech', Math.floor(t * 2)), 8 + 3 * 32 + 8, 7, t);
 });
 
+// v3 step: the agent at its desk while a task streams (phone mock, panel 3).
+scene('scene-task', 4, 3, (ctx, t) => {
+  wall(ctx, 4, [2]);
+  floor(ctx, 4, 3, 1);
+  furn(ctx, 'plant', 3, 1);
+  deskWorker(ctx, P[5], 1, 1, 'type', t, getToolIcon(['Read', 'Edit', 'Bash'][Math.floor(t / 2) % 3]));
+});
+
 // --- loop: only draw visible scenes ---------------------------------------------------------------
 const io = new IntersectionObserver((entries) => {
   for (const e of entries) {
@@ -225,3 +233,50 @@ async function renameLoop() {
   }
 }
 if (!reduced) renameLoop();
+
+// --- v3 task stream loop (phone mock) ---------------------------------------------------------------
+const out = document.getElementById('task-out');
+const STREAM = [
+  ['🔧 Read tests/test_app.py\n', 'tool'], ['Hatayı buldum: ', ''], ['tarih biçimi ', ''], ['yanlış.\n', ''],
+  ['🔧 Edit app.py\n', 'tool'], ['Düzelttim, ', ''], ['testler geçiyor. ', ''], ['✓\n', ''],
+];
+/** ms until a panel of the phone mock is shown again (CSS: 12 s cycle; p1 at 0 s, p2 at 4 s, p3 at 8 s). */
+function untilPanel(cls, startMs) {
+  const el = document.querySelector('.mp-panel.' + cls);
+  const a = el && el.getAnimations ? el.getAnimations()[0] : null;
+  const ct = a && typeof a.currentTime === 'number' ? a.currentTime : null;
+  if (ct === null) return startMs;
+  const phase = (((ct - startMs) % 12000) + 12000) % 12000;
+  return phase < 150 ? 150 - phase : 12000 - phase + 150;
+}
+async function streamLoop() {
+  for (;;) {
+    await sleep(untilPanel('p3', 8000));
+    out.textContent = '';
+    for (const [txt, cls] of STREAM) {
+      const s = document.createElement('span');
+      if (cls) s.className = cls;
+      out.append(s);
+      for (const ch of txt) { s.textContent += ch; await sleep(cls ? 10 : 22); }
+      await sleep(80);
+    }
+    await sleep(600);
+  }
+}
+if (out) {
+  if (reduced) out.textContent = STREAM.map((x) => x[0]).join('');
+  else streamLoop();
+}
+
+// pairing code typed into the phone (panel 1)
+const pc = document.getElementById('pair-code');
+async function codeLoop() {
+  const code = pc.textContent;
+  for (;;) {
+    await sleep(untilPanel('p1', 0));
+    pc.textContent = '';
+    for (const ch of code) { pc.textContent += ch; await sleep(70); }
+    await sleep(600);
+  }
+}
+if (pc && !reduced) codeLoop();

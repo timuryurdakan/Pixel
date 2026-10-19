@@ -206,3 +206,34 @@ test('rejects bad constructor input and bad ticket URLs', async () => {
   assert.equal(sched.pending().length, 1);
   c.stop();
 });
+
+test('CSP violation for the relay host stops the client with error csp (Phase 15)', async () => {
+  const listeners = {};
+  const doc = {
+    visibilityState: 'visible',
+    addEventListener: (t, fn) => { listeners[t] = fn; },
+    removeEventListener: (t, fn) => { if (listeners[t] === fn) delete listeners[t]; },
+  };
+  const { c, sockets, sched, statuses } = mk();
+  c.doc = doc;
+  c.destroy();                                   // re-create with the fake document
+  const details = [];
+  const c2 = new RelayClient({ roomId: ROOM, writeKey: KEY, bid: BID, scheduler: sched, WebSocketImpl: c.WebSocketImpl,
+    fetchImpl: c.fetchImpl, random: () => 0.5, doc, onStatus: (s, d) => { statuses.push(s); details.push(d); } });
+  assert.equal(typeof listeners.securitypolicyviolation, 'function');
+  await c2.start();
+  await flush();
+  assert.equal(sockets.length, 1);
+  // a violation for some other host is ignored
+  listeners.securitypolicyviolation({ effectiveDirective: 'connect-src', blockedURI: 'wss://other.example' });
+  assert.equal(c2.status, 'connecting');
+  sockets[0].drop(1006);                         // the browser fails the blocked socket …
+  listeners.securitypolicyviolation({ effectiveDirective: 'connect-src', blockedURI: URL });   // … and reports it
+  assert.equal(c2.status, 'idle');
+  assert.equal(c2.lastError, 'csp');
+  assert.deepEqual(details[details.length - 1], { error: 'csp', host: 'pixel-relay.test.workers.dev' });
+  await sched.advance(120_000);
+  assert.equal(sockets.length, 1);               // no retries
+  c2.destroy();
+  assert.equal(listeners.securitypolicyviolation, undefined);
+});

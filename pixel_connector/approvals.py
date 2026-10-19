@@ -4,9 +4,10 @@
   (`pixel-connector approve|deny <id>`) or the page `http://127.0.0.1:<port>/onay`.
 - `notify(name)`: OS notification with a fixed text that never includes the prompt.
 - `ControlServer`: `http://127.0.0.1:<port>/ctl/*` JSON API for the CLI, protected by the token in control.json
-  (`X-Pixel-Ctl` header, constant-time compare) and a strict Host check (DNS rebinding). The /onay page uses the same
-  token in an HttpOnly SameSite=Strict cookie (set once through `/onay?t=<token>`, which the CLI prints) plus a CSRF
-  token on every form.
+  (`X-Pixel-Ctl` header, constant-time compare) and a strict Host check (DNS rebinding). The /onay page uses a
+  separate *page token* derived from it (HMAC, Phase 15) in an HttpOnly SameSite=Strict cookie (set once through
+  `/onay?t=<page token>`, which the CLI prints) plus a CSRF token on every form. The page token only answers
+  approvals: browsers send cookies for 127.0.0.1 to every local port, so it must never unlock the /ctl API (pairing).
 """
 
 from __future__ import annotations
@@ -167,6 +168,10 @@ class ControlServer(ThreadingHTTPServer):
         super().__init__(("127.0.0.1", port), _Handler)
         self.port = self.server_address[1]
         self.csrf = hmac.new(self.token.encode(), b"pixel-onay-csrf", hashlib.sha256).hexdigest()[:32]
+        self.page_token = hmac.new(self.token.encode(), b"pixel-onay-page", hashlib.sha256).hexdigest()[:32]
+
+    def page_link(self) -> str:
+        return "http://127.0.0.1:%d/onay?t=%s" % (self.port, self.page_token)
 
     def write_control_file(self, home: str) -> None:
         write_json(os.path.join(home, CONTROL_FILE), {"port": self.port, "token": self.token})
@@ -219,6 +224,9 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _token_ok(self, given: Optional[str]) -> bool:
         return isinstance(given, str) and hmac.compare_digest(given.encode(), self.server.token.encode())
+
+    def _page_token_ok(self, given: Optional[str]) -> bool:
+        return isinstance(given, str) and hmac.compare_digest(given.encode(), self.server.page_token.encode())
 
     def _cookie_token(self) -> Optional[str]:
         for part in (self.headers.get("Cookie") or "").split(";"):
@@ -274,14 +282,14 @@ class _Handler(BaseHTTPRequestHandler):
     # -- /onay page --------------------------------------------------------------------------------
     def _onay(self, method: str, path: str, query: dict) -> None:
         if method == "GET" and path == "/onay" and "t" in query:
-            if not self._token_ok(query.get("t")):
+            if not self._page_token_ok(query.get("t")):
                 self._send(401, b"Yetkisiz", "text/plain; charset=utf-8")
                 return
             self._send(303, b"", "text/plain", [("Location", "/onay"),
-                                                ("Set-Cookie", "pixel_ctl=%s; HttpOnly; SameSite=Strict; Path=/"
-                                                 % self.server.token)])
+                                                ("Set-Cookie", "pixel_ctl=%s; HttpOnly; SameSite=Strict; Path=/onay"
+                                                 % self.server.page_token)])
             return
-        if not self._token_ok(self._cookie_token()):
+        if not self._page_token_ok(self._cookie_token()):
             body = ("<!doctype html><meta charset=utf-8><title>Pixel Office onay</title><p>Bu sayfayı açmak için "
                     "terminalde <code>pixel-connector approve --link</code> komutunun verdiği bağlantıyı kullanın.")
             self._send(401, body.encode(), "text/html; charset=utf-8", [("Content-Security-Policy", PAGE_CSP)])

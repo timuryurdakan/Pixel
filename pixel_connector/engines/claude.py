@@ -7,7 +7,8 @@
 
 The prompt goes to stdin (never argv). No shell. `bypassPermissions` / `--dangerously-skip-permissions` have no code
 path here: `build_argv` asserts their absence and tests grep this file. cwd = the resolved workspace; the child env is
-the connector's env without PIXEL_OFFICE_* plus PIXEL_OFFICE_DISABLE=1 (no duplicate office character from a v2 hook).
+the connector's env without PIXEL_*, RELAY_SECRET, UPSTASH_*, KV_REST_* plus PIXEL_OFFICE_DISABLE=1 (no duplicate
+office character from a v2 hook).
 Cancel: SIGINT to the process group → SIGTERM after 5 s → SIGKILL after 10 s more.
 """
 
@@ -42,8 +43,15 @@ def parse_version(text: str) -> Optional[Tuple[int, int, int]]:
     return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
 
 
+# Never handed to Claude Code (a prompt-injected run with a shell could read its environment). Phase 15: besides
+# PIXEL_OFFICE_*, the server-side secrets a developer may have exported in the same shell.
+SECRET_ENV_PREFIXES = ("PIXEL_", "UPSTASH_", "KV_REST_")
+SECRET_ENV_NAMES = ("RELAY_SECRET",)
+
+
 def child_env(base: Optional[Dict[str, str]] = None) -> Dict[str, str]:
-    env = {k: v for k, v in (os.environ if base is None else base).items() if not k.startswith("PIXEL_OFFICE_")}
+    env = {k: v for k, v in (os.environ if base is None else base).items()
+           if not k.upper().startswith(SECRET_ENV_PREFIXES) and k.upper() not in SECRET_ENV_NAMES}
     env["PIXEL_OFFICE_DISABLE"] = "1"
     return env
 

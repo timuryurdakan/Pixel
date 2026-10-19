@@ -42,6 +42,7 @@ export const ERROR_TEXT = {
   max_turns: 'Tur sınırına ulaşıldı.',
   engine_exit: 'Motor beklenmedik biçimde kapandı.',
   relay: 'Röleye bağlanılamadı.',
+  relay_csp: 'Röle adresi sitenin güvenlik politikasında (CSP) yok. Yönetici vercel.json dosyasındaki röle adresini düzeltmeli (README: "Röle adresini ayarlama").',
   not_paired: 'Bu tarayıcı cihazla eşleşmemiş.',
 };
 
@@ -144,6 +145,7 @@ export class DeviceHub {
     this._listeners = new Map();
     this._pairing = null;
     this._lastStatus = 'idle';
+    this.relayError = null;            // e.g. 'csp' when the page's CSP blocks the relay host
     this._roomNeeds = false;
     this._roomAgents = [];
   }
@@ -213,9 +215,12 @@ export class DeviceHub {
   }
 
   // -- relay callbacks -------------------------------------------------------------------------------
-  _onStatus(s) {
+  _onStatus(s, detail) {
     const was = this._lastStatus;
     this._lastStatus = s;
+    if (s === 'live') this.relayError = null;
+    else if (detail && detail.error) this.relayError = detail.error;
+    if (detail && detail.error === 'csp') this._emit('notice', ERROR_TEXT.relay_csp);
     if (s !== 'live') {
       for (const d of this.devices.values()) d.online = false;
       if (was === 'live') this._dropAll('device_offline');

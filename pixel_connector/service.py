@@ -18,8 +18,8 @@ SCHTASK_NAME = "PixelOffice\\Connector"
 
 def _quote_systemd(arg: str) -> str:
     """Quote one ExecStart argument (systemd.syntax): spaces/quotes/backslashes escaped inside double quotes;
-    `%` doubled so it is not taken as a specifier."""
-    a = arg.replace("%", "%%")
+    `%` doubled so it is not taken as a specifier, `$` doubled so it is not expanded as an environment variable."""
+    a = arg.replace("%", "%%").replace("$", "$$")
     if a and all(c.isalnum() or c in "/._-+:=@," for c in a):
         return a
     return '"' + a.replace("\\", "\\\\").replace('"', '\\"') + '"'
@@ -110,7 +110,11 @@ def install(connector_dir: str, pyz: Optional[str] = None, python: Optional[str]
                 f.write(text)
         rc = _run(["systemctl", "--user", "daemon-reload"], dry_run, log, runner)
         if rc == 0:
-            rc = _run(["systemctl", "--user", "enable", "--now", "pixel-connector"], dry_run, log, runner)
+            rc = _run(["systemctl", "--user", "enable", "pixel-connector"], dry_run, log, runner)
+        if rc == 0:
+            # `restart` also starts a stopped unit; after an update (install.sh again) the new .pyz must replace the
+            # running process, which `enable --now` would leave untouched (Phase 15).
+            rc = _run(["systemctl", "--user", "restart", "pixel-connector"], dry_run, log, runner)
         return rc, path
     if platform == "darwin":
         path = os.path.join(home, "Library", "LaunchAgents", LAUNCHD_LABEL + ".plist")
@@ -122,13 +126,16 @@ def install(connector_dir: str, pyz: Optional[str] = None, python: Optional[str]
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "wb") as f:
                 f.write(data)
-        rc = _run(["launchctl", "bootstrap", "gui/%d" % os.getuid() if hasattr(os, "getuid") else "gui/0", path],
-                  dry_run, log, runner)
+        uid = os.getuid() if hasattr(os, "getuid") else 0
+        # bootstrap fails while the agent is loaded: unload a previous version first (result ignored; Phase 15).
+        _run(["launchctl", "bootout", "gui/%d/%s" % (uid, LAUNCHD_LABEL)], dry_run, log, runner)
+        rc = _run(["launchctl", "bootstrap", "gui/%d" % uid, path], dry_run, log, runner)
         return rc, path
     if platform == "win32":
         pythonw = python.replace("python.exe", "pythonw.exe")
         rc = _run(schtasks_create_argv(pythonw, pyz), dry_run, log, runner)
         if rc == 0:
+            _run(["schtasks", "/End", "/TN", SCHTASK_NAME], dry_run, log, runner)   # stop an old instance (ignored)
             rc = _run(["schtasks", "/Run", "/TN", SCHTASK_NAME], dry_run, log, runner)
         return rc, None
     log("Bu işletim sistemi için servis kurulumu yok: %s" % platform)

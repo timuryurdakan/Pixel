@@ -294,6 +294,12 @@ class ClaudeFlowTests(Base):
         self.assertNotIn(PROMPT_CANARY, "\n".join(self.env.relay_frames))
         self.assertNotIn("src/app.py", "\n".join(self.env.relay_frames))
         self.assertNotIn(PROMPT_CANARY, b"".join(self.env.status_bodies).decode())
+        # Phase 15: Claude output, tool arguments and tool results never reach the relay or Vercel either
+        relay_blob = "\n".join(self.env.relay_frames)
+        status_blob = b"".join(self.env.status_bodies).decode()
+        for canary in ("okuyorum", "CANARY-TOOL-RESULT", "src/app.py", "Hatayı düzelt"):
+            self.assertNotIn(canary, relay_blob, canary)
+            self.assertNotIn(canary, status_blob, canary)
 
     def test_usd_budget_caps_max_budget(self):
         key = self.create(engine="claude", name="Kâtip", model=None)
@@ -356,7 +362,11 @@ class ConfirmTests(Base):
         r = c.getresponse()
         r.read()
         self.assertEqual(r.status, 401)
-        c.request("GET", "/onay?t=" + self.conn.ctl.token)
+        c.request("GET", "/onay?t=" + self.conn.ctl.token)       # the control token is not a page token
+        r = c.getresponse()
+        r.read()
+        self.assertEqual(r.status, 401)
+        c.request("GET", "/onay?t=" + self.conn.ctl.page_token)
         r = c.getresponse()
         r.read()
         self.assertEqual(r.status, 303)

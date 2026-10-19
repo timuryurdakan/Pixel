@@ -121,9 +121,48 @@
     </div>
   </section>
 
+  <section class="g-step reveal" id="adim-7">
+    <div class="g-num">📱</div>
+    <div class="g-body">
+      <h2>Yeni: ajanına uzaktan görev ver</h2>
+      <p>Bilgisayarına küçük <b>bağlayıcıyı</b> kur, sonra ofisten (telefondan bile!) ajanına iş ver. Üç adım:</p>
+      <ol class="g-mini">
+        <li><b>Eşleştir:</b> <span class="kbd">Cihazlar</span> → <span class="kbd">Cihaz ekle</span>. Terminalde <code>pixel-connector pair</code> yaz, çıkan kodu tarayıcıya gir. İki ekrandaki <b>6 haneli kod aynıysa</b> terminalde <code>e</code> de.</li>
+        <li><b>Ajan oluştur:</b> <span class="kbd">Yeni ajan</span>: klasör, motor (Claude Code ya da Ollama) ve bir isim seç.</li>
+        <li><b>Görev ver:</b> Ajana tıkla, kutuya yaz, <span class="kbd">Gönder</span>. Cevap canlı akar, karakter masasında yazar; istersen <span class="kbd">Durdur</span>.</li>
+      </ol>
+      <p class="g-tip">🔐 Görevlerin ve cevaplar <b>uçtan uca şifreli</b> gider: ofis sunucusu ve röle içeriği göremez. Kod tek kullanımlık ve 10 dakika geçerli. Bu bölüm yalnızca ofiste <b>Cihazlar</b> sekmesi varsa çalışır.</p>
+    </div>
+    <div class="g-visual">
+      <div class="mock-phone" aria-hidden="true">
+        <div class="mp-notch"></div>
+        <div class="mp-screen">
+          <div class="mp-panel p1">
+            <div class="mp-title">Cihaz ekle</div>
+            <div class="mp-code"><span id="pair-code">K7Q2-M4X5-Z6A9</span><span class="caret"></span></div>
+            <div class="mp-sas">Doğrulama kodu<b>482 913</b><span class="mp-ok">✓ Eşleşti</span></div>
+          </div>
+          <div class="mp-panel p2">
+            <div class="mp-title">Yeni ajan</div>
+            <div class="mp-field">📁 Pixel</div>
+            <div class="mp-field">🤖 Claude Code</div>
+            <div class="mp-field name">Kodcu Kedi</div>
+            <span class="mp-btn">Oluştur</span>
+          </div>
+          <div class="mp-panel p3">
+            <canvas class="px-scene" id="scene-task"></canvas>
+            <pre class="mp-out" id="task-out"></pre>
+            <div class="mp-prompt"><span>Testleri düzelt</span><span class="mp-send">➤</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="g-privacy reveal">
     <h2>🔒 Gizlilik</h2>
     <p>Promptların, kodun ve dosyaların <b>bilgisayarından çıkmaz</b>. Ofise yalnızca şunlar gider: ajanın durumu (çalışıyor, uyuyor…), araç adı (ör. <code>Bash</code>), proje klasörünün adı ve senin görünen adın. Kurulan küçük betiği çalıştırmadan önce okuyabilirsin; bağlantısı <b>Ajan bağla</b> penceresinde.</p>
+    <p>Uzaktan görev verirken (bağlayıcı) yazdığın görev ve gelen cevap, tarayıcın ile bilgisayarın arasında <b>uçtan uca şifrelenir</b>. Ofis sunucusu ve röle yalnızca şifreli baytları taşır.</p>
   </section>
 
   <section class="g-faq reveal">
@@ -132,6 +171,7 @@
     <details><summary>Ücretli mi?</summary><p>Hayır. Ofis ücretsiz planlarda çalışıyor, senden hiçbir şey istenmez.</p></details>
     <details><summary>Hareketler neden bazen birkaç saniye gecikiyor?</summary><p>Ücretsiz limitler içinde kalmak için ofis birkaç saniyede bir güncellenir. Durum değişiklikleri en fazla yarım dakika içinde görünür.</p></details>
     <details><summary>Bağlantıyı kaldırmak istiyorum</summary><p><b>Ajan bağla → Sorun giderme ve kaldırma</b>'daki kaldırma komutunu çalıştır. Claude Code ayarların eski hâline döner.</p></details>
+    <details><summary>Telefondan görev verdim ama "Cihaz çevrimdışı" diyor</summary><p>Bağlayıcı bilgisayarında çalışıyor olmalı: terminalde <code>pixel-connector doctor</code> çalıştır. Bilgisayar uyku modundaysa ya da kapalıysa görev gitmez. Telefon için <b>ayrı bir eşleştirme kodu</b> üretmen gerekir (<code>pixel-connector pair</code>'i yeniden çalıştır).</p></details>
     <details><summary>Firefox kullanıyorum, mini pencere açılmıyor</summary><p>Her zaman üstte duran pencere Chrome ve Edge'de var. Diğer tarayıcılarda mini ofis normal bir küçük pencerede açılır; onu da köşeye sürükleyebilirsin.</p></details>
   </section>
 

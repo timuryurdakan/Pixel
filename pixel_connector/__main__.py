@@ -377,6 +377,11 @@ def cmd_usage(args) -> int:
     return 0
 
 
+def term_safe(text, limit: int = 200) -> str:
+    """Remote-supplied text for the terminal: control characters (ESC sequences, CR, …) become spaces (Phase 15)."""
+    return "".join(ch if ch.isprintable() else " " for ch in str(text or ""))[:limit]
+
+
 def cmd_approve(args, ok: bool = True) -> int:
     home = _home(args)
     if ok and (args.link or not args.id):
@@ -389,7 +394,8 @@ def cmd_approve(args, ok: bool = True) -> int:
         if not d["pending"]:
             OUT("Onay bekleyen bir şey yok.")
         for p in d["pending"]:
-            OUT("%s  %s  %s\n    %s" % (p["id"], p["agent"] or "", p["title"], (p["preview"] or "")[:200]))
+            OUT("%s  %s  %s\n    %s" % (term_safe(p["id"], 16), term_safe(p["agent"], 40), term_safe(p["title"], 80),
+                                         term_safe(p["preview"])))
         return 0
     st, d = _service_call(home, "POST", "/ctl/approvals/resolve", {"id": args.id, "ok": ok})
     if st != 200:

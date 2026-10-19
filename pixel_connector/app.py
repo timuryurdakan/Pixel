@@ -727,8 +727,7 @@ class Connector:
             return fn
 
         def approvals(b, q):
-            return 200, {"pending": self.approvals.list(), "link": "http://127.0.0.1:%d/onay?t=%s"
-                         % (self.ctl.port, self.ctl.token) if self.ctl else None}
+            return 200, {"pending": self.approvals.list(), "link": self.ctl.page_link() if self.ctl else None}
 
         def approvals_resolve(b, q):
             if not self.approvals.resolve(str(b.get("id")), bool(b.get("ok"))):
