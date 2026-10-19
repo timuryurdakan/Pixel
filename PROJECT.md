@@ -226,13 +226,13 @@ Teslimat: `web/js/transport.js`, `cloud.js`, `pip.js`, `main.js`/`agents.js`/`re
 
 **Kullanıcının elle yapması gerekenler** (ayrıntılı rehber: [`README.md`](README.md) → "Adım adım dağıtım"):
 
-- [ ] `sudo apt install git` ve `git config --global user.name/user.email` (ya da GitHub Desktop / web arayüzünden yükleme)
-- [ ] **Kişisel** GitHub hesabında yeni bir depo oluşturup projeyi `git push` ile yüklemek (`.gitignore` hazır; `names.json` depoya girmez)
-- [ ] Vercel'de (Hobby) **Add New → Project → Import**; ayarlara dokunmadan **Deploy**
-- [ ] Vercel → Storage → **Upstash for Redis** (Free, Frankfurt) → projeye bağlamak
-- [ ] `python3 -c "import secrets;print(secrets.token_urlsafe(32))"` ile `PIXEL_SECRET` üretip Vercel'e girmek (**bir kez belirlenir, sonra değiştirilmez**); önerilen `PIXEL_CREATE_TOKEN`, isteğe bağlı `PIXEL_PUBLIC_URL`
-- [ ] **Redeploy**, sonra doğrulama: `/api/health` → `"storage":"upstash","storageOk":true`; `/README.md` ve `/server.py` → 404; `/hook/pixel_hook.py` → `text/plain`; `curl -sI ".../api/state?room=<oda>"` iki kez → ikincisinde `x-vercel-cache: HIT`
-- [ ] Oda oluşturup kendi bilgisayarında "Ajan bağla" komutunu çalıştırmak ve Claude Code'u yeniden başlatmak (gerçek Claude Code ile ilk deneme)
+- [x] `sudo apt install git` ve `git config --global user.name/user.email` (ya da GitHub Desktop / web arayüzünden yükleme)
+- [x] **Kişisel** GitHub hesabında yeni bir depo oluşturup projeyi `git push` ile yüklemek (`.gitignore` hazır; `names.json` depoya girmez)
+- [x] Vercel'de (Hobby) **Add New → Project → Import**; ayarlara dokunmadan **Deploy**
+- [x] Vercel → Storage → **Upstash for Redis** (Free, Frankfurt) → projeye bağlamak
+- [x] `python3 -c "import secrets;print(secrets.token_urlsafe(32))"` ile `PIXEL_SECRET` üretip Vercel'e girmek (**bir kez belirlenir, sonra değiştirilmez**); önerilen `PIXEL_CREATE_TOKEN`, isteğe bağlı `PIXEL_PUBLIC_URL`
+- [x] **Redeploy**, sonra doğrulama: `/api/health` → `"storage":"upstash","storageOk":true`; `/README.md` ve `/server.py` → 404; `/hook/pixel_hook.py` → `text/plain`; `curl -sI ".../api/state?room=<oda>"` iki kez → ikincisinde `x-vercel-cache: HIT`
+- [x] Oda oluşturup kendi bilgisayarında "Ajan bağla" komutunu çalıştırmak ve Claude Code'u yeniden başlatmak (gerçek Claude Code ile ilk deneme)
 - [ ] En az bir arkadaşın (tercihen Python'suz Windows) tek komutla bağlanması; `pixel_hook.ps1` ilk kez orada çalışacak, `doctor` çıktısına bakılmalı
 - [ ] İsteğe bağlı: gerçek Ollama/LM Studio ile `pixel-proxy`, gerçek aider ile `pixel-run`; Chrome'da mini pencereyi sağ alta sürükleyip ana pencereyi küçültmek
 - [ ] İlk ay haftada bir Vercel **Usage** ve Upstash **Usage** kontrolü; gerekirse `PIXEL_POLL_ACTIVE_MS` / `PIXEL_POLL_CALM_MS`
@@ -266,8 +266,8 @@ Teknik sözleşme: [`docs/V3.md`](docs/V3.md). v3 aşamalarındaki tüm ajanlar 
 | 11 | v3 Mimari | Yazılım/Güvenlik Mimarı | `docs/V3.md`, bu bölüm | ✅ Tamamlandı |
 | 12 | Gerçek Zamanlı Röle | Gerçek Zamanlı/Edge Mühendisi | `relay/` (Worker + Durable Object), `tools/dev_relay.py`, `pixel_connector/ws.py`, `web/js/relay.js`, `api/relay_ticket.py`, `pixel_cloud` eklemeleri, `dev_server.py --relay`, testler | ✅ Tamamlandı |
 | 13 | Bağlayıcı Uygulama | Bağlayıcı/Güvenlik Mühendisi | `pixel_connector/`, `web/js/e2e.js`, `web/js/idb.js`, `tools/build_connector.py`, `web/connector/`, testler | ✅ Tamamlandı |
-| 14 | Arayüz | Frontend Mühendisi | `web/js/{control,prompt,devices,usage}.js`, `main.js`/`ui.js`/`cloud.js`/`index.html`/`style.css`/`sw.js` düzenlemeleri, `vercel.json` CSP | ⬜ Bekliyor |
-| 15 | Güvenlik İncelemesi & QA & Dokümantasyon | Güvenlik İnceleyici + QA Mühendisi | inceleme, düzeltmeler, uçtan uca testler, README, `rehber.html`, kullanıcının dağıtım listesi | ⬜ Bekliyor |
+| 14 | Arayüz | Frontend Mühendisi | `web/js/{control,prompt,devices,usage}.js`, `main.js`/`ui.js`/`cloud.js`/`index.html`/`style.css`/`sw.js` düzenlemeleri, `vercel.json` CSP | ✅ Tamamlandı |
+| 15 | Güvenlik İncelemesi & QA & Dokümantasyon | Güvenlik İnceleyici + QA Mühendisi | inceleme, düzeltmeler, uçtan uca testler, README, `rehber.html`, kullanıcının dağıtım listesi | ✅ Tamamlandı |
 
 Bağımlılıklar: **Aşamalar kesin sırayla yürür, her aşamayı tek bir uzman yapar:** 12 → 13 → 14 → 15. 13, 12'nin röle protokolünü ve `dev_relay`'i kullanır. 14, 13'ün `e2e.js` ve bağlayıcısıyla (sahte motorlar) geliştirilir. 15 en son yapılır. Bir aşama tüm testleri yeşil olmadan ve günlüğe kayıt düşülmeden bitmiş sayılmaz.
 
@@ -354,8 +354,8 @@ Teslimat: `web/js/control.js`, `prompt.js`, `devices.js`, `usage.js`; `main.js`,
 
 Koordinatör kullanıcıyla **bu sırayla** yürür. Ayrıntılı, başlangıç düzeyi anlatım: README → "Yayına alma kontrol listesi (v3)".
 
-1. [ ] Röle adresini sabitle: `python3 tools/set_relay_host.py <workers.dev-alt-alan>` (Cloudflare hesabı yoksa önce 3. adımın ilk maddesi). Çıktıdaki `wss://pixel-relay.<alt-alan>.workers.dev` adresini not et.
-2. [ ] `git add -A && git commit -m "v3 yayına alma" && git push` (Vercel kendiliğinden dağıtır).
+1. [x] Röle adresini sabitle: `python3 tools/set_relay_host.py <workers.dev-alt-alan>` (Cloudflare hesabı yoksa önce 3. adımın ilk maddesi). Çıktıdaki `wss://pixel-relay.<alt-alan>.workers.dev` adresini not et.
+2. [x] `git add -A && git commit -m "v3 yayına alma" && git push` (Vercel kendiliğinden dağıtır).
 3. [ ] Cloudflare: hesap + `workers.dev` alt alan adı → Workers & Pages → Create → Import a repository → GitHub (yalnızca `timuryurdakan/Pixel`). Ad `pixel-relay`, dal `main`, kök dizin `relay`, derleme `npm install --no-audit --no-fund && npm test`, dağıtım `npx wrangler deploy`, izlenen yol `relay/*` → Save and Deploy → günlükte `fail 0`.
 4. [ ] `RELAY_SECRET` üret: `python3 -c "import secrets;print(secrets.token_urlsafe(32))"`.
 5. [ ] Cloudflare: pixel-relay → Settings → Variables and Secrets → Add → Secret `RELAY_SECRET` → Deploy (`ALLOWED_ORIGINS` panele eklenmez).
@@ -370,13 +370,13 @@ Koordinatör kullanıcıyla **bu sırayla** yürür. Ayrıntılı, başlangıç 
 14. [ ] İlk ay haftada bir: Cloudflare (Metrics, Durable Objects), Vercel Usage, Upstash Usage; ilk haftanın sayılarını V3.md §15 ile karşılaştır.
 
 **Kullanıcının elle yapması gerekenler (v3)** (ayrıntılar: V3.md §16):
-- [ ] Cloudflare hesabı açmak (ücretsiz, kart gerekmez) ve `workers.dev` alt alan adını seçmek
+- [x] Cloudflare hesabı açmak (ücretsiz, kart gerekmez) ve `workers.dev` alt alan adını seçmek
 - [ ] Aşama 12'den sonra: Workers & Pages → Import a repository → GitHub (yalnızca `timuryurdakan/Pixel` deposuna izin). Ad `pixel-relay`, kök dizin `relay`, derleme komutu `npm install --no-audit --no-fund && npm test`, dağıtım komutu `npx wrangler deploy`, izlenen yol `relay/*`
 - [ ] `RELAY_SECRET` üretmek (`python3 -c "import secrets;print(secrets.token_urlsafe(32))"`) ve **aynı değeri** hem Cloudflare'de (Secret) hem Vercel'de girmek; Vercel'e `PIXEL_RELAY_URL=wss://pixel-relay.<alt-alan>.workers.dev` eklemek
 - [ ] `python3 tools/set_relay_host.py <alt-alan>` ile CSP'deki röle adresini ayarlamak, push etmek, `/health` ve `/api/config` kontrolü, uyumluluk testlerini dağıtılmış Worker'a karşı çalıştırmak (sıralı liste: §5c "Yayına alma kontrol listesi (v3)")
 - [ ] Her bilgisayarda: Cihazlar → Cihaz ekle → kurulum komutu → `pixel-connector pair` → kodu tarayıcıya girmek → SAS'ı karşılaştırıp `e` demek (telefon için ayrı kod)
 - [ ] İsteğe bağlı: `loginctl enable-linger $USER`, Ollama için polkit kuralı, `connector.json` içinde çalışma klasörleri ve ortamlar
-- [ ] Yerleşik ajanlar hâlâ odadaysa kaldırmak (`/api/residents` ile `[]`)
+- [x] Yerleşik ajanlar hâlâ odadaysa kaldırmak (`/api/residents` ile `[]`)
 - [ ] İlk ay haftada bir Cloudflare (Durable Objects istek ve süre), Vercel ve Upstash kullanımını kontrol etmek
 - [ ] Girişim aşamasından önce: Anthropic koşulları sorusunu netleştirmek (V3.md §18.1, Q1) ve API anahtarıyla kimlik doğrulamaya geçmeyi değerlendirmek
 
@@ -734,3 +734,4 @@ Her ajan işini bitirince buraya tarihli bir kayıt ekler (en yeni en altta).
   Kullanıcıyla yapılacaklar (yalnızca yayına almadan sonra doğrulanabilir): Workers Builds derlemesi, Durable Object uyku modu ve ping yanıtı, dağıtılmış uyumluluk testi, Vercel'de `.pyz` içerik türü ve CSP başlığı, gerçek Claude Code (her profil, sürdürme, araç sırasında iptal, maliyet etiketleri), gerçek Ollama (polkit ile başlat/durdur, model yükle/boşalt), gerçek telefonla mobil veride deneme, ilk haftanın kota sayıları.
 
   Aşama 15 tamamlandı. v3: **kod tamamlandı, yayına alma bekliyor.** Sıradaki adım: §5c "Yayına alma kontrol listesi (v3)".
+- **2026-10-19 — Koordinatör (yayına alma, devam ediyor):** Belge güncellendi: v2'nin elle yapılan adımları (git, GitHub, Vercel, Upstash, `PIXEL_SECRET`, `PIXEL_CREATE_TOKEN`, `PIXEL_PUBLIC_URL`, ilk gerçek Claude Code bağlantısı) zaten tamamlanmıştı, işaretlendi. `www.pixeloffice.com.tr` domaini Vercel DNS ile yayında (Let's Encrypt). Yerleşik ajanlar kaldırıldı. v3 tablosunda 14–15 ✅ yapıldı. Röle adresi `wss://pixel-relay.yurdakantimur.workers.dev` olarak CSP'ye işlendi ve push edildi (kontrol listesi 1–2 ✅). Cloudflare'de `pixel-relay` Workers Builds kurulumu kullanıcıyla yapılıyor (adım 3).
