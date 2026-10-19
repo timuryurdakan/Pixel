@@ -31,6 +31,29 @@ MIN_PERMISSION_PROMPTS = (2, 1, 259)
 MIN_CUMULATIVE_RESUME = (2, 1, 277)
 BUILTIN_DENY = ["Bash(sudo *)", "Read(~/.ssh/**)", "Read(~/.gnupg/**)", "Read(~/.aws/**)", "Read(~/.pixel-office/**)",
                 "Edit(~/.pixel-office/**)", "Read(~/.claude/.credentials.json)"]
+# Phase 16 (docs/SECURITY_AUDIT.md S16-01): files where an *edit* turns into code execution later, outside the
+# profile's promise ("edit" = no shell) and mostly invisible in `git diff`: git hooks/config (core.fsmonitor,
+# core.hooksPath run on the next `git status`, which the dev profile allows), Claude Code settings with hooks and
+# MCP servers (run by the next `claude -p` without a trust dialog), editor tasks/settings (.vscode) and direnv
+# (.envrc) files that run when the folder is opened or entered (often gitignored), shell start-up files, user
+# services/autostart, PATH shims, the Claude Code binary itself (~/.local/share/claude, VS Code extension builds). `Edit(...)` rules
+# cover every built-in file-editing tool (Edit, Write, NotebookEdit). Both the absolute (`//`) and the cwd-relative
+# form are listed, so a parent repository's .git is covered as well.
+EXEC_SENSITIVE_DENY = [
+    "Edit(//**/.git/**)", "Edit(**/.git/**)",
+    "Edit(//**/.claude/settings.json)", "Edit(//**/.claude/settings.local.json)", "Edit(//**/.mcp.json)",
+    "Edit(**/.claude/settings.json)", "Edit(**/.claude/settings.local.json)", "Edit(**/.mcp.json)",
+    "Edit(//**/.vscode/**)", "Edit(**/.vscode/**)", "Edit(//**/.envrc)", "Edit(**/.envrc)",
+    "Edit(~/.claude/**)", "Edit(~/.claude.json)", "Edit(~/.ssh/**)", "Edit(~/.gitconfig)", "Edit(~/.config/**)",
+    "Edit(~/.local/bin/**)", "Edit(~/.local/share/**)", "Edit(~/.vscode/**)", "Edit(~/AppData/**)",
+    "Edit(~/Library/LaunchAgents/**)",
+    "Edit(~/.bashrc)", "Edit(~/.bash_profile)", "Edit(~/.bash_login)", "Edit(~/.profile)",
+    "Edit(~/.zshrc)", "Edit(~/.zprofile)", "Edit(~/.zshenv)",
+]
+# Credentials that a prompt-injected run should not even read (it could copy them into the workspace).
+SECRET_READ_DENY = ["Read(~/.claude.json)", "Read(~/.config/gh/**)", "Read(~/.netrc)", "Read(~/.git-credentials)",
+                    "Read(~/.docker/config.json)", "Read(~/.kube/**)"]
+BUILTIN_DENY = BUILTIN_DENY + EXEC_SENSITIVE_DENY + SECRET_READ_DENY
 EDIT_TOOLS = ["Edit", "Write", "NotebookEdit"]
 FORBIDDEN_ARGS = ("--dangerously-skip-permissions", "--allow-dangerously-skip-permissions", "bypassPermissions")
 RESUME_MISSING_RE = re.compile(r"no conversation found|session[^\n]{0,40}not found|not found[^\n]{0,40}session", re.I)

@@ -82,7 +82,7 @@ class ArgvTests(unittest.TestCase):
             self.argv("bypass")
         for a in (ro, ed, dv, au):
             j = a.index("--disallowedTools")
-            self.assertEqual(a[j + 1:j + 8], CL.BUILTIN_DENY)
+            self.assertEqual(a[j + 1:j + 1 + len(CL.BUILTIN_DENY)], CL.BUILTIN_DENY)
             self.assertIn("--session-id", a)
             self.assertEqual(a[a.index("--max-turns") + 1], "50")
 

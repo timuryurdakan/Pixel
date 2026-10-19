@@ -67,6 +67,8 @@ Ardından tarayıcıda **http://localhost:8765** adresini açın. Durdurmak içi
 
 Örnek: `python3 server.py --port 9000 --projects-dir ~/.claude/projects`
 
+DNS rebinding koruması: sunucu yalnızca IP adresiyle, `localhost` ile, bilgisayarın kendi adıyla (`ad`, `ad.local`) ya da `--host` ile verilen adla gelen istekleri kabul eder; başka bir adla gelen istek `421` alır. Başka bir adla (örneğin Tailscale adı) açıyorsanız adı ekleyin: `PIXEL_OFFICE_ALLOWED_HOSTS=pc.tailnet.ts.net python3 server.py --host 0.0.0.0` (virgülle birden çok ad).
+
 Üst çubukta mod (**CANLI MOD** / **DEMO MOD**) ve bağlantı durumu (**Bağlı** / **Yeniden bağlanıyor…**) yer alır. Sunucu yeniden başlatılırsa sayfa kendiliğinden yeniden bağlanır. Adrese `?debug` eklerseniz FPS'i ve karakter durumlarını gösteren bir hata ayıklama katmanı açılır.
 
 Yerel sunucu da bulutla aynı `POST /api/status` ucunu sunar. Böylece Ollama, aider ya da kendi betikleriniz de yerel ofiste görünebilir (bkz. [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md)).
@@ -313,7 +315,7 @@ içine kurar, `~/.pixel-office/bin/pixel-connector` kısayolunu ve ayar dosyası
 Ekrana yazdığı özeti bu sürümün özetiyle karşılaştırın:
 
 ```
-pixel-connector.pyz SHA-256: d8804ee9bc19e0d930d3394e09e50a083d97619b8a40efc7ebd80ac9ab34685f
+pixel-connector.pyz SHA-256: 18a4148d7cc2362ea00c7225fe4996170f60738a753a1d6088c5040c979020d9
 ```
 
 Windows (PowerShell): komut kutusundaki **Windows** sekmesini kullanın (`irm …/install.ps1 -OutFile install.ps1`, sonra
@@ -366,6 +368,7 @@ model, ad, izin profili ve isteğe bağlı bir bütçe seçin. İzin profilleri 
 | **Otomatik** | Claude Code'un otomatik modu. Yalnızca `profiles.auto.enabled: true` ise seçilebilir; `confirm.task: "always"` ile önerilir. |
 
 `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.pixel-office` ve Claude kimlik bilgilerini okuma ve `sudo` her profilde yasaktır.
+Ayrıca her profilde, düzenlenince sonradan kod çalıştıran dosyalara yazmak yasaktır: `.git/` (kancalar, `core.fsmonitor`), `.claude/settings*.json`, `.mcp.json`, `.vscode/`, `.envrc`, `~/.claude`, `~/.config`, `~/.local/bin`, `~/.local/share`, kabuk başlangıç dosyaları (`~/.bashrc`, `~/.zshrc`, `~/.profile` …). `~/.claude.json`, `~/.netrc`, `~/.git-credentials`, `~/.config/gh`, `~/.docker/config.json`, `~/.kube` okunamaz (docs/SECURITY_AUDIT.md S16-01).
 
 ### Görev verme
 

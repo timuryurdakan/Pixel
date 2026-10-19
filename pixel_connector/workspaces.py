@@ -61,6 +61,10 @@ def check_denied(real: str, home: Optional[str] = None) -> Optional[str]:
         return "the home directory itself"
     if _fold(real) == _fold(os.path.realpath(os.sep)) or re.match(r"^[A-Za-z]:\\?\Z", real):
         return "the filesystem root"
+    if _under(home_r, real):
+        # Phase 16 (SECURITY_AUDIT.md S16-06): /home, /Users, C:\Users … contain the whole home directory,
+        # including every denied folder below it.
+        return "an ancestor of the home directory"
     for d in deny_list(home):
         if _under(real, d):
             return "denied path " + d

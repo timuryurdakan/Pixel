@@ -42,6 +42,11 @@ RATE_IP_WRITE = (4.0, 60)
 RATE_IP_CREATE = (5 / 3600, 5)
 RATE_ROOM_RENAME = (10 / 60, 10)
 RATE_RELAY_TICKET = (0.5, 30)  # per room and per IP (V3.md §13.1): 30/min
+# Phase 16 (SECURITY_AUDIT.md S16-03): unauthenticated reads that reach Upstash. Only CDN misses reach the function;
+# a normal viewer causes at most one every few seconds, so 2/s with a burst of 120 per IP never bites real use but
+# stops one client from spending the room-wide free-tier quota (Vercel invocations + Upstash commands).
+RATE_IP_STATE = (2.0, 120)
+HEALTH_PING_TTL = 15.0         # s; /api/health reuses the last Upstash PING result for this long (per instance)
 
 # -- v3 relay (V3.md §6.2, §13.1) -----------------------------------------------------------------
 MAX_TICKET_BODY = 256          # bytes

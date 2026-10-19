@@ -294,7 +294,7 @@ class LocalRenameTests(LocalRenameBase):
     def test_sse_agent_updated(self):
         self.store.upsert(tagent("sess-1"))
         s = socket.create_connection(("127.0.0.1", self.port), timeout=5)
-        s.sendall(b"GET /events HTTP/1.1\r\nHost: x\r\n\r\n")
+        s.sendall(b"GET /events HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
         f = s.makefile("rb")
         buf = b""
         while b"event: snapshot" not in buf:

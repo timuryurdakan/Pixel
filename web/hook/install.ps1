@@ -25,6 +25,13 @@ try {
 } catch { }
 
 $Server = $Server.TrimEnd('/')
+# Phase 16 (SECURITY_AUDIT.md S16-05): https:// only; plain http:// only for a local-mode server on this machine or
+# the LAN (loopback, RFC 1918, *.local / *.lan, single-label names), as in install.sh.
+$LocalHttp = '^http://(127\.[0-9.]+|localhost|\[::1\]|10\.[0-9.]+|192\.168\.[0-9.]+|172\.(1[6-9]|2[0-9]|3[01])\.[0-9.]+|[A-Za-z0-9-]+|[A-Za-z0-9.-]+\.(local|lan))(:[0-9]{1,5})?$'
+if (-not ($Server -match '^https://[^/]' -or $Server -match $LocalHttp)) {
+    Write-Error 'Server must start with https:// (http:// only for a server on this computer or the local network).'
+    exit 2
+}
 $oh = $env:PIXEL_OFFICE_HOME
 if (-not $oh) {
     $h = $env:USERPROFILE

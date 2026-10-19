@@ -29,7 +29,7 @@ log = logging.getLogger("pixel_cloud")
 
 HOOK_CLIENT = Path(__file__).resolve().parent.parent / "web" / "hook" / "pixel_hook.py"
 JSON_CT = "application/json; charset=utf-8"
-_HOST_RE = re.compile(r"^(?:[A-Za-z0-9.-]{1,253}|\[[0-9A-Fa-f:.]{2,45}\])(?::\d{1,5})?$")
+_HOST_RE = re.compile(r"^(?:[A-Za-z0-9.-]{1,253}|\[[0-9A-Fa-f:.]{2,45}\])(?::\d{1,5})?\Z")
 
 
 # -- request / response ------------------------------------------------------------------------------
@@ -245,6 +245,8 @@ class App:
         self.limit_room_rename = RateLimiter(*S.RATE_ROOM_RENAME, clock=clock)
         self.limit_room_ticket = RateLimiter(*S.RATE_RELAY_TICKET, clock=clock)
         self.limit_ip_ticket = RateLimiter(*S.RATE_RELAY_TICKET, clock=clock)
+        self.limit_ip_state = RateLimiter(*S.RATE_IP_STATE, clock=clock)
+        self._ping: tuple[float, bool] | None = None                       # (checked_at, ok) for /api/health
         self._lock = threading.Lock()
         self._ttl_refreshed: OrderedDict[str, float] = OrderedDict()   # room → last EXPIRE (this instance)
         self._prev: OrderedDict[str, tuple[str, int, int]] = OrderedDict()  # agent → (st, ss, sa)
@@ -398,10 +400,16 @@ class App:
         }, cache=S.CONFIG_CACHE_CONTROL)
 
     def h_health(self, req: Request, q: dict) -> Response:
-        try:
-            ok = bool(self.storage.ping())
-        except Exception:
-            ok = False
+        now = self.clock()
+        cached = self._ping
+        if cached is not None and 0 <= now - cached[0] < S.HEALTH_PING_TTL:
+            ok = cached[1]
+        else:
+            try:
+                ok = bool(self.storage.ping())
+            except Exception:
+                ok = False
+            self._ping = (now, ok)
         return _json_response(200, {"ok": True, "version": __version__, "storage": self.storage.name,
                                     "storageOk": ok})
 
@@ -440,6 +448,7 @@ class App:
     # -- GET /api/state ---------------------------------------------------------------------------
     def h_state(self, req: Request, q: dict) -> Response:
         room = self._room(q)
+        self._rate((self.limit_ip_state, req.client_ip or "?"))     # before any storage command (S16-03)
         fields = self._read_fields(room)
         snap = derive.snapshot(room, fields, self.now_ms(), self.settings)
         if snap.purge:

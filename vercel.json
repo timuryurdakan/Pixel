@@ -10,7 +10,8 @@
     {"source": "/(.*)", "headers": [
       {"key": "X-Content-Type-Options", "value": "nosniff"},
       {"key": "Referrer-Policy", "value": "no-referrer"},
-      {"key": "Content-Security-Policy", "value": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' wss://pixel-relay.yurdakantimur.workers.dev; frame-ancestors 'none'; base-uri 'none'"}
+      {"key": "Content-Security-Policy", "value": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' wss://pixel-relay.yurdakantimur.workers.dev; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'"},
+      {"key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"}
     ]},
     {"source": "/sw.js", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},
     {"source": "/manifest.webmanifest", "headers": [{"key": "Content-Type", "value": "application/manifest+json"}]},

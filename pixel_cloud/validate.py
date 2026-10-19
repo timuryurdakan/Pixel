@@ -17,8 +17,8 @@ from .ids import OWNER_ID_RE, SESSION_RE
 STATES = ("working", "thinking", "waiting_for_user", "idle", "sleeping", "offline")
 ACTIVE_STATES = frozenset({"working", "thinking", "waiting_for_user"})
 
-TOOL_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,32}$")
-SOURCE_RE = re.compile(r"^[a-z0-9-]{1,16}$")
+TOOL_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,32}\Z")
+SOURCE_RE = re.compile(r"^[a-z0-9-]{1,16}\Z")
 CTL_RE = re.compile(r"^[a-z2-7]{16}\.[A-Za-z0-9_-]{1,24}\Z")   # v3: deviceId "." agentKey (V3.md §13.2)
 
 # Bidi overrides/isolates and zero-width / invisible format characters.

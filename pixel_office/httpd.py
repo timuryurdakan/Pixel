@@ -1,10 +1,13 @@
 """HTTP server: static files, JSON API and the SSE event stream (ARCHITECTURE.md §3.2–3.4, §7.6)."""
 
 import getpass
+import ipaddress
 import json
 import logging
 import mimetypes
+import os
 import queue
+import socket
 import sys
 import threading
 import time
@@ -39,6 +42,39 @@ MIME_TYPES = {
     ".webmanifest": "application/manifest+json",
 }
 SSE_POLL = 0.5   # s; how often an idle SSE handler checks for server shutdown
+
+
+def host_allowed(host_header: str | None, extra_names=()) -> bool:
+    """DNS-rebinding guard (docs/SECURITY_AUDIT.md S16-02). A rebinding page reaches us under the attacker's own
+    domain name, so the browser sends that name in Host. Accept only IP literals, `localhost`, this machine's
+    hostname (plain and `.local`) and the name the server was started with. No Host at all (non-browser HTTP/1.0
+    clients) is accepted; browsers always send one."""
+    if host_header is None:
+        return True
+    h = host_header.strip().lower()
+    if h.startswith("["):
+        end = h.find("]")
+        name = h[1:end] if end > 0 else ""
+    else:
+        name = h.rsplit(":", 1)[0] if h.count(":") == 1 else h
+    name = name.rstrip(".")
+    if not name:
+        return False
+    try:
+        ipaddress.ip_address(name)
+        return True
+    except ValueError:
+        pass
+    if name in ("localhost", "localhost.localdomain") or name.endswith(".localhost"):
+        return True
+    names = {n.lower().rstrip(".") for n in extra_names if n}
+    try:
+        hn = socket.gethostname().lower().rstrip(".")
+        if hn:
+            names.update({hn, hn.split(".")[0], hn.split(".")[0] + ".local"})
+    except OSError:
+        pass
+    return name in names
 CLIENT_GONE = (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, TimeoutError)
 
 
@@ -54,6 +90,10 @@ class PixelOfficeServer(ThreadingHTTPServer):
         self.reported = reported          # ReportedAgents → POST /api/status (CLOUD.md §16)
         self.names = names                # NamesStore → POST /api/agents/rename (CLOUD.md §15.4)
         self.write_key = write_key        # required as Bearer on the POST endpoints when set
+        # Host names accepted besides IP literals/localhost/this machine's name (S16-02): the --host value and, for
+        # names such as a Tailscale MagicDNS name, PIXEL_OFFICE_ALLOWED_HOSTS (comma-separated).
+        self.host_names = (str(addr[0] or ""),) + tuple(
+            h.strip() for h in os.environ.get("PIXEL_OFFICE_ALLOWED_HOSTS", "").split(",") if h.strip())
         super().__init__(addr, RequestHandler)
         host, port = self.server_address[:2]
         self.allowed_origins = {f"http://{h}:{port}" for h in ("127.0.0.1", "localhost", "[::1]")}
@@ -76,7 +116,15 @@ class RequestHandler(BaseHTTPRequestHandler):
     server_version = "PixelOffice/1.0"
 
     # -- routing ----------------------------------------------------------------------------
+    def _host_ok(self) -> bool:
+        if host_allowed(self.headers.get("Host"), self.server.host_names):
+            return True
+        self._send_json(421, {"error": "misdirected", "message": "Unknown Host header"})
+        return False
+
     def do_GET(self) -> None:
+        if not self._host_ok():
+            return
         try:
             path = unquote(urlsplit(self.path).path)
         except ValueError:
@@ -108,6 +156,9 @@ class RequestHandler(BaseHTTPRequestHandler):
     do_PUT = do_DELETE = do_PATCH = do_HEAD = do_OPTIONS = _method_not_allowed
 
     def do_POST(self) -> None:
+        if not self._host_ok():
+            self.close_connection = True
+            return
         try:
             path = unquote(urlsplit(self.path).path)
         except ValueError:

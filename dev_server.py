@@ -40,7 +40,9 @@ def security_headers(connect_extra: str = "") -> list[tuple[str, str]]:
         ("X-Content-Type-Options", "nosniff"),
         ("Referrer-Policy", "no-referrer"),
         ("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
-                                    f"script-src 'self'; connect-src {connect}; frame-ancestors 'none'; base-uri 'none'"),
+                                    f"script-src 'self'; connect-src {connect}; frame-ancestors 'none'; base-uri 'none'; "
+                                    "object-src 'none'; form-action 'self'"),
+        ("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()"),
     ]
 
 

@@ -22,6 +22,11 @@ relay/.wrangler/
 .env
 .env.*
 *.pem
+*.key
+*.p12
+.npmrc
+# Claude Code per-user settings (may hold local paths/tokens)
+.claude/settings.local.json
 
 # Editors / OS / scratch
 .vscode/

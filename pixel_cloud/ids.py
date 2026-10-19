@@ -8,11 +8,11 @@ import hmac
 import re
 import secrets
 
-ROOM_RE = re.compile(r"^[a-z2-7]{26}$")
-WRITE_KEY_RE = re.compile(r"^[A-Za-z0-9_-]{32}$")
-AGENT_ID_RE = re.compile(r"^a[0-9a-f]{16}$")
-OWNER_ID_RE = re.compile(r"^[A-Za-z0-9_-]{4,32}$")
-SESSION_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+ROOM_RE = re.compile(r"^[a-z2-7]{26}\Z")
+WRITE_KEY_RE = re.compile(r"^[A-Za-z0-9_-]{32}\Z")
+AGENT_ID_RE = re.compile(r"^a[0-9a-f]{16}\Z")
+OWNER_ID_RE = re.compile(r"^[A-Za-z0-9_-]{4,32}\Z")
+SESSION_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}\Z")
 
 _KEY_PREFIX = b"pixel-write:v1:"
 

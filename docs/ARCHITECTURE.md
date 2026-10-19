@@ -195,7 +195,7 @@ Server: `ThreadingHTTPServer`, `daemon_threads = True`, default `protocol_versio
 
 ```json
 {
-  "id": "d3c4193c-5d1e-4ef1-94ba-fa9fbb3a6d39",
+  "id": "11111111-2222-4333-8444-555555555555",
   "name": "Grace",
   "project": "Pixel",
   "projectPath": "/home/user/Desktop/Pixel",

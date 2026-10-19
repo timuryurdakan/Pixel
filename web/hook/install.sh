@@ -8,7 +8,13 @@
 # 3. runs `pixel_hook.py install …` (writes config.json, merges hooks into ~/.claude/settings.json with a
 #    backup, sends a test character).
 # Env: PIXEL_OFFICE_HOME (default ~/.pixel-office), PIXEL_OFFICE_CLAUDE_SETTINGS (default ~/.claude/settings.json).
+#
+# Phase 16 (docs/SECURITY_AUDIT.md S16-05): everything runs inside main(), called on the last line, so a download cut
+# off during `curl … | sh` runs nothing. --server must be https://, or plain http:// only for a local-mode server on
+# this machine or the LAN (loopback, RFC 1918 addresses, *.local / *.lan names), as in CLOUD.md §16.
 set -eu
+
+main() {
 
 SERVER=""
 prev=""
@@ -22,6 +28,26 @@ if [ -z "$SERVER" ]; then
   exit 2
 fi
 SERVER="${SERVER%/}"
+case "$SERVER" in
+  https://?*) ;;
+  http://127.*|http://localhost|http://localhost:*|http://\[::1\]*|http://10.*|http://192.168.*) ;;
+  http://172.1[6-9].*|http://172.2[0-9].*|http://172.3[01].*) ;;
+  http://*.local|http://*.local:*|http://*.lan|http://*.lan:*) ;;
+  http://?*)
+    host="${SERVER#http://}"
+    host="${host%%[:/]*}"
+    case "$host" in
+      *.*|"")   # a public DNS name over plain http: a network attacker could swap the downloaded hook
+        echo "Hata: --server https:// ile başlamalı (http:// yalnızca bu bilgisayardaki ya da yerel ağdaki sunucu için)." >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  *)
+    echo "Hata: --server https:// ile başlamalı (http:// yalnızca bu bilgisayardaki ya da yerel ağdaki sunucu için)." >&2
+    exit 2
+    ;;
+esac
 HOME_DIR="${PIXEL_OFFICE_HOME:-$HOME/.pixel-office}"
 mkdir -p "$HOME_DIR"
 chmod 700 "$HOME_DIR" 2>/dev/null || true
@@ -70,7 +96,8 @@ if command -v pwsh >/dev/null 2>&1; then
       ARGS="$ARGS '$(printf '%s' "$a" | sed "s/'/''/g")'"
     fi
   done
-  exec pwsh -NoProfile -NonInteractive -Command "& '$HOME_DIR/pixel_hook.ps1' $ARGS"
+  PS1_PATH="$(printf '%s' "$HOME_DIR/pixel_hook.ps1" | sed "s/'/''/g")"
+  exec pwsh -NoProfile -NonInteractive -Command "& '$PS1_PATH' $ARGS"
 fi
 
 cat >&2 <<'EOF'
@@ -79,3 +106,6 @@ Python 3 kurun (macOS: `xcode-select --install` veya python.org; Linux: paket y�
 Kurulum yapamıyorsanız sayfadaki "Gelişmiş" sekmesindeki HTTP kancası seçeneğine bakın (gizlilik ödünleşimini okuyun).
 EOF
 exit 1
+}
+
+main "$@"

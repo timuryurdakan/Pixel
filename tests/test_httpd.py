@@ -110,7 +110,7 @@ class HttpTests(unittest.TestCase):
     def test_sse(self):
         self.store.upsert(agent("a"))
         s = socket.create_connection(("127.0.0.1", self.port), timeout=5)
-        s.sendall(b"GET /events HTTP/1.1\r\nHost: x\r\n\r\n")
+        s.sendall(b"GET /events HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
         f = s.makefile("rb")
         status = f.readline()
         self.assertIn(b"200", status)

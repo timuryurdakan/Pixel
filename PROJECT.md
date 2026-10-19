@@ -68,6 +68,8 @@ Teknik ayrıntılar: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — **tüm a
 | 13 | Bağlayıcı Uygulama | Bağlayıcı/Güvenlik Mühendisi | `pixel_connector/`, `web/js/e2e.js`, `web/connector/` | ✅ Tamamlandı |
 | 14 | Arayüz | Frontend Mühendisi | görev kutusu, cihazlar sayfası, token göstergesi, telefon düzeni | ✅ Tamamlandı |
 | 15 | Güvenlik İncelemesi & QA & Dokümantasyon | Güvenlik İnceleyici + QA | inceleme, uçtan uca test, README, rehber | ✅ Tamamlandı (gerçek dünya denemeleri yayına almadan sonra, kullanıcıyla) |
+| 16 | Siber Güvenlik Denetimi | Uygulama Güvenliği Mühendisi | `docs/SECURITY_AUDIT.md`, düzeltmeler, `tests/test_phase16_security.py` | ✅ Tamamlandı |
+| 17 | Çalışma klasörü kurulum düzeltmesi | Bağlayıcı Mühendisi | kurulumda `~/PixelOfficeIsler`, `pixel-connector workspace` komutu, arayüz ipucu, `doctor` saat farkı | ⬜ Bekliyor |
 
 Durum işaretleri: ⬜ Bekliyor · 🔄 Devam ediyor · ✅ Tamamlandı · ⚠️ Sorunlu
 
@@ -349,6 +351,34 @@ Teslimat: `web/js/control.js`, `prompt.js`, `devices.js`, `usage.js`; `main.js`,
 - [x] CSP röle adresi kararı: `tools/set_relay_host.py` (tek doğrulanmış komut, joker yok) + tarayıcıda CSP ihlali algılama
 
 **Kabul kriterleri:** Tüm testler geçer. Kritik ya da yüksek önem derecesinde açık bulgu kalmaz. Kullanıcıyla yapılan gerçek denemelerin sonuçları günlüğe yazılır, yapılamayanlar listede açıkça işaretlenir. README'deki komutlar denenmiştir. İlk haftanın kullanım sayıları V3.md §15 ile karşılaştırılmıştır. ✔️ (kod tarafı; gerçek denemeler ve ilk hafta sayıları yayına almadan sonra kullanıcıyla)
+
+### Aşama 16 — Siber Güvenlik Denetimi (Uygulama Güvenliği Mühendisi)
+Teslimat: `docs/SECURITY_AUDIT.md` (İngilizce: kapsam, yöntem, bulgu tablosu, gizli bilgi taraması, canlı yapılandırma, öneriler, kullanıcı eylem listesi); düzeltmeler ve `tests/test_phase16_security.py`. Depo herkese açık olduğu için geçmiş de tarandı.
+- [x] Gizli bilgi ve depo temizliği: `git log -p --all` taraması (token biçimleri, özel anahtarlar, `.env`, `PIXEL_SECRET`/`RELAY_SECRET`/Upstash değerleri, oda anahtarları, e-posta, telefon, ev dizini yolları). Bu bilgisayardaki gerçek değerler geçmişle maskeli karşılaştırıldı, her eski `.pyz` açılıp incelendi; `.gitignore`/`.vercelignore` gözden geçirildi; canlı sitede `/.git/`, `/README.md`, `/tests/`, `/pixel_cloud/`, `/api/*.py`, `/.env`, `/relay/`, `/docs/`, `/PROJECT.md` → 404
+- [x] Canlı yapılandırma (salt okunur, ≈ 60 istek): güvenlik başlıkları, TLS, her `/api/*` ucu (kimliksiz, yanlış anahtar, büyük gövde, yanlış yöntem), röle `/health` ve biletsiz, yanlış Origin'li ve URL'de biletli WS yükseltmeleri
+- [x] Kod denetimi (risk sırasıyla): uzaktan komut çalıştırma (bağlayıcı komutları, eşleştirme, `/onay`, çalışma klasörü ve ortam izin listeleri, Claude izin profilleri, argv ve ortam değişkenleri), sunucu (HMAC, yazma anahtarı, bilet, zamanlama, enjeksiyon, yol geçişi, SSRF, hız sınırı, kota tüketme, hata mesajları), istemci (XSS, SW önbelleği, anahtar saklama, CSP), tedarik zinciri, kripto kullanımı, gizlilik sözü
+- [x] S16-01 (Yüksek): Claude Code'a her profilde, düzenlenince kod çalıştıran dosyalar için yazma yasakları (`.git/`, `.claude/settings*.json`, `.mcp.json`, `.vscode/`, `.envrc`, `~/.claude`, `~/.config`, `~/.local/bin`, `~/.local/share`, kabuk başlangıç dosyaları) ve ek kimlik bilgisi okuma yasakları
+- [x] S16-02 (Orta): v1 yerel sunucuda DNS rebinding'e karşı Host denetimi (`421`; ek adlar için `PIXEL_OFFICE_ALLOWED_HOSTS`)
+- [x] S16-03 (Orta): kimliksiz `/api/state` için depolamadan önce IP başına hız sınırı; `/api/health` PING sonucunu 15 sn yeniden kullanır (Upstash/Vercel ücretsiz kotası korunur)
+- [x] S16-05 (Orta): v2 kanca kurulum betikleri: yarım inen betik hiçbir şey çalıştırmaz; yalnızca `https://` (ya da yerel ağdaki sunucu için `http://`), `install.ps1` dahil
+- [x] S16-06 (Orta): ev dizininin üst klasörü (`/home`, `C:\Users`) çalışma klasörü olamaz
+- [x] Düşük/Bilgi: sondaki satır sonu kabul eden `$` düzenli ifadeleri → `\Z` (canlıda doğrulandı), CSP'ye `object-src 'none'; form-action 'self'` ve `Permissions-Policy`, belgede gerçek oturum kimliği yerine örnek kimlik, `.gitignore` eklemeleri; kabul edilenlerin gerekçeleri yazıldı (S16-07, -09, -12…-18)
+- [x] Bağlayıcı yeniden derlendi: `build_connector.py --check` geçer, `SHA256SUMS` ve README özeti eşleşir; `sw.js` sürümü `po-v3.0.2`
+- [x] Aşama 17 için güvenlik kısıtları yazıldı (SECURITY_AUDIT.md §5)
+
+**Kabul kriterleri:** Tüm testler geçer (481, 1 atlandı: `pwsh` yok). Kritik ya da yüksek önem derecesinde açık bulgu kalmaz; her düzeltmenin bir regresyon testi vardır. Herkese açık geçmişte döndürülmesi gereken gizli bilgi yoktur (varsa kullanıcı listesinde açıkça yazılır). Canlı denetimler salt okunurdur (oda oluşturma, kaba kuvvet, yük testi yok). Kabul edilen ve kullanıcıya kalan maddeler gerekçeleriyle belgededir. ✔️
+
+### Aşama 17 — Çalışma klasörü kurulum düzeltmesi (Bağlayıcı Mühendisi) ⬜
+Sorun: yeni kurulan bir bağlayıcıda hiç çalışma klasörü olmadığı için Claude Code ajanı oluşturulamıyor; kullanıcı `connector.json` dosyasını elle düzenlemek zorunda kalıyor. Ayrıca `doctor`, CDN önbelleğinden gelen yanıtın `Date` başlığıyla saat farkı hesapladığı için yanlış alarm veriyor.
+- [ ] Kurulum betikleri (`install.sh`, `install.ps1`) `~/PixelOfficeIsler` klasörünü oluşturur ve varsayılan çalışma klasörü olarak ekler (zaten varsa yeniden kullanır)
+- [ ] `pixel-connector workspace add|list|remove` komutu (yalnızca yerel komut satırı)
+- [ ] Cihazda hiç çalışma klasörü yoksa arayüzde açık bir ipucu (ne yapılacağı ve yerel komut)
+- [ ] `doctor` saat farkı yanlış alarmı: `no-store` bir uçtan ölçmek ya da `Age` başlığını çıkarmak
+- [ ] Testler; bağlayıcı yeniden derlenir, `SHA256SUMS` ve README özeti güncellenir; `sw.js` sürümü artırılır (web dosyaları değişirse)
+
+**Güvenlik kısıtları (Aşama 16'dan, ayrıntı: `docs/SECURITY_AUDIT.md` §5):** klasör `mkdir` ile 0700 oluşturulur, sembolik bağ ya da dosya ise reddedilir, `realpath` ile kaydedilir; ev dizini, üst klasörleri ve var olan depolar varsayılan olamaz. `workspace add` yalnızca yerel komut satırından çalışır: E2E komutu ya da `/onay` sayfa jetonuyla ulaşılabilen bir `/ctl` yolu olamaz, yani tarayıcı izin listesini genişletemez. `check_denied()` ve `realpath` kuralları aynen uygulanır, `connector.json` atomik ve 0600 yazılır. Arayüz ipucu tarayıcıdan yol almaz, metinler yalnızca `textContent` ile gösterilir. `EXEC_SENSITIVE_DENY`/`SECRET_READ_DENY` değişmez, kurulum `~/.claude`'a dokunmaz. Bilet `iat` toleransı (30 sn) saat farkını gizlemek için genişletilmez.
+
+**Kabul kriterleri:** Temiz bir geçici HOME'da kurulumdan sonra `~/PixelOfficeIsler` vardır ve `config-check` geçer. Arayüzden "Yeni ajan" ile Claude Code ajanı elle düzenleme yapmadan oluşturulabilir. `workspace add` yasaklı yolları (ev dizini, üst klasörleri, `~/.ssh`…) reddeder. `doctor` CDN önbelleğindeki eski bir `Date` başlığıyla alarm vermez. Tüm testler geçer.
 
 ### Yayına alma kontrol listesi (v3)
 
@@ -735,3 +765,17 @@ Her ajan işini bitirince buraya tarihli bir kayıt ekler (en yeni en altta).
 
   Aşama 15 tamamlandı. v3: **kod tamamlandı, yayına alma bekliyor.** Sıradaki adım: §5c "Yayına alma kontrol listesi (v3)".
 - **2026-10-19 — Koordinatör (yayına alma, devam ediyor):** Belge güncellendi: v2'nin elle yapılan adımları (git, GitHub, Vercel, Upstash, `PIXEL_SECRET`, `PIXEL_CREATE_TOKEN`, `PIXEL_PUBLIC_URL`, ilk gerçek Claude Code bağlantısı) zaten tamamlanmıştı, işaretlendi. `www.pixeloffice.com.tr` domaini Vercel DNS ile yayında (Let's Encrypt). Yerleşik ajanlar kaldırıldı. v3 tablosunda 14–15 ✅ yapıldı. Röle adresi `wss://pixel-relay.yurdakantimur.workers.dev` olarak CSP'ye işlendi ve push edildi (kontrol listesi 1–2 ✅). Cloudflare'de `pixel-relay` Workers Builds kurulumu kullanıcıyla yapılıyor (adım 3).
+- **2026-10-19 — Aşama 16 (Uygulama Güvenliği Mühendisi):** Herkese açık depo ve canlı servisler için siber güvenlik denetimi yapıldı; yarım kalan önceki denetimin işi devralınıp tamamlandı. Rapor: `docs/SECURITY_AUDIT.md`. Bulgular: 1 yüksek, 4 orta, 6 düşük, 9 bilgi. Yüksek ve orta bulguların hepsi regresyon testleriyle düzeltildi:
+  - **S16-01:** Claude Code'un "düzenleyebilir" profili `.git/config`, `.claude/settings.json`, `.mcp.json`, `.vscode/`, `.envrc` ve kabuk başlangıç dosyalarına yazabiliyordu. Bu, kabuk izni olmadan sonradan kod çalıştırmaya giden bir yoldu. Artık her profilde yasak.
+  - **S16-02:** v1 yerel sunucuya DNS rebinding'e karşı Host denetimi eklendi. Bu denetim, `Host: x` gönderen 4 testin sonsuza kadar asılı kalmasına yol açıyordu; testler düzeltildi.
+  - **S16-03:** kimliksiz `/api/state` isteklerine IP başına hız sınırı eklendi. Bu, ücretsiz kotanın tüketilmesini önler.
+  - **S16-05:** v2 kanca kurulum betikleri sağlamlaştırıldı.
+  - **S16-06:** ev dizininin üst klasörü artık çalışma klasörü olamıyor.
+
+  Sondaki satır sonu hatası (`room=<id>%0A` → 200) canlıda doğrulandı ve düzeltildi. Gizli bilgi taraması temiz çıktı: geçmişte token, anahtar, `.env` ya da gerçek oda anahtarı yok, **döndürülmesi gereken bir şey yok**. Geçmişte yalnızca commit e-postası, eski bir belgede ev dizini yolları ve bir oturum kimliği vardı; bunların hiçbiri gizli bilgi değil (oturum kimliği belgeden kaldırıldı). Canlı sitede kaynak dosyalar 404 dönüyor. TLS 1.3, HSTS, CSP ve `nosniff` yerinde. Tüm uçlar kimliksiz isteğe 401/403/405 dönüyor. Röle biletsiz ya da URL'de bilet taşıyan WS isteklerini 401 ile reddediyor. Bağlayıcı yeniden derlendi (README özeti `18a4148d…`). **481 test geçiyor** (1 atlandı). Kullanıcıya kalanlar:
+  1. Değişiklikleri push etmek ve iki canlı kontrolü yapmak.
+  2. Bağlayıcıyı kurulum komutuyla güncellemek.
+  3. İsteğe bağlı: röle için `package-lock.json` + `npm ci`.
+  4. İsteğe bağlı: GitHub noreply e-postası, secret scanning, kullanım uyarıları.
+
+  Sıradaki: Aşama 17 (çalışma klasörü kurulum düzeltmesi).

@@ -170,7 +170,7 @@ class LocalStatusTests(unittest.TestCase):
         r, d = self.post(b'{"session":"s","owner":"T","state":"idle","x":"' + b"y" * 5000 + b'"}')
         self.assertEqual((r.status, d["error"]), (413, "payload_too_large"))
         s = socket.create_connection(("127.0.0.1", self.s.port), timeout=5)
-        s.sendall(b"POST /api/status HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\n"
+        s.sendall(b"POST /api/status HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\n"
                   b"Content-Length: 99999999\r\n\r\n")
         data = s.recv(65536)
         s.close()
@@ -220,7 +220,7 @@ class LocalStatusTests(unittest.TestCase):
 
     def test_sse_broadcast(self):
         s = socket.create_connection(("127.0.0.1", self.s.port), timeout=5)
-        s.sendall(b"GET /events HTTP/1.1\r\nHost: x\r\n\r\n")
+        s.sendall(b"GET /events HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
         f = s.makefile("rb")
 
         def next_event():
