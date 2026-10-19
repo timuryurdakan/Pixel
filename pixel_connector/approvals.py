@@ -158,7 +158,9 @@ def load_control(home: str) -> Optional[dict]:
 
 class ControlServer(ThreadingHTTPServer):
     daemon_threads = True
-    allow_reuse_address = False
+    # SO_REUSEADDR lets a restarted service rebind the port while the old socket is in TIME_WAIT. On Windows the
+    # same flag would let another local process bind the port too, so it stays off there.
+    allow_reuse_address = os.name != "nt"
 
     def __init__(self, port: int, routes: Dict[Tuple[str, str], Route], approvals: Approvals,
                  token: Optional[str] = None) -> None:

@@ -124,3 +124,11 @@ görüntüleri, bilinen sorunlar.
   - **A2:** `web/tanitim.html`, `web/css/tanitim.css`, `web/js/tanitim.js` (girişim için ana tanıtım sayfası; `sprites.js` ile çalışan prosedürel canlı mini ofis sahnesi, 5 duruma tıklanabilir interaktif durum demosu, 6 özellik kartı, 3 adımlı rehber, gizlilik ve SSS). 1280, 390 ve 360 px'te Chrome CDP ile doğrulandı (0 konsol hatası, 0 yatay kaydırma).
   - **A3:** `web/rehber.html` (7. adımda oda izleme linki ile eşleştirme kumandası ayrımı sade dille açıklandı; SSS'e `pixel-connector` bulunamadı çözümü ve `workspace add` klasör izin çözümü eklendi). Geri dönüş bağlantısı ve animasyonlar korundu.
   - **A4:** `docs/V4_OTOMASYON_ARASTIRMA.md` (9 detaylı şablon fikri, DAG devir teslim durum makinesi, v3 şifreli protokol entegrasyonu, n8n/CrewAI/Lindy karşılaştırması, YouTube Data API kotası ve Anthropic kullanım koşulları risk analizi, önerilen ilk 3 MVP şablonu). Kod değişikliği yok.
+- **2026-10-19, Claude (birleştirme):** A1–A4 `main`'e birleştirildi (`fa76328`); çakışan günlük kayıtlarının ikisi de korundu,
+  `sw.js` → `po-v3.0.4`. Tanıtım sayfasındaki "kodların bilgisayarından çıkmaz" cümlesi "Pixel Office sunucularına
+  gönderilmez" olarak düzeltildi (Claude Code kullanılırken kod Anthropic'e gider). Görev dışı `4d2c348` (bağlayıcı yeniden
+  başlatma yarışı) uyarlanarak alındı: `SO_REUSEADDR` Windows'ta kapalı (orada portun ele geçirilmesine izin verir); test:
+  `tests/test_connector_restart.py`. `fa6b28c` (parçacık/ışık efektleri), çalışma klasöründeki `audio.js` ve kökteki
+  `agents.md` **birleştirilmedi**: panoda atanmış görev değiller ve korunan dosyalara (`main.js`, `renderer.js`,
+  `sprites.js`) dokunuyorlar. Kullanıcı onayı bekleniyor. Not: birleştirme `~/Desktop/Pixel` içinde başlatılmıştı; kurala
+  göre birleştirmeyi yalnızca Claude yapar.

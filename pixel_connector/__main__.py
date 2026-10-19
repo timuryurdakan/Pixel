@@ -252,10 +252,16 @@ def _pair_result(info: dict) -> int:
 
 def cmd_pair(args, ask: Callable[[str], bool] = ask_yes_no) -> int:
     home = _home(args)
-    try:
-        st, info = ctl_request(home, "POST", "/ctl/pair/start")
-    except OSError:
-        return _pair_inprocess(home, ask)
+    # The service may be (re)starting, e.g. right after the installer: retry briefly before falling back to an
+    # in-process session, which would take the run lock and keep the service from starting.
+    for attempt in range(5):
+        try:
+            st, info = ctl_request(home, "POST", "/ctl/pair/start")
+            break
+        except OSError:
+            if attempt == 4:
+                return _pair_inprocess(home, ask)
+            time.sleep(0.4)
     if st == 503:
         return _err("bağlayıcı röleye bağlı değil. Ağ bağlantısını ve `pixel-connector doctor` çıktısını kontrol edin.")
     if st != 200:
@@ -282,7 +288,7 @@ def _pair_inprocess(home: str, ask: Callable[[str], bool]) -> int:
         return 2
     lock = InstanceLock(os.path.join(home, CFG.LOCK_FILE))
     if not lock.acquire():
-        return _err("bağlayıcı çalışıyor ama denetim arayüzüne ulaşılamadı (control.json).")
+        return _err("bağlayıcı servisi çalışıyor ama denetim arayüzü henüz yanıt vermedi. Birkaç saniye sonra tekrar deneyin.")
     from .app import Connector
     OUT("Servis çalışmıyor; geçici bir oturumla eşleştiriliyor…")
     conn = Connector(home, cfg, start_ctl=False)
