@@ -125,7 +125,7 @@
     <div class="g-num">📱</div>
     <div class="g-body">
       <h2>Yeni: ajanına uzaktan görev ver</h2>
-      <p>Bilgisayarına küçük <b>bağlayıcıyı</b> kur, sonra ofisten (telefondan bile!) ajanına iş ver. Üç adım:</p>
+      <p>Bilgisayarına küçük <b>bağlayıcıyı</b> kur, sonra ofisten (telefondan bile!) ajanına iş ver. Burada önemli bir ayrım var: <b>Oda linki sadece izlemek içindir, eşleştirme ise kumanda yetkisi verir.</b> Arkadaşların ofise girip karakterlerini canlı görebilir ama senin bilgisayarına asla komut veremez. Yalnızca senin tek kullanımlık kodla eşleştirdiğin cihazlar kumandaya sahip olur.</p>
       <ol class="g-mini">
         <li><b>Eşleştir:</b> <span class="kbd">Cihazlar</span> → <span class="kbd">Cihaz ekle</span>. Terminalde <code>pixel-connector pair</code> yaz, çıkan kodu tarayıcıya gir. İki ekrandaki <b>6 haneli kod aynıysa</b> terminalde <code>e</code> de.</li>
         <li><b>Ajan oluştur:</b> <span class="kbd">Yeni ajan</span>: klasör, motor (Claude Code ya da Ollama) ve bir isim seç.</li>
@@ -168,6 +168,8 @@
   <section class="g-faq reveal">
     <h2>Sık sorulanlar</h2>
     <details><summary>Karakterim ofiste görünmüyor</summary><p>Komutu çalıştırdıktan sonra Claude Code'u <b>tamamen kapatıp yeniden açtın mı?</b> Sonra ona bir şey sor; ilk mesajla birlikte kapıdan girer. Hâlâ yoksa <b>Ajan bağla → Sorun giderme</b>'deki <code>doctor</code> komutunu çalıştır.</p></details>
+    <details><summary>Kurulumdan sonra "pixel-connector: komut bulunamadı" diyor</summary><p>Kurulum betiği komutu <code>~/.local/bin</code> ya da <code>~/.pixel-office/bin</code> altına ekler. Terminalini yeniden başlat, <code>source ~/.bashrc</code> (veya kabuğuna göre <code>source ~/.zshrc</code>) yaz ya da doğrudan tam yolla çalıştır: <code>~/.pixel-office/bin/pixel-connector pair</code>.</p></details>
+    <details><summary>Yeni ajan oluştururken "Bu klasöre izin verilmiyor" hatası alıyorum</summary><p>Güvenlik gereği bağlayıcı yalnızca izin listesindeki çalışma klasörlerine erişebilir (ev dizininin tamamı ya da <code>~/.ssh</code> gibi hassas yerler yasaktır). Varsayılan çalışma klasörü <code>~/PixelOfficeIsler</code> olarak tanımlıdır. Kendi projenin klasörünü eklemek için terminalinde şu komutu çalıştır: <code>pixel-connector workspace add ~/projem</code>.</p></details>
     <details><summary>Ücretli mi?</summary><p>Hayır. Ofis ücretsiz planlarda çalışıyor, senden hiçbir şey istenmez.</p></details>
     <details><summary>Hareketler neden bazen birkaç saniye gecikiyor?</summary><p>Ücretsiz limitler içinde kalmak için ofis birkaç saniyede bir güncellenir. Durum değişiklikleri en fazla yarım dakika içinde görünür.</p></details>
     <details><summary>Bağlantıyı kaldırmak istiyorum</summary><p><b>Ajan bağla → Sorun giderme ve kaldırma</b>'daki kaldırma komutunu çalıştır. Claude Code ayarların eski hâline döner.</p></details>
