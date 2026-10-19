@@ -388,7 +388,11 @@ function bootCommon() {
 
   canvas.addEventListener('click', (e) => {
     const [x, y] = canvasPoint(e);
-    select(renderer.pickCharacter(manager.list(), x, y));
+    const picked = renderer.pickCharacter(manager.list(), x, y);
+    select(picked);
+    if (picked) {
+      renderer.reactions.trigger(picked, Math.random() < 0.5 ? 'heart' : 'happy');
+    }
   });
   canvas.addEventListener('mousemove', (e) => {
     const [x, y] = canvasPoint(e);
