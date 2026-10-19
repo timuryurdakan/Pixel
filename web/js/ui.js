@@ -3,7 +3,7 @@
 // details), inline rename in the details panel, toast. UI language: Turkish.
 // Every untrusted string reaches the DOM only through esc() (or textContent / input.value).
 
-import { makeCharacterPalette, getCharacterFrame } from './sprites.js';
+import { makeCharacterPalette } from './sprites.js';
 
 export const STATE_LABELS = {
   working: 'Çalışıyor',
@@ -122,23 +122,7 @@ export class UI {
       if (a) { e.preventDefault(); this.onSelect(a.dataset.select || null); }
     });
     this.setConnection('connecting');
-    this.activeFilter = 'all';
-    this._setupFilterBar();
     this._renderDetails();
-  }
-
-  _setupFilterBar() {
-    const bar = document.getElementById('filter-bar');
-    if (!bar) return;
-    bar.addEventListener('click', (e) => {
-      const chip = e.target.closest('.filter-chip');
-      if (!chip) return;
-      this.activeFilter = chip.dataset.filter || 'all';
-      for (const c of bar.querySelectorAll('.filter-chip')) {
-        c.classList.toggle('active', c === chip);
-      }
-      this.setAgents(this.agents);
-    });
   }
 
   setServerTime(serverTime) {
@@ -156,26 +140,10 @@ export class UI {
     return makeCharacterPalette(a.colorSeed >>> 0).shirt;
   }
 
-  _updateFilterCounts(agents) {
-    const bar = document.getElementById('filter-bar');
-    if (!bar) return;
-    const counts = { all: agents.length };
-    for (const a of agents) {
-      counts[a.state] = (counts[a.state] || 0) + 1;
-    }
-    for (const chip of bar.querySelectorAll('.filter-chip')) {
-      const f = chip.dataset.filter;
-      const n = counts[f] || 0;
-      const label = f === 'all' ? 'Tümü' : (f === 'working' ? 'Çalışan' : (f === 'waiting_for_user' ? 'Bekleyen' : (f === 'idle' ? 'Kahve' : (f === 'sleeping' ? 'Uyuyan' : f))));
-      chip.textContent = n > 0 ? `${label} (${n})` : label;
-    }
-  }
-
   /** Re-render the list (main sessions, subagents indented under their parent) + counts. */
   setAgents(agents) {
     this.agents = agents;
     this.byId = new Map(agents.map((a) => [a.id, a]));
-    this._updateFilterCounts(agents);
     const els = this.els;
 
     // State counts summary.
@@ -204,29 +172,14 @@ export class UI {
       return;
     }
 
-    let filtered = agents;
-    if (this.activeFilter && this.activeFilter !== 'all') {
-      filtered = agents.filter((a) => a.state === this.activeFilter);
-    }
-
-    if (!filtered.length) {
-      els.list.innerHTML = `<li class="empty">
-        <div class="empty-icon">🔍</div>
-        <div><b>Bu filtrede ajan yok.</b></div>
-        <div class="muted">${esc(STATE_LABELS[this.activeFilter] || '')} durumunda aktif ajan bulunmuyor.</div>
-      </li>`;
-      this._renderDetails();
-      return;
-    }
-
-    let mains = filtered.filter((a) => !a.isSubagent || !this.byId.has(a.parentId));
+    let mains = agents.filter((a) => !a.isSubagent || !this.byId.has(a.parentId));
     if (this.ctlInfo) {
       // v3: controllable agents first (stable otherwise), so their owner group comes first too.
       const ctl = (a) => (this.ctlInfo(a) ? 0 : 1);
       mains = mains.map((a, i) => [a, i]).sort((x, y) => ctl(x[0]) - ctl(y[0]) || x[1] - y[1]).map((x) => x[0]);
     }
     const children = new Map();
-    for (const a of filtered) {
+    for (const a of agents) {
       if (a.isSubagent && this.byId.has(a.parentId)) {
         if (!children.has(a.parentId)) children.set(a.parentId, []);
         children.get(a.parentId).push(a);
@@ -237,7 +190,7 @@ export class UI {
       rows.push(this._row(m, false));
       for (const c of children.get(m.id) || []) rows.push(this._row(c, true));
     };
-    if (filtered.some((a) => a.owner)) {
+    if (agents.some((a) => a.owner)) {
       // Cloud: grouped by owner (first appearance order), subagents under their parent.
       const groups = new Map();
       for (const m of mains) {
@@ -313,7 +266,7 @@ export class UI {
     const row = (k, v, cls = '') => (v === null || v === undefined || v === '' ? '' : `<dt>${k}</dt><dd class="${cls}">${v}</dd>`);
     el.innerHTML = `
       <div class="det-head">
-        <canvas class="det-portrait" width="32" height="48" title="${esc(a.name)}" aria-label="${esc(a.name)} portresi"></canvas>
+        <span class="swatch big" style="background:${esc(this._color(a))}"></span>
         <div>
           ${this._nameBlock(a)}
           <div class="muted" title="${esc(a.projectPath || '')}">📁 ${esc(a.project)}${a.projectPath ? ` <span class="path">${esc(a.projectPath)}</span>` : ''}</div>
@@ -339,24 +292,6 @@ export class UI {
         ${row('Son etkinlik', `<span class="ago" data-at="${num(a.updatedAt)}">${formatDuration(now - (num(a.updatedAt) || now))} önce</span>`)}
         ${row('Kimlik', `<code class="id">${esc(a.id)}</code>`)}
       </dl>`;
-    const portrait = el.querySelector('.det-portrait');
-    if (portrait) this._drawPortrait(portrait, a);
-  }
-
-  _drawPortrait(canvas, a) {
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, 32, 48);
-    const pal = makeCharacterPalette(a.colorSeed >>> 0);
-    let anim = 'stand';
-    let dir = 'down';
-    if (a.state === 'working') anim = 'type';
-    else if (a.state === 'idle') anim = 'drink';
-    else if (a.state === 'sleeping') anim = 'sleep';
-    else if (a.state === 'thinking') anim = 'sit';
-    const frame = getCharacterFrame(pal, anim, dir, 0);
-    ctx.drawImage(frame, 0, 0, 32, 48);
   }
 
   setConnection(status) {
