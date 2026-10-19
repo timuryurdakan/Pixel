@@ -52,6 +52,13 @@
       <h2>Ajanlar</h2>
       <div id="summary" class="summary"></div>
     </header>
+    <div id="filter-bar" class="filter-bar" role="tablist" aria-label="Ajan durumu filtresi">
+      <button type="button" class="filter-chip active" data-filter="all">Tümü</button>
+      <button type="button" class="filter-chip" data-filter="working">Çalışan</button>
+      <button type="button" class="filter-chip" data-filter="waiting_for_user">Bekleyen</button>
+      <button type="button" class="filter-chip" data-filter="idle">Kahve</button>
+      <button type="button" class="filter-chip" data-filter="sleeping">Uyuyan</button>
+    </div>
     <ul id="agent-list" class="agent-list"></ul>
     <div id="det-scroll" class="det-scroll">
       <section id="agent-details" class="details placeholder" aria-live="polite"></section>

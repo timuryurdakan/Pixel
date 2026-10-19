@@ -182,6 +182,40 @@ body {
 .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
 .chip i { width: 8px; height: 8px; background: var(--c); box-shadow: 0 0 0 1px #000; }
 
+/* ---------- agent filter bar ---------- */
+.filter-bar {
+  display: flex;
+  gap: 4px;
+  padding: 8px 10px;
+  background: #181824;
+  border-bottom: 2px solid #000;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.filter-bar::-webkit-scrollbar { display: none; }
+.filter-chip {
+  flex: none;
+  font: bold 10px/1 var(--font);
+  padding: 4px 7px;
+  background: var(--panel-2);
+  color: var(--muted);
+  border: 1px solid #000;
+  box-shadow: 1px 1px 0 #000;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s, color 0.1s;
+}
+.filter-chip:hover {
+  color: var(--text);
+  background: #3a3a52;
+}
+.filter-chip.active {
+  background: var(--accent);
+  color: #111;
+  border-color: #000;
+  box-shadow: 1px 1px 0 #000, inset -1px -1px 0 rgba(0,0,0,0.25);
+}
+
 .agent-list {
   list-style: none;
   margin: 0;
@@ -254,6 +288,16 @@ code { background: #1c1c28; padding: 0 4px; color: #b9e3ff; }
 .details.placeholder { flex: none; }
 .details.placeholder:empty { display: none; }
 .det-head { display: flex; gap: 10px; align-items: center; }
+.det-portrait {
+  flex: none;
+  width: 32px;
+  height: 48px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: #181824;
+  border: 2px solid #000;
+  box-shadow: 2px 2px 0 #000;
+}
 .det-head > div { min-width: 0; flex: 1; }
 .det-name { font-size: 15px; font-weight: bold; color: var(--accent); text-shadow: 2px 2px 0 #000; }
 .path { opacity: .7; font-size: 11px; word-break: break-all; }
