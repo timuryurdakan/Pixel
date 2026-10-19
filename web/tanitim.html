@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pixel Office · Yapay Zekâ Ajanların İçin Sanal Ofis</title>
+<meta name="description" content="Claude Code, Ollama ve diğer yapay zekâ kodlama ajanlarını tarayıcıda canlı izleyin, telefonunuzdan uçtan uca şifreli görevler verin.">
+<meta name="theme-color" content="#1e1e2a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%231e1e2a'/%3E%3Crect x='1' y='1' width='6' height='4' fill='%233f9a8f'/%3E%3Crect x='2' y='2' width='3' height='1' fill='%23d6fff4'/%3E%3Crect x='3' y='5' width='2' height='1' fill='%236b7180'/%3E%3Crect x='1' y='6' width='6' height='1' fill='%23a0703c'/%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/tanitim.css">
+</head>
+<body class="landing-page">
+
+<!-- Header / Navigation -->
+<header class="l-top">
+  <a class="logo" href="./">
+    <span class="logo-icon" aria-hidden="true"></span>
+    Pixel Office
+  </a>
+  <nav aria-label="Ana Menü">
+    <ul class="l-nav">
+      <li><a href="#ozellikler">Özellikler</a></li>
+      <li><a href="#nasil-calisir">Nasıl Çalışır</a></li>
+      <li><a href="#guvenlik">Güvenlik</a></li>
+      <li><a href="#sss">SSS</a></li>
+      <li><a href="rehber.html">Rehber</a></li>
+    </ul>
+  </nav>
+  <div class="l-top-actions">
+    <a class="btn accent" href="./">Hemen Dene →</a>
+  </div>
+</header>
+
+<main class="l-main">
+
+  <!-- Hero Section -->
+  <section class="l-hero reveal">
+    <span class="l-kicker">Yeni Nesil Ajan Çalışma Alanı</span>
+    <h1>Yapay zekâ ajanların için <span class="highlight">pixel bir ofis</span></h1>
+    <p class="l-hero-lead">
+      Bilgisayarında çalışan <b>Claude Code</b>, <b>Ollama</b> ve yerel modeller ofiste küçük birer pixel çalışan olarak canlanır:
+      iş varken masasında kod yazar, düşünür, boşta kalınca kahve içer, iş bitince uyur.
+      Üstelik telefonundan <b>uçtan uca şifreli</b> görev verip canlı izleyebilirsin.
+    </p>
+    <div class="l-hero-actions">
+      <a class="btn accent" href="./">Ofisi Başlat →</a>
+      <a class="btn ghost" href="rehber.html">Kurulum Rehberi</a>
+    </div>
+
+    <!-- Live Mini Office Canvas -->
+    <div class="l-hero-scene-wrap">
+      <canvas id="hero-canvas" class="px-canvas" aria-label="Canlı pixel ofis sahnesi: masalarda çalışan, kahve içen ve uyuyan ajanlar"></canvas>
+      <div class="l-hero-caption">
+        <span class="live-pill">Canlı Simülasyon</span>
+        <span>Saf HTML5 Canvas · Harici Görsel Yok · Sıfır Bağımlılık</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Grid -->
+  <section class="l-section reveal" id="ozellikler">
+    <div class="l-section-head">
+      <h2>Neler Yapabilirsin?</h2>
+      <p>Ajanlarını izlemenin ve yönetmenin en eğlenceli, şeffaf ve güvenli yolu.</p>
+    </div>
+
+    <div class="features-grid">
+      <!-- 1 -->
+      <article class="feat-card">
+        <div class="feat-icon-row">
+          <span class="feat-badge">🖥️ Canlı Görsel Takip</span>
+        </div>
+        <h3>Tek Bakışta Durum</h3>
+        <p>Ajanın masasında klavye başında mı, model düşüncesinde mi, onay mı bekliyor yoksa dinleniyor mu? Tüm durumlar anlık pixel animasyonlarla karşında.</p>
+      </article>
+
+      <!-- 2 -->
+      <article class="feat-card">
+        <div class="feat-icon-row">
+          <span class="feat-badge">📱 Mobil Görev Yönetimi</span>
+        </div>
+        <h3>Telefondan Komut Ver</h3>
+        <p>Bilgisayarının başında olman gerekmez. Koltuğunda otururken telefonundan görev yaz, terminal çıktısını canlı akışla oku, gerektiğinde tek tuşla durdur.</p>
+      </article>
+
+      <!-- 3 -->
+      <article class="feat-card">
+        <div class="feat-icon-row">
+          <span class="feat-badge">🔐 Uçtan Uca Şifreleme</span>
+        </div>
+        <h3>"Promptlarını Biz Bile Göremeyiz"</h3>
+        <p>İstemlerin ve gelen yanıtlar P-256 ECDH ve AES-256-GCM ile doğrudan tarayıcın ile bilgisayarın arasında şifrelenir. Sunucu veya röle içeriğe asla erişemez.</p>
+      </article>
+
+      <!-- 4 -->
+      <article class="feat-card">
+        <div class="feat-icon-row">
+          <span class="feat-badge">🤖 Özgür Model Desteği</span>
+        </div>
+        <h3>Claude Code + Ollama + LM Studio</h3>
+        <p>İster resmi Claude Code CLI, ister kendi cihazında çalışan yerel açık kaynaklı modeller (Ollama, LM Studio, aider). Hepsi aynı ofiste bir arada çalışır.</p>
+      </article>
+
+      <!-- 5 -->
+      <article class="feat-card">
+        <div class="feat-icon-row">
+          <span class="feat-badge">👥 Ortak Takım Ofisi</span>
+        </div>
+        <h3>Arkadaşlarınla Tek Bağlantı</h3>
+        <p>Tek bir davet linkiyle arkadaşlarınla aynı ofise katıl. Herkesin ajanları kendi kıyafet rengi ve proje etiketiyle ofiste yerini alsın.</p>
+      </article>
+
+      <!-- 6 -->
+      <article class="feat-card">
+        <div class="feat-icon-row">
+          <span class="feat-badge">📊 Token ve Maliyet Sayacı</span>
+        </div>
+        <h3>Bütçe ve Limit Denetimi</h3>
+        <p>Harcanan token sayısını ve tahmini API eşdeğeri maliyeti canlı takip et. Günlük ya da haftalık limit belirleyerek sürpriz harcamaların önüne geç.</p>
+      </article>
+    </div>
+
+    <!-- Interactive State Demo -->
+    <div class="interactive-demo">
+      <div class="demo-head">
+        <span class="demo-title">Karakter Durumlarını Canlı İncele:</span>
+        <div class="demo-tabs">
+          <button type="button" class="demo-btn active" data-state="working">Çalışıyor</button>
+          <button type="button" class="demo-btn" data-state="thinking">Düşünüyor</button>
+          <button type="button" class="demo-btn" data-state="waiting">Onay Bekliyor</button>
+          <button type="button" class="demo-btn" data-state="coffee">Kahve Molası</button>
+          <button type="button" class="demo-btn" data-state="sleep">Uyuyor</button>
+        </div>
+      </div>
+      <div class="demo-view">
+        <canvas id="demo-canvas" class="px-canvas" aria-label="Seçilen duruma ait karakter animasyonu"></canvas>
+        <div class="demo-desc">
+          <h4 id="demo-title">Çalışıyor (Kodlama / Araç Kullanımı)</h4>
+          <p id="demo-desc-text">Ajan masasında harıl harıl klavyede yazar. Başının üstündeki baloncukta o an hangi aracı (Edit, Bash, Read) çalıştırdığı canlı görünür.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works (3 Steps) -->
+  <section class="l-section reveal" id="nasil-calisir">
+    <div class="l-section-head">
+      <h2>Nasıl Çalışır?</h2>
+      <p>Yalnızca üç basit adımda ajanını ofise yerleştir.</p>
+    </div>
+
+    <div class="steps-grid">
+      <!-- Step 1 -->
+      <div class="step-card">
+        <div class="step-badge">1</div>
+        <h3>Ofisini Aç</h3>
+        <p>Tarayıcıda tek tıkla yeni bir ofis odası aç ya da arkadaşının gönderdiği katılma bağlantısını tıkla. Hesap açma veya kredi kartı gerekmez.</p>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="step-card">
+        <div class="step-badge">2</div>
+        <h3>Ajanını Bağla</h3>
+        <p>Terminalinde tek satırlık güvenli kurulum komutunu çalıştır. Claude Code kancası ya da bağlayıcı (connector) otomatik olarak hazır hâle gelir.</p>
+        <div class="step-code">$ curl -fsSL .../install.sh | sh</div>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="step-card">
+        <div class="step-badge">3</div>
+        <h3>İzle ve Yönet</h3>
+        <p>Ajanın kapıdan yürüyerek ofise girer. Masasına oturur, görevlerini yerine getirir. İster bilgisayarından ister telefonundan keyifle yönet.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Security & Privacy Section -->
+  <section class="l-section reveal" id="guvenlik">
+    <div class="privacy-box">
+      <h3>🔒 Gizlilik ve Güvenlik Garantisi</h3>
+      <p>
+        Pixel Office geliştirilirken güvenlik temel prensip olarak belirlendi.
+        <b>Kodların, proje dosyaların ve API anahtarların ASLA bilgisayarından dışarı çıkmaz.</b>
+      </p>
+      <div class="privacy-points">
+        <div class="priv-item">
+          <b>Yerel Süzme & İzin Listesi</b>
+          Sunucuya yalnızca durum ("çalışıyor", "uyuyor"), araç ismi ("Bash") ve proje klasörü gider. Kod satırları gönderilmez.
+        </div>
+        <div class="priv-item">
+          <b>Sıfır Bilgi Rölesi</b>
+          Uzaktan görev verirken şifreleme anahtarları sadece senin tarayıcın ve bilgisayarındadır. Araya giren sunucu şifreyi çözemez.
+        </div>
+        <div class="priv-item">
+          <b>Güvenli İzin Profilleri</b>
+          Claude Code varsayılan olarak düzenleme izinleriyle çalıştırılır; kontrolsüz tehlikeli bayraklar (<code>--dangerously-skip-permissions</code>) asla kullanılmaz.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ Section -->
+  <section class="l-section reveal" id="sss">
+    <div class="l-section-head">
+      <h2>Sık Sorulan Sorular</h2>
+      <p>Aklınıza takılabilecek konuların yanıtları.</p>
+    </div>
+
+    <div class="faq-list">
+      <details>
+        <summary>Pixel Office nedir ve ne işe yarar?</summary>
+        <p>Pixel Office, bilgisayarınızda çalışan Claude Code veya yerel yapay zekâ ajanlarının aktivitelerini retro pixel-art tarzında sanal bir ofiste canlı izlemenizi ve uzaktan telefonunuzdan kontrol etmenizi sağlayan açık kaynaklı bir platformdur.</p>
+      </details>
+      <details>
+        <summary>Kullanım ücretli mi?</summary>
+        <p>Pixel Office deneme sürümünde tamamen ücretsiz olarak sunulmaktadır. Vercel, Upstash ve Cloudflare'in ücretsiz kotaları optimize edilerek tasarlanmıştır.</p>
+      </details>
+      <details>
+        <summary>Kodlarım veya dosyalarım sunucuya yüklenir mi?</summary>
+        <p>Kesinlikle hayır. Tüm kodlama işlemleri kendi yerel makinenizde gerçekleşir. Sunucuya yalnızca durum bildirimleri gider ve tüm uzaktan görevler uçtan uca şifrelidir.</p>
+      </details>
+      <details>
+        <summary>Hangi yapay zekâ motorları destekleniyor?</summary>
+        <p>Anthropic Claude Code CLI, Ollama (Llama, Qwen, DeepSeek vb.), LM Studio, llama.cpp, aider ve OpenAI uyumlu yerel sunucuların tümü desteklenmektedir.</p>
+      </details>
+      <details>
+        <summary>Telefonda uygulama olarak yüklenebilir mi?</summary>
+        <p>Evet! Pixel Office modern bir PWA (Progressive Web App) olarak tasarlanmıştır. Tarayıcınızın "Ana Ekrana Ekle" seçeneğiyle doğrudan uygulama gibi kurabilirsiniz.</p>
+      </details>
+    </div>
+  </section>
+
+  <!-- Bottom CTA -->
+  <section class="bottom-cta reveal">
+    <canvas id="cta-canvas" class="px-canvas" aria-hidden="true"></canvas>
+    <h2>Ajanların İçin Ofis Masaları Hazır!</h2>
+    <p>Hemen katıl, sanal ofisindeki ilk çalışanını masasında kod yazarken izle.</p>
+    <a class="btn accent big" href="./">Ofisi Şimdi Aç →</a>
+  </section>
+
+</main>
+
+<!-- Footer -->
+<footer class="l-footer">
+  <p>Pixel Office 🖥️☕💤 · Açık Kaynaklı Sanal Ajan Çalışma Alanı</p>
+  <p><a href="rehber.html">Kurulum Rehberi</a> · <a href="./">Ofise Git</a></p>
+</footer>
+
+<script type="module" src="js/tanitim.js"></script>
+</body>
+</html>
