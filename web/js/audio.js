@@ -173,6 +173,33 @@ class SoundEngine {
     osc.start(now);
     osc.stop(now + 0.08);
   }
+
+  /**
+   * Cute chiptune cat meow when clicking the office mascot.
+   */
+  playMeow() {
+    const ctx = this._getCtx();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(580, now);
+    osc.frequency.exponentialRampToValueAtTime(860, now + 0.12);
+    osc.frequency.exponentialRampToValueAtTime(420, now + 0.32);
+
+    gain.gain.setValueAtTime(0.01, now);
+    gain.gain.linearRampToValueAtTime(this.volume * 0.85, now + 0.06);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.34);
+  }
 }
 
 export const sound = new SoundEngine();

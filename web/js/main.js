@@ -392,6 +392,12 @@ function bootCommon() {
   canvas.addEventListener('click', (e) => {
     const [x, y] = canvasPoint(e);
     const picked = renderer.pickCharacter(manager.list(), x, y);
+    if (picked === 'mascot-cat') {
+      sound.playMeow();
+      renderer.reactions.trigger('mascot-cat', 'heart');
+      renderer.cat.wakeTime = gameTime;
+      return;
+    }
     select(picked);
     if (picked) {
       sound.playHop();
@@ -407,6 +413,7 @@ function bootCommon() {
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape') select(null); });
 
   setupSoundButton();
+  setupZoomControls();
 
   if (viewMini) document.body.classList.add('mini');
   fitCanvas();
@@ -433,6 +440,36 @@ function setupSoundButton() {
     if (!sound.muted) sound.playBlip();
   });
   sync();
+}
+
+function setupZoomControls() {
+  const btnIn = document.getElementById('btn-zoom-in');
+  const btnOut = document.getElementById('btn-zoom-out');
+  const label = document.getElementById('zoom-label');
+  if (!btnIn || !btnOut || !label) return;
+
+  const levels = [0.8, 1.0, 1.25, 1.5, 2.0];
+  let curIdx = 1; // 1.0x
+
+  const update = () => {
+    label.textContent = `${levels[curIdx]}x`;
+    renderer.setZoom(levels[curIdx]);
+    sound.playBlip();
+  };
+
+  btnIn.addEventListener('click', () => {
+    if (curIdx < levels.length - 1) {
+      curIdx++;
+      update();
+    }
+  });
+
+  btnOut.addEventListener('click', () => {
+    if (curIdx > 0) {
+      curIdx--;
+      update();
+    }
+  });
 }
 
 async function bootLocal() {

@@ -1326,6 +1326,110 @@ export function getBubbleSprite(kind, frame = 0) {
   return renderDef(`b|${kind}|${f}`, frames[f]);
 }
 
+const PAL_CAT = {
+  K: '#1b1b2a',
+  O: '#e67e22',
+  o: '#ba5808',
+  W: '#fdfefe',
+  P: '#f1948a',
+  E: '#1b1b2a',
+  G: '#2ecc71',
+};
+
+const CAT_SLEEP_0 = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '.....KK...KK....',
+  '....KPKK.KPKK...',
+  '...KOOOKKOOOK...',
+  '..KOOOOOOOOOOK..',
+  '..KOOEEEOOOOOK..',
+  '..KOOWWWWOOOOK..',
+  '..KOOOOOOOOOOK..',
+  '...KOOOOOOOOK...',
+  '....KKKKKKKK....',
+  '................',
+];
+
+const CAT_SLEEP_1 = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '.....KK...KK....',
+  '....KPKK.KPKK...',
+  '...KOOOKKOOOK...',
+  '..KOOOOOOOOOOK..',
+  '..KOOEEEOOOOOK..',
+  '..KOOWWWWOOOOK..',
+  '...KOOOOOOOOK...',
+  '....KOOOOOOK....',
+  '.....KKKKKK.....',
+  '................',
+];
+
+const CAT_SIT_0 = [
+  '................',
+  '................',
+  '....KK....KK....',
+  '...KPKK..KPKK...',
+  '..KOOOKKKKOOOK..',
+  '..KOOOOOOOOOOK..',
+  '..KOEGOOOOGEOK..',
+  '..KOEEOOOOEEOK..',
+  '..KOOOWPWOOOOK..',
+  '...KOOWWWOOOK...',
+  '...KOOOOOOOOK.K.',
+  '..KOOWWWWOOOKKK.',
+  '..KOOWWWWOOOOK..',
+  '..KOOOOOOOOOOK..',
+  '...KKWKKKKWKK...',
+  '................',
+];
+
+const CAT_SIT_1 = [
+  '................',
+  '................',
+  '....KK....KK....',
+  '...KPKK..KPKK...',
+  '..KOOOKKKKOOOK..',
+  '..KOOOOOOOOOOK..',
+  '..KOEGOOOOGEOK..',
+  '..KOEEOOOOEEOK..',
+  '..KOOOWPWOOOOK..',
+  '...KOOWWWOOOK.K.',
+  '...KOOOOOOOOKKK.',
+  '..KOOWWWWOOOOK..',
+  '..KOOWWWWOOOOK..',
+  '..KOOOOOOOOOOK..',
+  '...KKWKKKKWKK...',
+  '................',
+];
+
+const CAT_SPRITES = {
+  sleep: [
+    { w: 16, h: 16, pal: PAL_CAT, rows: CAT_SLEEP_0 },
+    { w: 16, h: 16, pal: PAL_CAT, rows: CAT_SLEEP_1 },
+  ],
+  sit: [
+    { w: 16, h: 16, pal: PAL_CAT, rows: CAT_SIT_0 },
+    { w: 16, h: 16, pal: PAL_CAT, rows: CAT_SIT_1 },
+  ],
+};
+
+/** @returns {HTMLCanvasElement} 16x16 office mascot cat frame */
+export function getCatFrame(anim = 'sleep', frame = 0) {
+  const frames = CAT_SPRITES[anim] || CAT_SPRITES.sleep;
+  const f = ((Math.floor(frame) || 0) % frames.length + frames.length) % frames.length;
+  return renderDef(`cat|${anim}|${f}`, frames[f]);
+}
+
 /** @returns {HTMLCanvasElement} 12x12 icon in a white bubble. */
 export function getToolIcon(toolName) {
   const kind = toolIconKind(toolName);
