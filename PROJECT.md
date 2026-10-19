@@ -70,6 +70,9 @@ Teknik ayrıntılar: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — **tüm a
 | 15 | Güvenlik İncelemesi & QA & Dokümantasyon | Güvenlik İnceleyici + QA | inceleme, uçtan uca test, README, rehber | ✅ Tamamlandı (gerçek dünya denemeleri yayına almadan sonra, kullanıcıyla) |
 | 16 | Siber Güvenlik Denetimi | Uygulama Güvenliği Mühendisi | `docs/SECURITY_AUDIT.md`, düzeltmeler, `tests/test_phase16_security.py` | ✅ Tamamlandı |
 | 17 | Çalışma klasörü kurulum düzeltmesi | Bağlayıcı Mühendisi | kurulumda `~/PixelOfficeIsler`, `pixel-connector workspace` komutu, arayüz ipucu, `doctor` saat farkı | ✅ Tamamlandı |
+| 18 | Antigravity bağlantısı | Entegrasyon Mühendisi | `pixel_agent.py antigravity` izleyicisi, `pixel-antigravity` kısayolu, servis, belgeler, testler | 🔄 Devam ediyor |
+| 19 | Ofisten kontrol: uzaktan onay | Bağlayıcı/Güvenlik Mühendisi + Frontend | izin isteklerini ve seçmeli soruları eşleşmiş telefondan onaylama/reddetme (tüm kullanıcılar, tüm ajan türleri) | ⬜ Bekliyor |
+| 20 | Kalan görevler | Koordinatör (Claude) + uzmanlar | yanıltıcı röle hatası, A5 birleştirme, bağlayıcı güncellemesi, kalan küçük işler | ⬜ Bekliyor |
 
 Durum işaretleri: ⬜ Bekliyor · 🔄 Devam ediyor · ✅ Tamamlandı · ⚠️ Sorunlu
 
@@ -379,6 +382,37 @@ Sorun: yeni kurulan bir bağlayıcıda hiç çalışma klasörü olmadığı iç
 **Güvenlik kısıtları (Aşama 16'dan, ayrıntı: `docs/SECURITY_AUDIT.md` §5):** klasör `mkdir` ile 0700 oluşturulur, sembolik bağ ya da dosya ise reddedilir, `realpath` ile kaydedilir; ev dizini, üst klasörleri ve var olan depolar varsayılan olamaz. `workspace add` yalnızca yerel komut satırından çalışır: E2E komutu ya da `/onay` sayfa jetonuyla ulaşılabilen bir `/ctl` yolu olamaz, yani tarayıcı izin listesini genişletemez. `check_denied()` ve `realpath` kuralları aynen uygulanır, `connector.json` atomik ve 0600 yazılır. Arayüz ipucu tarayıcıdan yol almaz, metinler yalnızca `textContent` ile gösterilir. `EXEC_SENSITIVE_DENY`/`SECRET_READ_DENY` değişmez, kurulum `~/.claude`'a dokunmaz. Bilet `iat` toleransı (30 sn) saat farkını gizlemek için genişletilmez.
 
 **Kabul kriterleri:** Temiz bir geçici HOME'da kurulumdan sonra `~/PixelOfficeIsler` vardır ve `config-check` geçer. Arayüzden "Yeni ajan" ile Claude Code ajanı elle düzenleme yapmadan oluşturulabilir. `workspace add` yasaklı yolları (ev dizini, üst klasörleri, `~/.ssh`…) reddeder. `doctor` CDN önbelleğindeki eski bir `Date` başlığıyla alarm vermez. Tüm testler geçer.
+
+### Aşama 18 — Antigravity bağlantısı (Entegrasyon Mühendisi) 🔄
+Sorun: Antigravity IDE'nin kanca (hook) sistemi yok, bu yüzden ofiste görünmüyor. Ama her konuşmanın adımlarını `~/.gemini/antigravity-ide/brain/<konuşma>/.system_generated/logs/transcript.jsonl` dosyasına yazıyor (her satırda `step_index`, `type`, `status` RUNNING/DONE, `created_at`, araç çağrılarında `Cwd`).
+- [ ] `pixel_agent.py antigravity` komutu: kayıt dosyalarını izler (yalnızca sona eklenen satırlar), her konuşmayı bir ajan olarak raporlar: adım geliyorsa `working` (araç adıyla), model yanıtı ve sessizlikte `idle`, kullanıcı girdisi bekleniyorsa `waiting_for_user`, uzun sessizlikte `sleeping`
+- [ ] Proje adı yalnızca `Cwd`'nin son klasör adı; ajan adı ayarlanabilir (varsayılan "Antigravity")
+- [ ] `pixel-antigravity` kısayolu (`install-shims`) ve isteğe bağlı systemd kullanıcı servisi / Windows ve macOS yolları
+- [ ] Antigravity'nin `agentapi` aracının dışarıdan komut ya da onay kabul edip etmediği araştırılır (Aşama 19 için)
+- [ ] Belgeler (`docs/INTEGRATIONS.md`, rehber, bulut sayfasındaki örnek komutlar) ve testler
+
+**Gizlilik kısıtları:** konuşma metni, düşünce, komut satırı, dosya yolu, araç argümanları ve dosya içeriği **asla** gönderilmez; yalnızca durum, araç adı (izin listesindeki biçimde), proje klasörünün adı, ajan adı ve sahip. Kayıt dosyaları salt okunur açılır; Antigravity dosyalarına yazılmaz. Testler gerçek `~/.gemini` klasörünü değil geçici klasörleri kullanır.
+
+**Kabul kriterleri:** Antigravity'de bir konuşma çalışırken ofiste karakter yazı yazar, durunca kahve içer, uzun süre dokunulmayınca uyur. Gönderilen her güncelleme gizlilik testinden geçer. Tüm testler geçer.
+
+### Aşama 19 — Ofisten kontrol: uzaktan onay (Bağlayıcı/Güvenlik Mühendisi + Frontend) ⬜
+Amaç: bir ajan izin istediğinde ya da soru sorduğunda kullanıcı telefondan ofise girip **onaylayabilsin ya da reddedebilsin**. Bu her kullanıcı için kendi eşleşmiş cihazlarıyla ve desteklenen her ajan türü için geçerli olur.
+- [ ] Claude Code kancası: `PermissionRequest` → yerel bağlayıcı → E2E röle → eşleşmiş cihaz → `allow`/`deny`; yanıt yoksa ya da bağlayıcı kapalıysa bugünkü davranış (VS Code penceresi)
+- [ ] Claude Code seçmeli soruları (`AskUserQuestion`): seçenekler telefonda gösterilir, seçilen cevap ajana iletilir (Claude Code desteği önce doğrulanır)
+- [ ] Bağlayıcının çalıştırdığı ajanlar (Claude Code başsız modu): izin istemleri aynı karttan
+- [ ] Diğer ajanlar (Antigravity, `pixel-run`): mümkünse aynı yol; mümkün değilse nedeni belgelenir
+- [ ] Arayüz: ajanın üstünde ve Cihazlar sayfasında onay kartı (araç + kısa özet, Onayla/Reddet), bilgisayardaki `/onay` sayfasında da aynı istek (önce gelen cevap geçerli)
+
+**Güvenlik kısıtları:** varsayılan **kapalı** (`pixel-connector remote-approvals on` ile yalnızca yerel komut satırından açılır). Yalnızca eşleşmiş ve kumanda yetkisi olan cihazlar görür ve cevaplar; oda bağlantısını bilen başkaları, sunucu ve röle içeriği göremez. Her istek tek kullanımlık kimlik ve süre sınırıyla bağlanır (tekrar oynatma yok). "Hepsine izin ver" yok. Her karar denetim kaydına yazılır. Belirsizlikte reddetmek değil, bilgisayardaki normal pencereye düşmek (fail safe: kendiliğinden izin verilmez).
+
+**Kabul kriterleri:** VS Code'da çalışan bir Claude Code oturumunun izin isteği telefondan onaylanınca araç çalışır, reddedilince çalışmaz; özellik kapalıyken ya da telefon cevap vermezken davranış eskisiyle aynıdır. Eşleşmemiş bir tarayıcı isteği göremez. Tüm testler geçer.
+
+### Aşama 20 — Kalan görevler (Koordinatör + uzmanlar) ⬜
+- [ ] Yanıltıcı "Röleye bağlanılamadı" hatası: yazma anahtarı yoksa (izleme bağlantısı) bunu açıkça söyleyen mesaj
+- [ ] Antigravity'nin A5 efekt teslimini incelemek ve birleştirmek (`sw.js` sürümü)
+- [ ] Bu bilgisayardaki bağlayıcıyı yeni sürüme güncellemek, `doctor`, eşleşmeler ve rölenin "canlı" durumunu doğrulamak
+- [ ] Kullanıcıyla: telefonu katılım bağlantısıyla eşleştirmek, ilk gerçek görev, diğer cihazda kurulumu yeniden çalıştırmak
+- [ ] İsteğe bağlı: `~/.pixel-test-room` temizliği, `relay/package-lock.json` (Node gerekir), GitHub noreply e-postası ve secret scanning (kullanıcı)
 
 ### Yayına alma kontrol listesi (v3)
 
@@ -791,3 +825,4 @@ Her ajan işini bitirince buraya tarihli bir kayıt ekler (en yeni en altta).
   - **A2 (Tanıtım Landing Sayfası):** `web/tanitim.html`, `web/css/tanitim.css`, `web/js/tanitim.js` yazıldı. Harici bağımlılık ve CDN olmadan, CSP kurallarına tam uyumlu. `sprites.js` procedürel sprite motoru kullanılarak canlı mini ofis animasyonu, 5 durumu etkileşimli gösteren mini demo, 6 özellik kartı, 3 adımlı rehber, gizlilik ve SSS bölümleri eklendi. Headless Chrome ile 1280, 390 ve 360 px'te test edildi (0 konsol hatası, 0 yatay kaydırma).
   - **A3 (Rehber Sayfası İyileştirmesi):** `web/rehber.html` güncellendi. 7. adımda oda izleme bağlantısı ile kumanda eşleştirmesi arasındaki fark açıklandı; SSS'e `pixel-connector: komut bulunamadı` ve çalışma klasörü izin hatası (`pixel-connector workspace add`) maddeleri eklendi.
   - **A4 (v4 Otomasyonlar Ön Araştırması):** `docs/V4_OTOMASYON_ARASTIRMA.md` hazırlandı. 9 adet çok ajanlı otomasyon şablonu, DAG devir teslim durum makinesi, insan onay noktaları, v3 şifreli protokol entegrasyonu, n8n/CrewAI/Lindy rakip analizi, YouTube Data API ve Anthropic kullanım şartları riskleri belgelendi; MVP için ilk 3 şablon önerildi.
+- **2026-10-19 — Plan:** Kullanıcının isteğiyle üç yeni aşama eklendi ve bu sırayla yürütülecek: **18** Antigravity bağlantısı (kayıt dosyalarından izleme), **19** ofisten kontrol (izin isteklerini ve soruları eşleşmiş telefondan onaylama/reddetme; tüm kullanıcılar ve desteklenen tüm ajanlar için), **20** kalan bütün görevler. Bekleyen 8 commit kullanıcı tarafından push'landı.
