@@ -46,7 +46,7 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | A2 | Tanıtım (landing) sayfası | Antigravity | ✅ Teslim edildi |
 | A3 | Rehber sayfası iyileştirmesi | Antigravity | ✅ Teslim edildi |
 | A4 | v4 Otomasyonlar ön araştırması | Antigravity | ✅ Teslim edildi |
-| A5 | Ofis efektleri: parçacık, ışık, tıklama tepkisi, ses (kullanıcı isteği) | Antigravity | 🔄 |
+| A5 | Ofis efektleri: parçacık, ışık, tıklama tepkisi, ses (kullanıcı isteği) | Antigravity | ✅ Teslim edildi |
 
 ---
 
@@ -151,3 +151,9 @@ görüntüleri, bilinen sorunlar.
 - **2026-10-19, Claude:** Kullanıcı efektleri onayladı, **A5** olarak panoya eklendi (kurallar yukarıda; ses varsayılan kapalı).
   Kökteki `agents.md` temizlenip `AGENTS.md` olarak eklendi: Google yönlendirme bağlantıları doğrudan bağlantıya çevrildi,
   sembolik bağlantı önerisi kaldırıldı, §8 proje değerleriyle dolduruldu. Panoyla çelişirse pano geçerlidir.
+- **2026-10-19, Antigravity:** A5 (Ofis efektleri: parçacık, ışık, tıklama tepkisi, ses) tamamlandı ve teslim edildi:
+  - **Değişen dosyalar:** `web/js/fx.js`, `web/js/audio.js` (yeni), `web/js/renderer.js`, `web/js/sprites.js`, `web/js/main.js`, `web/index.html`, `web/css/style.css` (yalnızca A5 için izin verilen dosyalar).
+  - **Ses:** Varsayılan olarak **KAPALI** (`audio.muted = true`, `btn-sound` simgesi `🔇`, başlık `Sesi aç`). Kullanıcı tıklayınca açılır, `localStorage`'da try/catch ile saklanır (`po-audio-muted`). Sıfır harici dosya (0 KB), saf Web Audio API osilatör sentezi (blip, hop, success, alert, coffee, meow).
+  - **Efektler & Işık:** Sabit 48 partiküllük havuz ile bellek sızıntısız yürüme tozu ve kodlama ışıltısı. Saat bazlı yumuşak günbatımı ve gece atmosferi, pencerelerde yanıp sönen yıldızlar, aktif monitörlerde yeşil halo parıltısı. `prefers-reduced-motion` destekli.
+  - **Karakter & Maskot:** Karakter tıklandığında hop zıplaması ve kalp/sevinç balonu. Halıda kıvrılan, tıklandığında miyavlayıp kalp balonu çıkaran sevimli ofis kedisi (`mascot-cat`).
+  - **Test & Doğrulama:** `python3 -m unittest discover -s tests -p "test_v3_ui.py"` başarıyla geçti (2 test OK). `sprite-preview.html` `validateSprites()` hatasız (`[]`). Chrome CDP ile 1280 px ve 390 px ekranlarda test edildi (60 fps stabil, sıfır hata).

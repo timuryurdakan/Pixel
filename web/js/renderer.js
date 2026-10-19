@@ -1,8 +1,9 @@
 // Pixel Office — canvas renderer (ARCHITECTURE.md §6.4).
 // Cached static background, y-sorted furniture + characters, bubbles, crisp labels.
 
-import { getCharacterFrame, getTileSprite, getFurnitureSprite, getBubbleSprite, getToolIcon, CHAR_W, CHAR_H } from './sprites.js';
+import { getCharacterFrame, getTileSprite, getFurnitureSprite, getBubbleSprite, getToolIcon, getCatFrame, CHAR_W, CHAR_H } from './sprites.js';
 import { TILE, SCALE } from './office.js';
+import { ParticleSystem, LightingEngine, AgentReactions } from './fx.js';
 
 const DESK_ON_STATES = new Set(['working', 'thinking']);
 export const LABEL_MAX = 18;
@@ -35,8 +36,23 @@ export class Renderer {
     this.worldH = office.height * TILE;  // 224
     this.ctx = canvas.getContext('2d');
     this.scale = SCALE;                  // device px per world px
+    this.zoomLevel = 1.0;
+    this._availW = 0;
+    this._availH = 0;
     this._applySize(SCALE, null);
     this.background = this._buildBackground();
+    this.particles = new ParticleSystem();
+    this.lighting = new LightingEngine();
+    this.reactions = new AgentReactions();
+    this.cat = {
+      id: 'mascot-cat',
+      x: 13 * TILE + 4,
+      y: 7 * TILE + 4,
+      w: 16,
+      h: 16,
+      wakeTime: 0,
+    };
+    this._lastTime = 0;
   }
 
   _applySize(s, cssScale) {
@@ -55,8 +71,11 @@ export class Renderer {
    * space exactly with a backing store rendered at the next integer scale.
    */
   fit(availW, availH) {
+    this._availW = availW;
+    this._availH = availH;
     const dpr = window.devicePixelRatio || 1;
-    const fit = Math.max(0.25, Math.min(availW / this.worldW, availH / this.worldH));
+    const baseFit = Math.max(0.25, Math.min(availW / this.worldW, availH / this.worldH));
+    const fit = baseFit * (this.zoomLevel || 1.0);
     const dev = fit * dpr;
     let s = Math.floor(dev);
     let cssScale;
@@ -66,6 +85,14 @@ export class Renderer {
     if (key === this._fitKey) return;
     this._fitKey = key;
     this._applySize(s, cssScale);
+  }
+
+  setZoom(level) {
+    this.zoomLevel = Math.max(0.8, Math.min(2.5, level));
+    if (this._availW && this._availH) {
+      this._fitKey = null;
+      this.fit(this._availW, this._availH);
+    }
   }
 
   _buildBackground() {
@@ -99,6 +126,10 @@ export class Renderer {
    * @param {{selectedId:string|null, hoverId:string|null, time:number}} opts
    */
   render(characters, { selectedId = null, hoverId = null, time = 0 } = {}) {
+    const dt = this._lastTime ? Math.min(0.1, Math.max(0, time - this._lastTime)) : 0.016;
+    this._lastTime = time;
+    this.particles.update(dt);
+
     const ctx = this.ctx;
     const s = this.scale;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -112,51 +143,92 @@ export class Renderer {
 
     for (const f of this.office.furniture) {
       let name = f.kind;
+      let isDeskActive = false;
       if (f.kind === 'desk' && f.spot && f.spot.occupant) {
         const c = byId.get(f.spot.occupant);
-        if (c && c.phase === 'settled' && c.spot === f.spot && DESK_ON_STATES.has(c.agent.state)) name = 'desk_on';
+        if (c && c.phase === 'settled' && c.spot === f.spot && DESK_ON_STATES.has(c.agent.state)) {
+          name = 'desk_on';
+          isDeskActive = true;
+        }
       }
       const img = getFurnitureSprite(name);
       const dx = f.x * TILE;
       const dy = f.kind === 'bed' ? f.y * TILE : f.y * TILE + TILE - img.height;
-      items.push({ sortY: f.sortY, x: dx, draw: () => ctx.drawImage(img, dx, dy) });
+      items.push({
+        sortY: f.sortY,
+        x: dx,
+        draw: () => {
+          if (isDeskActive) this.lighting.drawMonitorGlow(ctx, f.x, f.y);
+          ctx.drawImage(img, dx, dy);
+        },
+      });
     }
 
     for (const c of characters) {
       if (c.alpha <= 0) continue;
+
+      // FX particle triggers
+      if (c.anim === 'walk' && Math.random() < 0.22) {
+        this.particles.spawnStepDust(c.px, c.py);
+      } else if (c.anim === 'type' && Math.random() < 0.08) {
+        this.particles.spawnCodeSparkle(c.px + (Math.random() - 0.5) * 8, c.py - 12);
+      }
+
       const r = this._spriteRect(c);
+      const hop = this.reactions.getHopOffset(c.id);
       const sel = c.id === selectedId, hov = c.id === hoverId;
       items.push({
-        sortY: c.sortY, x: r.x,
+        sortY: c.sortY,
+        x: r.x,
         draw: () => {
           if (sel || hov) {
             ctx.globalAlpha = sel ? 0.6 : 0.35;
             ctx.fillStyle = sel ? '#ffd84a' : '#ffffff';
             ctx.beginPath();
-            if (c.isSleepingOnBed()) ctx.ellipse(r.x + 8, r.y + 12, 9, 13, 0, 0, Math.PI * 2);
+            if (c.isSleepingOnBed()) ctx.ellipse(r.x + 8, r.y + 12 + hop, 9, 13, 0, 0, Math.PI * 2);
             else ctx.ellipse(Math.round(c.px), Math.round(c.py), 7, 3, 0, 0, Math.PI * 2);
             ctx.fill();
           }
           ctx.globalAlpha = c.alpha;
           const f = c.currentFrame();
-          ctx.drawImage(getCharacterFrame(c.palette, f.anim, f.dir, f.frame), r.x, r.y);
+          ctx.drawImage(getCharacterFrame(c.palette, f.anim, f.dir, f.frame), r.x, r.y + hop);
           ctx.globalAlpha = 1;
         },
       });
     }
 
+    // Mascot Cat (curled up on rug, occasionally sits or reacts)
+    const cat = this.cat;
+    const catHop = this.reactions.getHopOffset(cat.id);
+    const isCatAwake = (time - cat.wakeTime) < 5.0 || ((Math.floor(time) % 24) < 4);
+    const catAnim = isCatAwake ? 'sit' : 'sleep';
+    const catFrame = isCatAwake ? Math.floor(time * 2) : Math.floor(time * 1.5);
+    const catSprite = getCatFrame(catAnim, catFrame);
+    items.push({
+      sortY: cat.y + 16,
+      x: cat.x,
+      draw: () => {
+        ctx.drawImage(catSprite, cat.x, cat.y + catHop);
+      },
+    });
+
     items.sort((a, b) => a.sortY - b.sortY || a.x - b.x);
     for (const it of items) it.draw();
 
+    // World-space FX particles
+    this.particles.draw(ctx);
+
     // Bubbles (world space, above all sprites).
     for (const c of characters) {
-      const b = c.bubble();
+      const emote = this.reactions.getEmote(c.id);
+      const b = emote ? { kind: emote } : c.bubble();
       if (!b || c.alpha < 1) continue;
       const phase = ((c.agent.colorSeed >>> 0) % 997) / 997;
       const bob = Math.round(Math.sin((time + phase) * Math.PI * 4));
+      const hop = this.reactions.getHopOffset(c.id);
       let bx, by;
       if (c.isSleepingOnBed()) { bx = c.spot.x * TILE + 14; by = c.spot.y * TILE - 4; }
-      else { bx = c.px; by = c.py - 27; }
+      else { bx = c.px; by = c.py - 27 + hop; }
       let img = null;
       if (b.kind === 'tool') img = getToolIcon(b.tool);
       else if (b.kind === 'alert') { if (Math.floor(time * 4) % 2 === 0) img = getBubbleSprite('alert', 0); }
@@ -170,6 +242,16 @@ export class Renderer {
       } else img = getBubbleSprite(b.kind, Math.floor(time * 2));
       if (img) ctx.drawImage(img, Math.round(bx - img.width / 2), Math.round(by - img.height / 2 + bob));
     }
+
+    // Cat mascot emote bubble
+    const catEmote = this.reactions.getEmote(cat.id);
+    if (catEmote) {
+      const img = getBubbleSprite(catEmote, 0);
+      if (img) ctx.drawImage(img, Math.round(cat.x + 8 - img.width / 2), Math.round(cat.y - 12 + catHop));
+    }
+
+    // World atmosphere & window lighting
+    this.lighting.drawAtmosphere(ctx, this.office, time);
 
     // Labels (device-pixel space, so text is crisp at any scale).
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -204,6 +286,13 @@ export class Renderer {
     if (!rect.width || !rect.height) return null;
     const wx = (canvasX * this.worldW) / rect.width;
     const wy = (canvasY * this.worldH) / rect.height;
+
+    // Check mascot cat first
+    const cat = this.cat;
+    if (wx >= cat.x && wx < cat.x + cat.w && wy >= cat.y && wy < cat.y + cat.h) {
+      return cat.id;
+    }
+
     let best = null;
     for (const c of characters) {
       if (c.alpha <= 0 || c.phase === 'gone') continue;

@@ -19,7 +19,7 @@ export const ANIMS = {
 
 export const TILE_NAMES = ['floor', 'floor_alt', 'rug', 'wall', 'window', 'door'];
 export const FURNITURE_NAMES = ['desk', 'desk_on', 'chair', 'bookshelf', 'plant', 'coffee_counter', 'water_cooler', 'bed'];
-export const BUBBLE_KINDS = ['zzz', 'dots', 'alert', 'steam', 'question', 'coffee', 'speech'];
+export const BUBBLE_KINDS = ['zzz', 'dots', 'alert', 'steam', 'question', 'coffee', 'speech', 'heart', 'happy'];
 export const TOOL_ICON_KINDS = ['terminal', 'eye', 'pencil', 'magnifier', 'globe', 'people', 'checklist', 'gear'];
 
 // ---------------------------------------------------------------------------
@@ -1017,6 +1017,56 @@ const SPEECH_B = [
   '..............',
 ];
 
+const HEART_A = [
+  '..KK...KK...',
+  '.KrrK.KrrK..',
+  'KrrrrKrrrrK.',
+  'KrrrrrrrrrK.',
+  'KrrrrrrrrrK.',
+  '.KrrrrrrrK..',
+  '..KrrrrrK...',
+  '...KrrrK....',
+  '....KrK.....',
+  '.....K......',
+];
+const HEART_B = [
+  '............',
+  '..KK...KK...',
+  '.KrrK.KrrK..',
+  'KrrrrrrrrrK.',
+  'KrrrrrrrrrK.',
+  '.KrrrrrrrK..',
+  '..KrrrrrK...',
+  '...KrrrK....',
+  '....KrK.....',
+  '.....K......',
+];
+
+const HAPPY_A = [
+  '..KKKKKKKK..',
+  '.KyyyyyyyyK.',
+  'KyyKyyyyKyyK',
+  'KyyKyyyyKyyK',
+  'KyyyyyyyyyyK',
+  'KyyKyyyyKyyK',
+  'KyyyKKKKyyyK',
+  '.KyyyyyyyyK.',
+  '..KKKKKKKK..',
+  '............',
+];
+const HAPPY_B = [
+  '..KKKKKKKK..',
+  '.KyyyyyyyyK.',
+  'KyyKyyyyKyyK',
+  'KyyKyyyyKyyK',
+  'KyyyyyyyyyyK',
+  'KyyyKKKKyyyK',
+  'KyyKyyyyKyyK',
+  '.KyyyyyyyyK.',
+  '..KKKKKKKK..',
+  '............',
+];
+
 const ICONS = {
   terminal: [
     '..........',
@@ -1156,6 +1206,8 @@ const BUBBLES = {
   question: [def(10, 12, PAL_BUBBLE, () => QUESTION_A), def(10, 12, PAL_BUBBLE, () => QUESTION_B)],
   coffee: [def(12, 12, PAL_BUBBLE, () => iconBubble(COFFEE_INNER_A)), def(12, 12, PAL_BUBBLE, () => iconBubble(COFFEE_INNER_B))],
   speech: [def(14, 10, PAL_BUBBLE, () => SPEECH_A), def(14, 10, PAL_BUBBLE, () => SPEECH_B)],
+  heart: [def(12, 10, PAL_BUBBLE, () => HEART_A), def(12, 10, PAL_BUBBLE, () => HEART_B)],
+  happy: [def(12, 10, PAL_BUBBLE, () => HAPPY_A), def(12, 10, PAL_BUBBLE, () => HAPPY_B)],
 };
 
 const ICON_DEFS = Object.fromEntries(
@@ -1274,6 +1326,110 @@ export function getBubbleSprite(kind, frame = 0) {
   return renderDef(`b|${kind}|${f}`, frames[f]);
 }
 
+const PAL_CAT = {
+  K: '#1b1b2a',
+  O: '#e67e22',
+  o: '#ba5808',
+  W: '#fdfefe',
+  P: '#f1948a',
+  E: '#1b1b2a',
+  G: '#2ecc71',
+};
+
+const CAT_SLEEP_0 = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '.....KK...KK....',
+  '....KPKK.KPKK...',
+  '...KOOOKKOOOK...',
+  '..KOOOOOOOOOOK..',
+  '..KOOEEEOOOOOK..',
+  '..KOOWWWWOOOOK..',
+  '..KOOOOOOOOOOK..',
+  '...KOOOOOOOOK...',
+  '....KKKKKKKK....',
+  '................',
+];
+
+const CAT_SLEEP_1 = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '.....KK...KK....',
+  '....KPKK.KPKK...',
+  '...KOOOKKOOOK...',
+  '..KOOOOOOOOOOK..',
+  '..KOOEEEOOOOOK..',
+  '..KOOWWWWOOOOK..',
+  '...KOOOOOOOOK...',
+  '....KOOOOOOK....',
+  '.....KKKKKK.....',
+  '................',
+];
+
+const CAT_SIT_0 = [
+  '................',
+  '................',
+  '....KK....KK....',
+  '...KPKK..KPKK...',
+  '..KOOOKKKKOOOK..',
+  '..KOOOOOOOOOOK..',
+  '..KOEGOOOOGEOK..',
+  '..KOEEOOOOEEOK..',
+  '..KOOOWPWOOOOK..',
+  '...KOOWWWOOOK...',
+  '...KOOOOOOOOK.K.',
+  '..KOOWWWWOOOKKK.',
+  '..KOOWWWWOOOOK..',
+  '..KOOOOOOOOOOK..',
+  '...KKWKKKKWKK...',
+  '................',
+];
+
+const CAT_SIT_1 = [
+  '................',
+  '................',
+  '....KK....KK....',
+  '...KPKK..KPKK...',
+  '..KOOOKKKKOOOK..',
+  '..KOOOOOOOOOOK..',
+  '..KOEGOOOOGEOK..',
+  '..KOEEOOOOEEOK..',
+  '..KOOOWPWOOOOK..',
+  '...KOOWWWOOOK.K.',
+  '...KOOOOOOOOKKK.',
+  '..KOOWWWWOOOOK..',
+  '..KOOWWWWOOOOK..',
+  '..KOOOOOOOOOOK..',
+  '...KKWKKKKWKK...',
+  '................',
+];
+
+const CAT_SPRITES = {
+  sleep: [
+    { w: 16, h: 16, pal: PAL_CAT, rows: CAT_SLEEP_0 },
+    { w: 16, h: 16, pal: PAL_CAT, rows: CAT_SLEEP_1 },
+  ],
+  sit: [
+    { w: 16, h: 16, pal: PAL_CAT, rows: CAT_SIT_0 },
+    { w: 16, h: 16, pal: PAL_CAT, rows: CAT_SIT_1 },
+  ],
+};
+
+/** @returns {HTMLCanvasElement} 16x16 office mascot cat frame */
+export function getCatFrame(anim = 'sleep', frame = 0) {
+  const frames = CAT_SPRITES[anim] || CAT_SPRITES.sleep;
+  const f = ((Math.floor(frame) || 0) % frames.length + frames.length) % frames.length;
+  return renderDef(`cat|${anim}|${f}`, frames[f]);
+}
+
 /** @returns {HTMLCanvasElement} 12x12 icon in a white bubble. */
 export function getToolIcon(toolName) {
   const kind = toolIconKind(toolName);
@@ -1344,7 +1500,7 @@ export function validateSprites() {
     if (d.w !== w || d.h !== h) errors.push(`${n}: declared ${d.w}x${d.h}, expected ${w}x${h}`);
     safe(n, () => checkMap(errors, n, d.rows, w, h, inPal(d.pal)));
   }
-  const bubbleDims = { zzz: [12, 10], dots: [14, 10], alert: [10, 12], steam: [8, 8], question: [10, 12], coffee: [12, 12], speech: [14, 10] };
+  const bubbleDims = { zzz: [12, 10], dots: [14, 10], alert: [10, 12], steam: [8, 8], question: [10, 12], coffee: [12, 12], speech: [14, 10], heart: [12, 10], happy: [12, 10] };
   for (const [k, frames] of Object.entries(BUBBLES)) {
     if (frames.length !== 2) errors.push(`bubble ${k}: ${frames.length} frames, expected 2`);
     frames.forEach((d, i) => {
