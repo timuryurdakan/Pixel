@@ -13,9 +13,10 @@ class SoundEngine {
 
   _loadMuted() {
     try {
-      return localStorage.getItem(STORAGE_KEY) === '1';
+      // Default: MUTED (sound is OFF by default unless user explicitly turns it on).
+      return localStorage.getItem(STORAGE_KEY) !== '0';
     } catch {
-      return false;
+      return true;
     }
   }
 

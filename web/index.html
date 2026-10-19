@@ -35,11 +35,6 @@
       <canvas id="office" width="1056" height="672" aria-label="Pixel ofis: ajanlar karakter olarak görünür"></canvas>
       <div id="conn-banner" class="show" role="status">Bağlanıyor…</div>
     </div>
-    <div id="zoom-controls" class="zoom-controls" role="group" aria-label="Görünüm yakınlaştırma">
-      <button type="button" id="btn-zoom-out" class="btn small" title="Uzaklaştır" aria-label="Uzaklaştır">−</button>
-      <span id="zoom-label" class="zoom-label">1x</span>
-      <button type="button" id="btn-zoom-in" class="btn small" title="Yakınlaştır" aria-label="Yakınlaştır">+</button>
-    </div>
   </div>
   <div id="mini-strip" class="mini-strip" role="status" aria-live="polite">…</div>
   <aside id="panel">
@@ -52,13 +47,6 @@
       <h2>Ajanlar</h2>
       <div id="summary" class="summary"></div>
     </header>
-    <div id="filter-bar" class="filter-bar" role="tablist" aria-label="Ajan durumu filtresi">
-      <button type="button" class="filter-chip active" data-filter="all">Tümü</button>
-      <button type="button" class="filter-chip" data-filter="working">Çalışan</button>
-      <button type="button" class="filter-chip" data-filter="waiting_for_user">Bekleyen</button>
-      <button type="button" class="filter-chip" data-filter="idle">Kahve</button>
-      <button type="button" class="filter-chip" data-filter="sleeping">Uyuyan</button>
-    </div>
     <ul id="agent-list" class="agent-list"></ul>
     <div id="det-scroll" class="det-scroll">
       <section id="agent-details" class="details placeholder" aria-live="polite"></section>
