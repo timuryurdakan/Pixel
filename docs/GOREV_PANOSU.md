@@ -46,6 +46,7 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | A2 | Tanıtım (landing) sayfası | Antigravity | ✅ Teslim edildi |
 | A3 | Rehber sayfası iyileştirmesi | Antigravity | ✅ Teslim edildi |
 | A4 | v4 Otomasyonlar ön araştırması | Antigravity | ✅ Teslim edildi |
+| A5 | Ofis efektleri: parçacık, ışık, tıklama tepkisi, ses (kullanıcı isteği) | Antigravity | 🔄 |
 
 ---
 
@@ -105,6 +106,21 @@ bir şablon seçer, ajanlar ofiste birbirine iş devreder (ör. frontend bitince
 - Önerilen ilk 3 şablon ve kaba bir uygulama planı.
 **Kabul:** Kaynaklar tarihle belirtilir; kod değişikliği yok.
 
+### A5: Ofis efektleri (kullanıcı isteği)
+**Amaç:** Ofise parçacıklar, atmosferik ışık, ajana tıklayınca küçük tepkiler ve isteğe bağlı ses eklemek.
+**Dokunulabilecek dosyalar:** `web/js/fx.js`, `web/js/audio.js` (yeni), `web/js/renderer.js`, `web/js/sprites.js`
+(yalnızca yeni çizimler eklenir, mevcut çizimler ve API değişmez), `web/js/main.js` (yalnızca efekt/ses bağlantısı),
+`web/index.html` (yalnızca ses düğmesi), `web/css/style.css` (yalnızca efekt/ses düğmesi stilleri).
+**Kurallar:**
+- **Ses varsayılan olarak KAPALI.** Kullanıcı bir düğmeyle açar, tercih `localStorage`'da (try/catch ile) saklanır.
+  Sesler kodla (WebAudio) üretilir ya da `web/` altındaki küçük dosyalardan gelir; dış kaynak yok.
+- `prefers-reduced-motion` açıksa parçacık ve titreşim efektleri kapanır.
+- Performans: mini pencerede (PiP) ve telefonda 60 fps'i bozmamalı. Görünmeyen sekmede efekt döngüsü durur.
+- Mevcut davranış bozulmaz: v1 yerel mod, v2 bulut, v3 kontrol paneli ve `tests/test_v3_ui.py` geçer.
+- `sprites.js` için `validateSprites()` hatasız kalmalı (`web/sprite-preview.html`).
+**Teslim:** Önce `git merge main` ile güncel `main`'i dalına al (Aşama 17 ve bağlayıcı düzeltmesi geldi), sonra `[A5]`
+commit'i. Ekran görüntüsü ve fps gözlemi teslim notuna yazılır.
+
 ---
 
 ## 3. Teslim notları
@@ -132,3 +148,6 @@ görüntüleri, bilinen sorunlar.
   `agents.md` **birleştirilmedi**: panoda atanmış görev değiller ve korunan dosyalara (`main.js`, `renderer.js`,
   `sprites.js`) dokunuyorlar. Kullanıcı onayı bekleniyor. Not: birleştirme `~/Desktop/Pixel` içinde başlatılmıştı; kurala
   göre birleştirmeyi yalnızca Claude yapar.
+- **2026-10-19, Claude:** Kullanıcı efektleri onayladı, **A5** olarak panoya eklendi (kurallar yukarıda; ses varsayılan kapalı).
+  Kökteki `agents.md` temizlenip `AGENTS.md` olarak eklendi: Google yönlendirme bağlantıları doğrudan bağlantıya çevrildi,
+  sembolik bağlantı önerisi kaldırıldı, §8 proje değerleriyle dolduruldu. Panoyla çelişirse pano geçerlidir.
