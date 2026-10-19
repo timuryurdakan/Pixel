@@ -9,6 +9,7 @@ import { UI, summaryText } from './ui.js';
 import { SseTransport, PollingTransport } from './transport.js';
 import { MiniWindow } from './pip.js';
 import * as cloud from './cloud.js';
+import { sound } from './audio.js';
 
 export const STEP = 1 / 60;   // fixed timestep (s)
 export const MAX_STEPS = 5;   // per animation frame (excess is dropped)
@@ -54,8 +55,10 @@ function refreshUI() {
 }
 
 function select(id) {
+  const prev = selectedId;
   selectedId = id || null;
   ui.setSelected(selectedId);
+  if (selectedId && selectedId !== prev) sound.playBlip();
   if (v3) v3Sync();
 }
 
@@ -391,6 +394,7 @@ function bootCommon() {
     const picked = renderer.pickCharacter(manager.list(), x, y);
     select(picked);
     if (picked) {
+      sound.playHop();
       renderer.reactions.trigger(picked, Math.random() < 0.5 ? 'heart' : 'happy');
     }
   });
@@ -402,15 +406,33 @@ function bootCommon() {
   canvas.addEventListener('mouseleave', () => { hoverId = null; });
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape') select(null); });
 
+  setupSoundButton();
+
   if (viewMini) document.body.classList.add('mini');
   fitCanvas();
   if (typeof ResizeObserver === 'function') new ResizeObserver(() => { if (!(mini && mini.window)) fitCanvas(); }).observe(document.getElementById('stage'));
   window.addEventListener('resize', () => { if (!(mini && mini.window)) fitCanvas(); });
 
-  window.pixelOffice = { office, manager, renderer, ui, agents, errors, overrides,
+  window.pixelOffice = { office, manager, renderer, ui, sound, agents, errors, overrides,
     get transport() { return transport; }, get backend() { return backend; }, get room() { return room; },
     get mini() { return mini; } };
   scheduleFrame();
+}
+
+function setupSoundButton() {
+  const btn = document.getElementById('btn-sound');
+  if (!btn) return;
+  const sync = () => {
+    btn.textContent = sound.muted ? '🔇' : '🔊';
+    btn.dataset.muted = sound.muted ? 'true' : 'false';
+    btn.title = sound.muted ? 'Sesi aç' : 'Sesi kapat';
+  };
+  btn.addEventListener('click', () => {
+    sound.toggleMute();
+    sync();
+    if (!sound.muted) sound.playBlip();
+  });
+  sync();
 }
 
 async function bootLocal() {

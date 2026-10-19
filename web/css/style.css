@@ -320,6 +320,16 @@ code { background: #1c1c28; padding: 0 4px; color: #b9e3ff; }
 .btn.accent:hover { background: var(--accent); }
 .btn.ghost { background: transparent; border-color: var(--line); box-shadow: none; }
 .btn.small { padding: 2px 8px; font-size: 11px; }
+.btn-sound {
+  font-size: 13px;
+  padding: 4px 8px;
+  min-width: 34px;
+  line-height: 1;
+}
+.btn-sound[data-muted="true"] {
+  opacity: 0.65;
+  filter: grayscale(1);
+}
 
 /* ---------- landing ---------- */
 .landing {
