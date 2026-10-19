@@ -257,7 +257,7 @@ class ChatRun(Running):
                     self.events.live(inTok=u["inTok"], outTok=u["outTok"], cacheRead=0, cacheWrite=0)
                     ed = o.get("eval_duration")
                     if isinstance(ec, int) and isinstance(ed, int) and ed > 0:
-                        self.note = "%.1f token/sn" % (ec / ed * 1e9)
+                        self.note = ("%.1f token/sn" % (ec / ed * 1e9)).replace(".", ",")   # tr-TR decimal comma
                 break
         return None
 

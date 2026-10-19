@@ -21,6 +21,8 @@
     <nav id="toolbar" class="toolbar" aria-label="Oda araçları" hidden>
       <button type="button" id="btn-invite" class="btn" data-cloud hidden title="Odaya davet bağlantısını kopyala">Davet et</button>
       <button type="button" id="btn-setup" class="btn accent" data-cloud hidden title="Claude Code ya da başka bir ajanı bu odaya bağla">Ajan bağla</button>
+      <button type="button" id="btn-devices" class="btn" hidden title="Eşleşmiş cihazlar, çalışma ortamları ve cihaz ekleme">Cihazlar</button>
+      <button type="button" id="btn-newagent" class="btn" hidden title="Eşleşmiş bir cihazda yeni ajan oluştur">Yeni ajan</button>
       <button type="button" id="btn-mini" class="btn" hidden title="Her zaman üstte duran küçük pencere. Ekranın sağ altına sürükleyin.">Mini pencere</button>
       <button type="button" id="btn-install" class="btn" hidden title="Pixel Ofis'i masaüstü uygulaması olarak yükle">Uygulamayı yükle</button>
       <a id="btn-guide" class="btn ghost" data-cloud hidden href="/rehber.html" title="Kurulum rehberi: uygulamayı yükleme, mini pencere, ajan bağlama">Rehber</a>
@@ -35,14 +37,103 @@
   </div>
   <div id="mini-strip" class="mini-strip" role="status" aria-live="polite">…</div>
   <aside id="panel">
+    <header id="sheet-head" class="sheet-head" hidden>
+      <button type="button" id="sheet-back" class="btn sheet-back" aria-label="Geri">←</button>
+      <span id="sheet-name" class="sheet-name"></span>
+      <button type="button" id="sheet-stop" class="btn small" hidden>Durdur</button>
+    </header>
     <header class="panel-head">
       <h2>Ajanlar</h2>
       <div id="summary" class="summary"></div>
     </header>
     <ul id="agent-list" class="agent-list"></ul>
-    <section id="agent-details" class="details placeholder" aria-live="polite"></section>
+    <div id="det-scroll" class="det-scroll">
+      <section id="agent-details" class="details placeholder" aria-live="polite"></section>
+      <section id="agent-control" class="ctl-slot" hidden></section>
+    </div>
   </aside>
 </main>
+
+<!-- v3: phone tab bar (V3.md §11.6); shown only when device control is available -->
+<nav id="tabbar" class="tabbar" aria-label="Bölümler" hidden>
+  <button type="button" data-tab="office" aria-current="page">Ofis</button>
+  <button type="button" data-tab="agents">Ajanlar</button>
+  <button type="button" data-tab="devices">Cihazlar</button>
+</nav>
+
+<!-- v3: devices page (V3.md §11.5): a wide panel on desktop, a full-screen tab on phones -->
+<section id="devices-page" class="devices-page" hidden aria-labelledby="dev-title">
+  <div class="dev-panel" tabindex="-1">
+    <header class="dev-top">
+      <h2 id="dev-title">Cihazlar</h2>
+      <span class="dev-relay muted small" role="status"></span>
+      <button type="button" class="btn accent" data-dev-add>+ Cihaz ekle</button>
+      <button type="button" class="close" data-dev-close aria-label="Kapat">✕</button>
+    </header>
+    <div class="dev-body"></div>
+  </div>
+</section>
+
+<!-- v3: "Cihaz ekle" pairing wizard (V3.md §11.5) -->
+<dialog id="dlg-pair" class="dlg wide" aria-labelledby="dlg-pair-title">
+  <form method="dialog" class="dlg-head"><h2 id="dlg-pair-title">Cihaz ekle <span id="pair-steplabel" class="muted small"></span></h2><button class="close" value="close" aria-label="Kapat">✕</button></form>
+  <section data-step="1">
+    <h3>1. Bağlayıcıyı kurun</h3>
+    <p>Görev vermek istediğiniz bilgisayarda (Python 3.8+ gerekir) terminalde şu komutu çalıştırın. Komut dosyayı indirir, SHA-256 özetini doğrular ve arka plan servisini kurar.</p>
+    <label class="setup-name">Adınız (ofiste görünecek) <input id="pair-name" maxlength="24" placeholder="ör. Timur"></label>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" class="tab" data-ostab="linux" aria-selected="true">Linux</button>
+      <button type="button" role="tab" class="tab" data-ostab="mac" aria-selected="false">macOS</button>
+      <button type="button" role="tab" class="tab" data-ostab="win" aria-selected="false">Windows</button>
+    </div>
+    <div class="tab-pane" data-ospane="linux"><div class="cmd" data-pcmd="linux"></div></div>
+    <div class="tab-pane" data-ospane="mac" hidden><div class="cmd" data-pcmd="mac"></div></div>
+    <div class="tab-pane" data-ospane="win" hidden><div class="cmd" data-pcmd="win"></div><p class="muted small">PowerShell'de çalıştırın. Bağlayıcı için Windows'ta da Python gerekir.</p></div>
+    <p class="muted small">Betiği önce okuyabilirsiniz: <a href="/connector/install.sh" target="_blank" rel="noopener">install.sh</a> · <a href="/connector/install.ps1" target="_blank" rel="noopener">install.ps1</a></p>
+    <div class="dlg-actions"><button type="button" class="btn ghost" data-goto="2">Zaten kurulu</button><button type="button" class="btn accent" data-goto="2">İleri</button></div>
+  </section>
+  <section data-step="2" hidden>
+    <h3>2. Eşleştirme kodu alın</h3>
+    <p>Cihazda şu komutu çalıştırın. Ekranda <b>12 karakterlik</b> bir kod görünecek (10 dakika geçerli, tek deneme).</p>
+    <div class="cmd" data-pcmd="pair"></div>
+    <div class="dlg-actions"><button type="button" class="btn ghost" data-goto="1">Geri</button><button type="button" class="btn accent" data-goto="3">Kodu aldım</button></div>
+  </section>
+  <section data-step="3" hidden>
+    <h3>3. Kodu girin</h3>
+    <form id="pair-form" class="pair-form" autocomplete="off">
+      <label>Eşleştirme kodu <input id="pair-code" class="pair-code" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="14" placeholder="K7Q2-M4X5-Z6A9" aria-describedby="pair-status"></label>
+      <button type="submit" id="pair-submit" class="btn accent">Eşleştir</button>
+    </form>
+    <p id="pair-sas" class="pair-sas" hidden></p>
+    <p id="pair-status" class="pair-status" role="status" aria-live="polite"></p>
+    <p class="muted small">Terminalde gördüğünüz doğrulama kodu burada görünenle aynı değilse orada onaylamayın.</p>
+    <div class="dlg-actions"><button type="button" class="btn ghost" data-goto="2">Geri</button></div>
+  </section>
+</dialog>
+
+<!-- v3: "Yeni ajan" (V3.md §11.4) -->
+<dialog id="dlg-agent" class="dlg" aria-labelledby="dlg-agent-title">
+  <form method="dialog" class="dlg-head"><h2 id="dlg-agent-title">Yeni ajan</h2><button class="close" value="close" aria-label="Kapat">✕</button></form>
+  <form id="agent-form" class="agent-form" autocomplete="off">
+    <label>Cihaz <select name="device"></select></label>
+    <fieldset class="engines"><legend>Motor</legend><div id="agent-engines" class="radio-row"></div></fieldset>
+    <label>Çalışma klasörü <select name="workspace"></select></label>
+    <label id="agent-sub-row" hidden>Alt klasör (isteğe bağlı) <input name="sub" list="agent-sub-list" maxlength="200" placeholder="ör. web"><datalist id="agent-sub-list"></datalist></label>
+    <label>Model <select name="model"></select></label>
+    <label>Ad <input name="name" maxlength="24" required placeholder="ör. Kâtip"></label>
+    <label id="agent-profile-row">İzin profili <select name="profile"></select></label>
+    <p id="agent-auto-note" class="danger small" hidden>Claude her adımı sizin yerinize, bir güvenlik sınıflandırıcısıyla onaylar. Önerilen: cihazda görev onayını açın.</p>
+    <p id="agent-local-note" class="muted small" hidden>Yerel model: sohbet eder, dosyalara dokunmaz.</p>
+    <fieldset class="budget-row"><legend>Günlük bütçe</legend>
+      <label class="check"><input type="checkbox" name="useBudget"> Sınır koy</label>
+      <input name="budgetLimit" type="number" min="0" step="any" inputmode="decimal" aria-label="Sınır" value="3">
+      <select name="budgetUnit" aria-label="Birim"><option value="usd">$ (tahmini)</option><option value="tokens">token</option></select>
+      <select name="budgetAction" aria-label="Aşılınca"><option value="warn">uyar</option><option value="block">durdur</option></select>
+    </fieldset>
+    <p id="agent-error" class="form-error" role="alert" hidden></p>
+    <div class="dlg-actions"><button type="button" class="btn ghost" data-agent-cancel>Vazgeç</button><button type="submit" name="create" class="btn accent">Oluştur</button></div>
+  </form>
+</dialog>
 
 <!-- Cloud landing (CLOUD.md §9.3): create / join / recent rooms -->
 <section id="landing" class="landing" hidden aria-labelledby="landing-title">

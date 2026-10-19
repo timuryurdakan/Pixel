@@ -10,13 +10,20 @@
     {"source": "/(.*)", "headers": [
       {"key": "X-Content-Type-Options", "value": "nosniff"},
       {"key": "Referrer-Policy", "value": "no-referrer"},
-      {"key": "Content-Security-Policy", "value": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"}
+      {"key": "Content-Security-Policy", "value": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' wss://pixel-relay.timur.workers.dev; frame-ancestors 'none'; base-uri 'none'"}
     ]},
     {"source": "/sw.js", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},
     {"source": "/manifest.webmanifest", "headers": [{"key": "Content-Type", "value": "application/manifest+json"}]},
     {"source": "/hook/(.*)", "headers": [
       {"key": "Content-Type", "value": "text/plain; charset=utf-8"},
       {"key": "Cache-Control", "value": "no-cache"}
+    ]},
+    {"source": "/connector/(.*)", "headers": [
+      {"key": "Content-Type", "value": "text/plain; charset=utf-8"},
+      {"key": "Cache-Control", "value": "no-cache"}
+    ]},
+    {"source": "/connector/(.*)\\.pyz", "headers": [
+      {"key": "Content-Type", "value": "application/zip"}
     ]}
   ]
 }

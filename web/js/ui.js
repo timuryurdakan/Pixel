@@ -92,6 +92,8 @@ export class UI {
     this.mode = null;
     this.editing = null;     // {id} while the inline rename input is open
     this.emptyHint = null;   // custom empty-office text (cloud)
+    /** v3 (V3.md §11.1, §11.6): agent → null | {tokens: string|null}. Set only when device control is on. */
+    this.ctlInfo = null;
     this.agents = [];
     this.byId = new Map();
     this.selectedId = null;
@@ -170,7 +172,12 @@ export class UI {
       return;
     }
 
-    const mains = agents.filter((a) => !a.isSubagent || !this.byId.has(a.parentId));
+    let mains = agents.filter((a) => !a.isSubagent || !this.byId.has(a.parentId));
+    if (this.ctlInfo) {
+      // v3: controllable agents first (stable otherwise), so their owner group comes first too.
+      const ctl = (a) => (this.ctlInfo(a) ? 0 : 1);
+      mains = mains.map((a, i) => [a, i]).sort((x, y) => ctl(x[0]) - ctl(y[0]) || x[1] - y[1]).map((x) => x[0]);
+    }
     const children = new Map();
     for (const a of agents) {
       if (a.isSubagent && this.byId.has(a.parentId)) {
@@ -207,11 +214,14 @@ export class UI {
     const now = this._now();
     const sel = a.id === this.selectedId ? ' selected' : '';
     const tool = a.tool ? `<span class="tool" title="${esc(a.detail || '')}">🔧 ${esc(a.tool)}${a.detail ? ` · ${esc(a.detail)}` : ''}</span>` : '';
+    const ci = this.ctlInfo ? this.ctlInfo(a) : null;
+    const ctl = ci ? `<span class="ctl-badge" title="Bu ajana görev verebilirsiniz" aria-label="Bu ajana görev verebilirsiniz">⌨</span>` : '';
+    const tok = ci && ci.tokens ? `<span class="ctl-tok" title="Bugün">${esc(ci.tokens)}</span>` : '';
     return `<li class="agent${indented ? ' sub' : ''}${sel}" data-id="${esc(a.id)}" tabindex="0" role="button" aria-pressed="${sel ? 'true' : 'false'}">
       <span class="swatch" style="background:${esc(this._color(a))}"></span>
       <div class="agent-main">
         <div class="agent-top">
-          <span class="agent-name">${indented ? '↳ ' : ''}${esc(a.name)}</span>
+          <span class="agent-name">${indented ? '↳ ' : ''}${esc(a.name)}</span>${ctl}
           <span class="badge" style="--c:${stateColor(a.state)}">${esc(stateLabel(a.state))}</span>
         </div>
         <div class="agent-sub">
@@ -220,7 +230,7 @@ export class UI {
     : `<span class="project" title="${esc(a.projectPath || '')}">📁 ${esc(a.project)}</span>`}
           <span class="elapsed" data-since="${num(a.stateSince)}">${formatDuration(now - (num(a.stateSince) || now))}</span>
         </div>
-        ${tool ? `<div class="agent-tool">${tool}</div>` : ''}
+        ${tool ? `<div class="agent-tool">${tool}</div>` : ''}${tok ? `<div class="agent-tool">${tok}</div>` : ''}
       </div>
     </li>`;
   }

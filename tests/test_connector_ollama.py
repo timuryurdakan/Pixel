@@ -68,7 +68,7 @@ class OllamaTests(Base):
                                         "estimated": False})
         self.assertEqual((end["cost"], end["basis"]), (0.0, "local"))
         self.assertEqual(ev.offices, [("thinking", None), ("working", "llm")])
-        self.assertEqual(ev.kinds("note"), [{"k": "note", "v": "10.0 token/sn"}])
+        self.assertEqual(ev.kinds("note"), [{"k": "note", "v": "10,0 token/sn"}])
         req = self.srv.requests[-1]["body"]
         self.assertEqual(req["stream"], True)
         self.assertEqual(req["keep_alive"], "10m")

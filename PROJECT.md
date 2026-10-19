@@ -1,6 +1,6 @@
 # Pixel Office 🖥️☕💤
 
-> **Proje durumu: v1.0 ✅ tamamlandı (yerel mod, 2026-10-11). v2 "Bulut Ofis" ✅ tamamlandı (Aşama 6–10 ✅, 2026-10-11) ve https://pixel-rouge-phi.vercel.app adresinde yayında. v3 "Ajan Kontrol Merkezi (Deneme Sürümü)": Aşama 11 (mimari) ✅ 2026-10-16, Aşama 12 (röle) ✅ 2026-10-17, Aşama 13 (bağlayıcı) ✅ 2026-10-17, Aşama 14–15 bekliyor (bkz. §5c, [`docs/V3.md`](docs/V3.md)).** Kullanım için bkz. [`README.md`](README.md), bulut tasarımı için [`docs/CLOUD.md`](docs/CLOUD.md).
+> **Proje durumu: v1.0 ✅ tamamlandı (yerel mod, 2026-10-11). v2 "Bulut Ofis" ✅ tamamlandı (Aşama 6–10 ✅, 2026-10-11) ve https://pixel-rouge-phi.vercel.app adresinde yayında. v3 "Ajan Kontrol Merkezi (Deneme Sürümü)": Aşama 11 (mimari) ✅ 2026-10-16, Aşama 12 (röle) ✅ 2026-10-17, Aşama 13 (bağlayıcı) ✅ 2026-10-17, Aşama 14 (arayüz) ✅ 2026-10-19, Aşama 15 bekliyor (bkz. §5c, [`docs/V3.md`](docs/V3.md)).** Kullanım için bkz. [`README.md`](README.md), bulut tasarımı için [`docs/CLOUD.md`](docs/CLOUD.md).
 >
 > Tarayıcıda çalışan, pixel-art tarzı sanal bir ofis. Bilgisayarınızda çalışan her **Claude Code** oturumu (ve alt-ajanları) ofiste küçük bir pixel karakter olarak görünür.
 
@@ -65,8 +65,8 @@ Teknik ayrıntılar: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — **tüm a
 | 10 | QA & Yayına Hazırlık | QA Mühendisi | uçtan uca test, README dağıtım rehberi, `.gitignore`, `LICENSE` | ✅ Tamamlandı |
 | 11 | v3 Mimari | Yazılım/Güvenlik Mimarı | `docs/V3.md`, §5c | ✅ Tamamlandı |
 | 12 | Gerçek Zamanlı Röle | Gerçek Zamanlı/Edge Mühendisi | `relay/`, `tools/dev_relay.py`, `api/relay_ticket.py`, `web/js/relay.js` | ✅ Tamamlandı |
-| 13 | Bağlayıcı Uygulama | Bağlayıcı/Güvenlik Mühendisi | `pixel_connector/`, `web/js/e2e.js`, `web/connector/` | ⬜ Bekliyor |
-| 14 | Arayüz | Frontend Mühendisi | görev kutusu, cihazlar sayfası, token göstergesi, telefon düzeni | ⬜ Bekliyor |
+| 13 | Bağlayıcı Uygulama | Bağlayıcı/Güvenlik Mühendisi | `pixel_connector/`, `web/js/e2e.js`, `web/connector/` | ✅ Tamamlandı |
+| 14 | Arayüz | Frontend Mühendisi | görev kutusu, cihazlar sayfası, token göstergesi, telefon düzeni | ✅ Tamamlandı |
 | 15 | Güvenlik İncelemesi & QA & Dokümantasyon | Güvenlik İnceleyici + QA | inceleme, uçtan uca test, README, rehber | ⬜ Bekliyor |
 
 Durum işaretleri: ⬜ Bekliyor · 🔄 Devam ediyor · ✅ Tamamlandı · ⚠️ Sorunlu
@@ -324,16 +324,16 @@ Teslimat: `pixel_connector/` (`__main__`, `relay`, `crypto`, `session`, `peers`,
 
 ### Aşama 14 — Arayüz (Frontend Mühendisi)
 Teslimat: `web/js/control.js`, `prompt.js`, `devices.js`, `usage.js`; `main.js`, `ui.js`, `cloud.js`, `index.html`, `style.css`, `sw.js` (VERSION artırımı) düzenlemeleri; `vercel.json` CSP ve `/connector/*` başlıkları (V3.md §11, §13.5, §17.3).
-- [ ] `DeviceHub`: varlık (presence), cihaz başına kanal, istek/yanıt zaman aşımları, görev akışları, `agent.watch`
-- [ ] Ayrıntılar panelinde görev kutusu: gönder (Ctrl+Enter), "Yeni sohbet", izin profili rozeti, akan çıktı (yalnızca `textContent` ile çalışan markdown-lite), araç satırları, Durdur, "Son görevler"
-- [ ] Canlı token sayacı, ajan ve cihaz için günlük toplamlar, bütçe göstergesi (yalnızca bütçe varsa yüzde), dürüstlük açıklamaları, `tr-TR` sayı biçimi
-- [ ] "Yeni ajan" penceresi: cihaz, çalışma klasörü ve alt klasör, motor, model, ad, izin profili, bütçe
-- [ ] "Cihazlar" sayfası: cihaz listesi, ajanlar, çalışma ortamları (başlat/durdur, model yükle/boşalt), eşleşen tarayıcılar ve iptal, 3 adımlı "Cihaz ekle" sihirbazı
-- [ ] Telefon düzeni: alt sekme çubuğu (Ofis · Ajanlar · Cihazlar), tam ekran ajan sayfası, altta sabit görev kutusu, geri dönüşte yeniden bağlanma ve `task.list`
-- [ ] Hata kodlarının Türkçe karşılıkları; çevrimdışı, eşleşmemiş ve meşgul durumları
-- [ ] v3 kapalıyken (röle yok ya da izleme bağlantısı) hiçbir v3 denetimi görünmez; yerel mod değişmez
+- [x] `DeviceHub`: varlık (presence), cihaz başına kanal, istek/yanıt zaman aşımları, görev akışları, `agent.watch`
+- [x] Ayrıntılar panelinde görev kutusu: gönder (Ctrl+Enter), "Yeni sohbet", izin profili rozeti, akan çıktı (yalnızca `textContent` ile çalışan markdown-lite), araç satırları, Durdur, "Son görevler"
+- [x] Canlı token sayacı, ajan ve cihaz için günlük toplamlar, bütçe göstergesi (yalnızca bütçe varsa yüzde), dürüstlük açıklamaları, `tr-TR` sayı biçimi
+- [x] "Yeni ajan" penceresi: cihaz, çalışma klasörü ve alt klasör, motor, model, ad, izin profili, bütçe
+- [x] "Cihazlar" sayfası: cihaz listesi, ajanlar, çalışma ortamları (başlat/durdur, model yükle/boşalt), eşleşen tarayıcılar ve iptal, 3 adımlı "Cihaz ekle" sihirbazı
+- [x] Telefon düzeni: alt sekme çubuğu (Ofis · Ajanlar · Cihazlar), tam ekran ajan sayfası, altta sabit görev kutusu, geri dönüşte yeniden bağlanma ve `task.list`
+- [x] Hata kodlarının Türkçe karşılıkları; çevrimdışı, eşleşmemiş ve meşgul durumları
+- [x] v3 kapalıyken (röle yok ya da izleme bağlantısı) hiçbir v3 denetimi görünmez; yerel mod değişmez
 
-**Kabul kriterleri:** Bağımlılık ve derleme adımı yok. `dev_server.py --demo --relay` ve gerçek bağlayıcı (sahte motorlar) ile headless Chrome'da şunlar çalışır: eşleştirme (doğru kod, yanlış kod, SAS reddi), ajan oluşturma, görev akışı, iptal, ikinci sekmeden izleme, çalışma ortamı denetimleri ve bütçe göstergesi. Çıktıdaki ve adlardaki XSS metinleri düz metin kalır. 390 ve 360 px genişlikte yatay kaydırma yoktur ve görev kutusu altta sabittir. Konsolda hata yoktur. `server.py --demo` ve v2 odası görsel ve davranışsal olarak değişmemiştir. Tüm testler geçer.
+**Kabul kriterleri:** Bağımlılık ve derleme adımı yok. `dev_server.py --demo --relay` ve gerçek bağlayıcı (sahte motorlar) ile headless Chrome'da şunlar çalışır: eşleştirme (doğru kod, yanlış kod, SAS reddi), ajan oluşturma, görev akışı, iptal, ikinci sekmeden izleme, çalışma ortamı denetimleri ve bütçe göstergesi. Çıktıdaki ve adlardaki XSS metinleri düz metin kalır. 390 ve 360 px genişlikte yatay kaydırma yoktur ve görev kutusu altta sabittir. Konsolda hata yoktur. `server.py --demo` ve v2 odası görsel ve davranışsal olarak değişmemiştir. Tüm testler geçer. ✔️
 
 ### Aşama 15 — Güvenlik İncelemesi & QA & Dokümantasyon (Güvenlik İnceleyici + QA Mühendisi)
 - [ ] V3.md §14'teki her tehdit satırının bir testle ya da yazılı bir notla doğrulanması; kripto kodunun satır satır incelenmesi
@@ -674,3 +674,20 @@ Her ajan işini bitirince buraya tarihli bir kayıt ekler (en yeni en altta).
   Kalan sınırlamalar: gerçek Claude Code (abonelik girişi) ve gerçek Ollama ile deneme Aşama 15'te kullanıcıyla yapılacak. Şunlar ancak orada doğrulanabilir: gerçek stream-json alanlarının kayıtlarla birebir uyumu, SIGINT'te turun düzgün kapanıp kapanmadığı, `--resume` hata metni, `rate_limit_event.resetsAt` birimi, `modelUsage` farkının gerçek oturumlarda doğruluğu, polkit kuralıyla Ollama başlatma ve durdurma, macOS launchd ve Windows Görev Zamanlayıcı. `sw.js` ve `vercel.json` içindeki `/connector/*` ayarları Aşama 14'e kaldı.
 
   Aşama 13 tamamlandı. Sıradaki adım: Aşama 14 (Arayüz).
+
+- **2026-10-19 — Aşama 14 (Frontend Mühendisi):** v3 arayüzü tamamlandı. Yeni modüller: `web/js/control.js` (`DeviceHub`: varlık, cihaz başına şifreli kanal, istek/yanıt zaman aşımları, görev akışları, `agent.watch`, eşleştirme, Türkçe hata metinleri), `prompt.js` (ayrıntılar panelinde görev kutusu, Ctrl+Enter, "Yeni sohbet", izin profili rozeti, yalnızca DOM düğümleriyle çalışan markdown-lite akan çıktı, araç satırları, Durdur, "Son görevler", ajan bütçesi), `devices.js` ("Cihazlar" sayfası, 3 adımlı "Cihaz ekle" sihirbazı ve SAS, "Yeni ajan" penceresi, çalışma ortamı ve model denetimleri, eşleşen tarayıcılar ve iptal) ve `usage.js` (`tr-TR` sayılar, "12,4 B" / "1,2 Mn", maliyet etiketleri, bütçe göstergesi, dürüstlük açıklamaları). `main.js`, `ui.js`, `cloud.js`, `index.html`, `style.css` düzenlendi. Telefonda alt sekme çubuğu (Ofis · Ajanlar · Cihazlar), tam ekran ajan sayfası ve altta sabit görev kutusu var. `vercel.json`: CSP'ye röle adresi ve `/connector/*` başlıkları eklendi. `dev_server.py` aynı başlıkları veriyor. `sw.js`: `/connector/*` yalnızca ağdan, `VERSION` `po-v3.0.0`. v3 modülleri yalnızca röle ayarlı ve yazma anahtarıyla açılmış bir bulut odasında yükleniyor; yerel mod ve v2 odası değişmedi.
+
+  Başarısız test düzeltildi: `test_v3_ui.py`'deki son bekleme (eşleşme kaldırıldıktan sonra) `document.querySelector(...)` ifadesini doğrudan döndürüyordu. Bulunan DOM düğümü CDP üzerinden `{}` olarak geliyor ve Python'da yanlış sayılıyordu. Yani arayüz doğruydu ("eşleşmemiş" uyarısı görünüyordu), test hatalıydı. İfade `!!` ile mantıksal değere çevrildi. Ayrıca eşleşme kaldırıldıktan sonra görev kutusunun ve "⌨" rozetinin kalmadığı da artık doğrulanıyor.
+
+  Ekran görüntüleri incelenince iki görsel sorun düzeltildi. Telefonda alt sekme çubuğu ajan sayfasındaki "Gönder" düğmesini örtüyordu; ajan sayfası açıkken sekme çubuğu artık gizleniyor (← ile geri dönülüyor). Eşleştirme penceresinde "Eşleştir" düğmesi kod kutusundan kısaydı; ikisi artık aynı yükseklikte. Ollama hız notu artık ondalık virgül kullanıyor ("41,7 token/sn"). Bunun için `engines/ollama.py` değişti, `pixel-connector.pyz` ve `SHA256SUMS` yeniden üretildi.
+
+  Doğrulama (boş portlar, geçici HOME, yalnızca başlatılan süreçler durduruldu, `~/.claude` ve gerçek `~/.pixel-office` kullanılmadı):
+  - `test_v3_ui.py` headless Chrome'da tüm akışı çalıştırıyor: eşleştirme (yanlış kod, SAS reddi, doğru kod ve eşleşen SAS), çalışma ortamı başlat/durdur ("Durdurulamadı (çıkış kodu 1)"), model yükle/boşalt, Ollama ve Claude ajanı oluşturma, karakterin ofise girmesi, akan çıktı, ofiste çalışıyor → kahve, iptal, araç satırları, "API eşdeğeri tahmini" ve "maliyet yok" etiketleri, bütçe göstergesi ve engelleme, ikinci sekmeden izleme, "Son görevler", eşleşmemiş ikinci tarayıcı (karakter var, görev kutusu yok), 390 ve 360 px telefon düzeni (yatay kaydırma yok, görev kutusu altta sabit, düğmeler ≥ 44 px), eşleşmeyi kaldırma, konsolda hata yok. Ad ve çıktıdaki XSS metinleri düz metin kaldı. Röle olmayan v2 odasında hiçbir v3 denetimi görünmüyor.
+  - Aynı senaryo ayrı süreçlerle de çalıştırıldı: `dev_server.py --demo --relay`, gerçek `python3 -m pixel_connector run` (eşleştirme yerel denetim API'si üzerinden), sahte Ollama ve sahte `claude`. Sonuç başarılı.
+  - Ekran görüntüleri incelendi: masaüstünde ofis ve görev paneli (akan çıktı, kalın yazı, kod bloğu, `<script>` düz metin), cihazlar sayfası (çalışma ortamları, model durumu, eşleşen tarayıcılar), SAS'lı eşleştirme penceresi, yeni ajan penceresi, eşleşmemiş tarayıcı, telefonda ajan sayfası ve cihazlar sekmesi.
+
+  Sonuç: `python3 -m unittest discover -s tests` → 452 test, hepsi geçiyor (1 atlanan, önceki gibi). Sapmalar V3.md §20 "Phase 14 deviations" altında.
+
+  Bilinen sınırlamalar: CSP'deki röle adresi (`wss://pixel-relay.timur.workers.dev`) örnek alt alan adıdır; kullanıcı kendi `workers.dev` adresini doğrulamalıdır. Kuyruk/meşgul, klasör reddi ve çevrimdışı cihaz metinleri kodda var ama Chrome'da uçtan uca sürülmedi. `/connector/*.pyz` başlık sırası ve gerçek telefonda PWA arka plandan dönüşü Aşama 15'te dağıtılmış ortamda denenecek.
+
+  Aşama 14 tamamlandı. Sıradaki adım: Aşama 15 (Güvenlik İncelemesi & QA & Dokümantasyon).

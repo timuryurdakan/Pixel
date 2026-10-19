@@ -1,13 +1,14 @@
 // Pixel Office — service worker (CLOUD.md §10.2). Registered only in cloud mode.
-// /api/* and /hook/* are never intercepted. Navigations: network-first, offline fallback to the cached
+// /api/*, /hook/* and /connector/* are never intercepted (network only). Navigations: network-first, offline fallback to the cached
 // /index.html. Other same-origin GETs: stale-while-revalidate.
 // Bump VERSION on every release (Phase 10 checklist).
 
-const VERSION = 'po-v2.1.0';
+const VERSION = 'po-v3.0.0';
 const SHELL = [
   '/', '/index.html', '/css/style.css',
   '/js/main.js', '/js/office.js', '/js/pathfinding.js', '/js/agents.js', '/js/renderer.js', '/js/ui.js',
   '/js/sprites.js', '/js/transport.js', '/js/cloud.js', '/js/pip.js',
+  '/js/relay.js', '/js/e2e.js', '/js/idb.js', '/js/control.js', '/js/prompt.js', '/js/devices.js', '/js/usage.js',
   '/rehber.html', '/css/guide.css', '/js/guide.js',
   '/manifest.webmanifest',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png', '/icons/apple-touch-icon.png',
@@ -33,7 +34,8 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith('/api/') || url.pathname === '/api' || url.pathname.startsWith('/hook/')) return;  // network only
+  if (url.pathname.startsWith('/api/') || url.pathname === '/api' || url.pathname.startsWith('/hook/')
+      || url.pathname.startsWith('/connector/')) return;  // network only
   if (url.pathname === '/sw.js') return;
 
   if (req.mode === 'navigate') {

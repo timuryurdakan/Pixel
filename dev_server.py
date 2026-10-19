@@ -135,6 +135,9 @@ class DevHandler(ApiHandler):
         rel_parts = target.relative_to(root).parts
         if rel_parts and rel_parts[0] == "hook":
             ctype, cache = "text/plain; charset=utf-8", "no-cache"
+        elif rel_parts and rel_parts[0] == "connector":      # same as vercel.json (V3.md §13.5)
+            ctype = "application/zip" if target.suffix == ".pyz" else "text/plain; charset=utf-8"
+            cache = "no-cache"
         else:
             ctype = MIME_TYPES.get(target.suffix.lower()) or mimetypes.guess_type(target.name)[0] \
                 or "application/octet-stream"

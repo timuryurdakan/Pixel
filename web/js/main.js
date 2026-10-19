@@ -34,6 +34,8 @@ let loopToken = 0;
 const agents = new Map();
 /** Optimistic renames: id → {name, nameSource, defaultName, until} (CLOUD.md §15.1). */
 const overrides = new Map();
+/** v3 device control (V3.md §11): set up only for a cloud room with the write key and a configured relay. */
+let v3 = null;              // {hub, panel, devices, wizard, newAgent, pendingSelect, setTab}
 
 cloud.captureInstallPrompt();
 
@@ -43,15 +45,36 @@ function sortedAgents() {
 
 function refreshUI() {
   const list = sortedAgents();
+  if (v3) v3.hub.updateRoom(list);
   ui.setAgents(list);
   if (selectedId && !agents.has(selectedId)) select(null);
   const strip = document.getElementById('mini-strip');
   if (strip) strip.textContent = summaryText(list);
+  if (v3) v3Sync();
 }
 
 function select(id) {
   selectedId = id || null;
   ui.setSelected(selectedId);
+  if (v3) v3Sync();
+}
+
+/** v3: details-panel control section, phone sheet and toolbar state follow the selection and the hub. */
+function v3Sync() {
+  const a = selectedId ? agents.get(selectedId) : null;
+  if (v3.pendingSelect) {
+    const p = v3.pendingSelect;
+    const hit = [...agents.values()].find((x) => x.control && x.control.device === p.device && x.control.agent === p.agent);
+    if (hit) { v3.pendingSelect = null; select(hit.id); return; }
+  }
+  v3.panel.show(a || null);
+  const panel = document.getElementById('panel');
+  panel.classList.toggle('has-ctl', !!(a && a.control));
+  document.body.classList.toggle('has-sel', !!a);
+  document.getElementById('sheet-head').hidden = !a;
+  document.getElementById('sheet-name').textContent = a ? a.name : '';
+  const anyReady = [...v3.hub.devices.values()].some((d) => d.ready);
+  document.getElementById('btn-newagent').hidden = !anyReady;
 }
 
 /** Apply a pending optimistic rename; dropped once the server shows the name, or after 60 s. */
@@ -456,11 +479,89 @@ function bootCloud(config) {
   setupMiniButton();
   cloud.enableInstallButton();
   if (!viewMini) cloud.registerServiceWorker();
+  if (key && config && config.relay && !viewMini) setupV3(roomParam, key).catch((e) => console.warn('[pixel-office] v3 controls unavailable', e));
   if (params.get('new') === '1') {
     // Just created: drop the marker and open the invite dialog once.
     try { history.replaceState(history.state, '', `/?room=${roomParam}`); } catch { /* ignore */ }
     if (key) document.getElementById('btn-invite').click();
   }
+}
+
+// --- v3: device control (V3.md §11) ---------------------------------------------------------------------
+async function setupV3(roomId, key) {
+  const [{ DeviceHub }, { PromptPanel }, { DevicesPage, PairWizard, NewAgentDialog }, { fmtCompact: fmtTok }] = await Promise.all([
+    import('./control.js'), import('./prompt.js'), import('./devices.js'), import('./usage.js')]);
+  const $ = (id) => document.getElementById(id);
+  const hub = new DeviceHub({ roomId, writeKey: key,
+    isVisible: () => document.visibilityState !== 'hidden' || !!(mini && mini.window) });
+  try {
+    await hub.init();
+  } catch (err) {
+    console.warn('[pixel-office] no key store for device pairing', err);
+    return;   // e.g. IndexedDB disabled: the v2 room keeps working, no v3 controls
+  }
+  const toast = (t, o) => ui.toast(t, o);
+  const wizard = new PairWizard({ dialog: $('dlg-pair'), hub, toast, copy: (t) => cloud.copyText(t),
+    commands: (name) => cloud.buildConnectorCommands({ origin: location.origin, room: roomId, key, name: name || cloud.getName() }),
+    onPaired: () => { if (devices.isOpen) devices.render(); } });
+  const pairName = $('pair-name');
+  if (pairName) pairName.value = cloud.getName();
+  const newAgent = new NewAgentDialog({ dialog: $('dlg-agent'), hub, toast,
+    onCreated: (ctl) => {
+      v3.pendingSelect = ctl;
+      if (devices.isOpen) { devices.close(); setTab(phone() ? 'agents' : 'office'); }
+      if (transport && transport.boost) transport.boost({ ms: 60000 });
+      if (transport) transport.pollNow({ bust: true });
+    } });
+  const setTab = (t) => {
+    document.body.dataset.tab = t;
+    for (const b of document.querySelectorAll('#tabbar [data-tab]')) {
+      if (b.dataset.tab === t) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    }
+    if (t === 'devices') devices.open(); else if (devices.isOpen) devices.close();
+    if (t !== 'devices') fitCanvas();
+  };
+  const phone = () => window.matchMedia('(max-width: 600px)').matches;
+  const devices = new DevicesPage({ hub, root: $('devices-page'), wizard, newAgent, toast,
+    onSelectAgent: (ctl) => {
+      const hit = [...agents.values()].find((x) => x.control && x.control.device === ctl.device && x.control.agent === ctl.agent);
+      devices.close();
+      setTab(phone() ? 'agents' : 'office');
+      if (hit) select(hit.id); else { v3.pendingSelect = ctl; toast('Ajan ofise girince açılacak'); }
+    },
+    onToggle: (open) => { if (!open && document.body.dataset.tab === 'devices') setTab('office'); } });
+  let boosted = false;
+  const panel = new PromptPanel({ hub, slot: $('agent-control'), toast, headStop: $('sheet-stop'),
+    onPair: () => wizard.open(2), onDevices: () => devices.open(),
+    onActivity: (running) => {
+      hub.need('task', running);
+      if (running && !boosted && transport && transport.boost) transport.boost({ ms: 120000 });
+      if (!running && transport && transport.boost) transport.boost({ ms: 30000 });
+      boosted = running;
+    } });
+  v3 = { hub, panel, devices, wizard, newAgent, pendingSelect: null, setTab };
+  window.pixelOffice.v3 = v3;
+
+  ui.ctlInfo = (a) => {
+    if (!a.control || !hub.isReady(a.control.device)) return null;
+    const info = hub.agentInfo(a.control);
+    const t = info && info.today && Number.isFinite(info.today.tokens) ? info.today.tokens : null;
+    return { tokens: t === null ? null : `bugün ${fmtTok(t)} token` };
+  };
+  hub.on('change', () => refreshUI());
+  hub.on('notice', (t) => toast(t, { error: true }));
+
+  document.body.classList.add('v3');
+  document.body.dataset.tab = 'office';
+  $('btn-devices').hidden = false;
+  $('btn-devices').addEventListener('click', () => (devices.isOpen ? devices.close() : devices.open()));
+  $('btn-newagent').addEventListener('click', () => newAgent.open());
+  $('tabbar').hidden = false;
+  for (const b of document.querySelectorAll('#tabbar [data-tab]')) {
+    b.addEventListener('click', () => { if (selectedId) select(null); setTab(b.dataset.tab); });
+  }
+  $('sheet-back').addEventListener('click', () => select(null));
+  refreshUI();
 }
 
 async function boot() {

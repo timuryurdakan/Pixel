@@ -178,6 +178,19 @@ export function buildSetupCommands({ origin, room, key, name, ownerId }) {
   };
 }
 
+/** v3 "Cihaz ekle" step 1 (V3.md §5.4, §11.5): connector installers with this room's values, same quoting as above. */
+export function buildConnectorCommands({ origin, room, key, name }) {
+  const n = cmdName(name);
+  const o = origin;
+  const unix = `curl -fsSL ${o}/connector/install.sh | sh -s -- --server ${o} --room ${room} --key ${key} --name '${n}'`;
+  return {
+    linux: unix,
+    mac: unix,
+    win: `irm ${o}/connector/install.ps1 -OutFile install.ps1; powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Server ${o} -Room ${room} -Key ${key} -Name '${n}'`,
+    pair: 'pixel-connector pair',
+  };
+}
+
 // --- landing (§9.3) ---------------------------------------------------------------------------------
 /**
  * Show the landing overlay. Resolves never (navigation replaces the page).
