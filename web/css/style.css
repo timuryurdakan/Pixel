@@ -791,3 +791,37 @@ input.pair-code { font: bold 20px/1.2 var(--font) !important; letter-spacing: 2p
   .pair-form label { flex-basis: 100%; }
   .pair-form .btn { flex: 1; }
 }
+
+/* ---------- A1: phone polish (≤ 600 px) ---------- */
+@media (max-width: 600px) {
+  /* The tab bar is 44 px buttons + 2×4 px padding + 3 px border = 55 px. */
+  body.v3 { padding-bottom: calc(56px + env(safe-area-inset-bottom)); }
+
+  /* Empty output: the generic `.empty` placeholder rule (agent list) also matched `.ctl-outwrap.empty`
+     and padded it into a box-inside-a-box. Before the first task show one compact dashed line instead. */
+  .ctl-outwrap.empty { padding: 0; text-align: left; cursor: auto; background: transparent; border-style: dashed; border-color: var(--line); }
+  .ctl-outwrap.empty .ctl-out { min-height: 0; padding: 10px; }
+  .ctl-outwrap.empty:has(.ctl-run:empty) .ctl-out-head { display: none; }
+  .ctl-outwrap.empty .ctl-foot:has(.ctl-live:empty):has(.ctl-cost:empty) { display: none; }
+
+  /* The compose box always sits at the bottom of the sheet, even when the content above is short. */
+  .ctl .ctl-compose { margin-top: auto; }
+
+  /* Touch targets ≥ 44 px. */
+  .sheet-back, #sheet-stop { min-height: 44px; }
+  .sheet-back { min-width: 44px; }
+  body.v3.has-sel .det-head .close { display: none; }          /* ← in the sheet header does the same */
+  .edit-name { min-width: 44px; min-height: 44px; }
+  .ctl-row .check { min-height: 44px; }
+  .ctl .btn.small, .devices-page .btn.small, .dlg .btn.small { min-height: 44px; padding: 4px 12px; font-size: 12px; }
+  .devices-page .link-btn { display: inline-flex; align-items: center; min-height: 44px; }
+  .ctl-recent summary, .budget-edit summary { padding: 12px 0; line-height: 20px; }
+  .recent-btn { min-height: 44px; align-content: center; }
+  .dev-agent-list li, .peer-list li { padding: 2px 2px 2px 8px; }
+  .rt-models li { padding-left: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conn-status::before { animation: none !important; }
+  .btn, .btn:active { transition: none; transform: none; }
+}
