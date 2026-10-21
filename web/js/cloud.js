@@ -285,7 +285,12 @@ export function setupRoomUI({ roomId, key, ui, onSetupDialog = null }) {
   roomName.hidden = false;
   const r0 = getRoom(roomId);
   roomName.textContent = (r0 && r0.name) || 'Oda';
-  if (!key) roomName.title = 'Yalnızca izleme bağlantısı';
+  if (!key) {
+    // v2.md E4: opened with the view link (no write key) → say so, instead of silently missing controls.
+    roomName.title = 'Yalnızca izleme bağlantısı';
+    $('view-only').hidden = false;
+    $('view-only-hint').hidden = false;
+  }
 
   // Copy buttons inside dialogs.
   for (const b of document.querySelectorAll('[data-copy]')) {
@@ -377,9 +382,44 @@ function renderCmd(box, text, ui) {
 }
 
 // --- PWA (§10) ---------------------------------------------------------------------------------------
+/** Release of the files this page was loaded from; equal to sw.js VERSION (tests/test_release.py checks it). */
+export const APP_VERSION = 'po-v3.0.7';
+const SW_VERSION_RE = /^po-v[0-9.]{1,20}$/;
+
+/** v2.md H16: a newer service worker took over while this (older) page was open → offer a reload. */
+function showUpdateNotice() {
+  if (document.getElementById('update-toast')) return;
+  const box = document.createElement('div');
+  box.id = 'update-toast';
+  box.className = 'update-toast';
+  box.setAttribute('role', 'status');
+  const text = document.createElement('span');
+  text.textContent = 'Yeni sürüm hazır';
+  const reload = document.createElement('button');
+  reload.type = 'button';
+  reload.className = 'btn small accent';
+  reload.textContent = 'Yenile';
+  reload.addEventListener('click', () => location.reload());
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'btn small ghost';
+  close.textContent = '✕';
+  close.setAttribute('aria-label', 'Kapat');
+  close.addEventListener('click', () => box.remove());
+  box.append(text, reload, close);
+  document.body.appendChild(box);
+}
+
 export function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return Promise.resolve(null);
-  return navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((err) => {
+  const sw = navigator.serviceWorker;
+  sw.addEventListener('message', (ev) => {
+    const d = ev.data;
+    if (!d || d.type !== 'po-sw-version' || typeof d.version !== 'string' || !SW_VERSION_RE.test(d.version)) return;
+    if (d.version !== APP_VERSION) showUpdateNotice();
+  });
+  if (typeof sw.startMessages === 'function') sw.startMessages();
+  return sw.register('/sw.js', { scope: '/' }).catch((err) => {
     console.warn('[pixel-office] service worker registration failed', err);
     return null;
   });

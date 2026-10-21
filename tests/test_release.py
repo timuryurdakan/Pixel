@@ -219,6 +219,67 @@ class ReleaseFilesTests(unittest.TestCase):
         self.assertNotIn("'/api", sw.split("const SHELL")[1].split("];")[0])
 
 
+WEB = ROOT / "web"
+_IMPORT_RE = re.compile(r"""(?:^|[;\s])(?:import|export)\s[^'"`;]*?\sfrom\s*['"]([^'"]+)['"]|^\s*import\s*['"]([^'"]+)['"]|\bimport\(\s*['"]([^'"]+)['"]\s*\)""", re.M)
+_HTML_ASSET_RE = re.compile(r"""<(?:script[^>]*\ssrc|link[^>]*\shref)=["']([^"'#?]+)["']""", re.I)
+
+
+def _sw_shell():
+    sw = (WEB / "sw.js").read_text()
+    return set(re.findall(r"'(/[^']*)'", sw.split("const SHELL")[1].split("];")[0]))
+
+
+def _module_graph(entries):
+    """Every module reachable from `entries` (web paths like '/js/main.js') through static imports, re-exports and
+    literal dynamic import('./x.js') calls."""
+    seen, todo = set(), list(entries)
+    while todo:
+        path = todo.pop()
+        if path in seen:
+            continue
+        seen.add(path)
+        src = (WEB / path.lstrip("/")).read_text(encoding="utf-8")
+        for m in _IMPORT_RE.finditer(src):
+            spec = next(g for g in m.groups() if g)
+            if not spec.startswith("."):
+                continue
+            todo.append("/" + os.path.normpath(os.path.join(os.path.dirname(path.lstrip("/")), spec)))
+    return seen
+
+
+class ServiceWorkerShellTests(unittest.TestCase):
+    """v2.md E3: the offline cache (sw.js SHELL) holds every module and stylesheet the cached pages load."""
+
+    def test_shell_covers_the_module_graph_of_every_cached_page(self):
+        shell = _sw_shell()
+        pages = sorted(p for p in shell if p.endswith(".html"))
+        self.assertIn("/index.html", pages)
+        for page in pages:
+            html = (WEB / page.lstrip("/")).read_text(encoding="utf-8")
+            assets = ["/" + os.path.normpath(os.path.join(os.path.dirname(page.lstrip("/")), a))
+                      for a in _HTML_ASSET_RE.findall(html) if not a.startswith(("http:", "https:", "data:", "/"))]
+            assets += [a for a in _HTML_ASSET_RE.findall(html) if a.startswith("/") and not a.startswith("//")]
+            entries = [a for a in assets if a.endswith(".js")]
+            self.assertTrue(entries, page)
+            needed = _module_graph(entries) | {a for a in assets if a.endswith((".css", ".webmanifest"))}
+            with self.subTest(page=page):
+                self.assertEqual(sorted(needed - shell), [], "missing from sw.js SHELL")
+        graph = _module_graph(["/js/main.js"])
+        for lazy in ("/js/control.js", "/js/prompt.js", "/js/devices.js", "/js/usage.js", "/js/fx.js", "/js/audio.js"):
+            self.assertIn(lazy, graph)
+
+    def test_import_parser_sees_static_and_dynamic_imports(self):
+        src = "import { a } from './a.js';\nexport { b } from \"./b.js\";\nimport './c.js';\nconst x = await import('./d.js');\n"
+        found = [next(g for g in m.groups() if g) for m in _IMPORT_RE.finditer(src)]
+        self.assertEqual(found, ["./a.js", "./b.js", "./c.js", "./d.js"])
+
+    def test_page_version_matches_the_service_worker(self):
+        sw = (WEB / "sw.js").read_text()
+        cloud = (WEB / "js" / "cloud.js").read_text()
+        v = re.search(r"const VERSION = '(po-v[0-9.]+)';", sw).group(1)
+        self.assertIn("export const APP_VERSION = '%s';" % v, cloud)
+
+
 class InstallerSymlinkTests(unittest.TestCase):
     @unittest.skipIf(os.name == "nt", "symlinks")
     def test_install_and_uninstall_keep_a_symlinked_settings_file(self):

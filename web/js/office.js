@@ -23,6 +23,14 @@ export const DOOR = { x: 4, y: 13 };
 export const SPAWN = { x: 4, y: 12 };
 
 const WALKABLE = new Set(['.', '=', 'D']);
+
+/**
+ * The office cat sleeps on the lower-right corner of the lounge rug (v2.md H3). The tile is no spot (regular or
+ * overflow) and nobody needs it to reach anything, so it is taken out of the walkable grid: characters walk around
+ * the cat instead of over it.
+ */
+export const CAT_TILE = Object.freeze({ x: 20, y: 6 });
+const isDecorTile = (x, y) => x === CAT_TILE.x && y === CAT_TILE.y;
 const SPOT_TILES = new Set(['h', 'c', 'b']);
 
 /** Spot kind → facing when settled. */
@@ -60,7 +68,7 @@ export class Office {
   }
 
   isWalkable(x, y) {
-    return WALKABLE.has(this.tileAt(x, y));
+    return WALKABLE.has(this.tileAt(x, y)) && !isDecorTile(x, y);
   }
 
   isSpotTile(x, y) {
@@ -70,6 +78,7 @@ export class Office {
   /** Walkable, or a spot tile that is the path's start or goal (no through-traffic). */
   isPassable(x, y, start, goal) {
     const ch = this.tileAt(x, y);
+    if (isDecorTile(x, y)) return false;
     if (WALKABLE.has(ch)) return true;
     if (!SPOT_TILES.has(ch)) return false;
     return (start && start.x === x && start.y === y) || (goal && goal.x === x && goal.y === y);

@@ -2,10 +2,11 @@
 // Cached static background, y-sorted furniture + characters, bubbles, crisp labels.
 
 import { getCharacterFrame, getTileSprite, getFurnitureSprite, getBubbleSprite, getToolIcon, getCatFrame, CHAR_W, CHAR_H } from './sprites.js';
-import { TILE, SCALE } from './office.js';
-import { ParticleSystem, LightingEngine, AgentReactions } from './fx.js';
+import { TILE, SCALE, CAT_TILE } from './office.js';
+import { ParticleSystem, LightingEngine, AgentReactions, STEP_DUST_PER_S, CODE_SPARKLE_PER_S } from './fx.js';
 
 const DESK_ON_STATES = new Set(['working', 'thinking']);
+export const CAT_ID = 'mascot-cat';
 export const LABEL_MAX = 18;
 
 /**
@@ -22,6 +23,15 @@ export function labelText(agent) {
 function clip(s, max) {
   const cps = [...s];
   return cps.length > max ? cps.slice(0, max - 1).join('') + '…' : s;
+}
+
+/**
+ * The bubble to draw: a click emote replaces the state bubble for a moment, except the blinking "!" of an agent
+ * that waits for the user, which must never be hidden (v2.md H35).
+ */
+export function bubbleWithEmote(stateBubble, emote) {
+  if (!emote || (stateBubble && stateBubble.kind === 'alert')) return stateBubble;
+  return { kind: emote };
 }
 
 export class Renderer {
@@ -45,9 +55,9 @@ export class Renderer {
     this.lighting = new LightingEngine();
     this.reactions = new AgentReactions();
     this.cat = {
-      id: 'mascot-cat',
-      x: 13 * TILE + 4,
-      y: 7 * TILE + 4,
+      id: CAT_ID,
+      x: CAT_TILE.x * TILE,
+      y: CAT_TILE.y * TILE,
       w: 16,
       h: 16,
       wakeTime: 0,
@@ -167,10 +177,10 @@ export class Renderer {
     for (const c of characters) {
       if (c.alpha <= 0) continue;
 
-      // FX particle triggers
-      if (c.anim === 'walk' && Math.random() < 0.22) {
+      // FX particles: a rate per second (× frame time), so 60/120/144 Hz screens spawn the same amount (v2.md H15).
+      if (c.anim === 'walk' && this.particles.chance(STEP_DUST_PER_S, dt)) {
         this.particles.spawnStepDust(c.px, c.py);
-      } else if (c.anim === 'type' && Math.random() < 0.08) {
+      } else if (c.anim === 'type' && this.particles.chance(CODE_SPARKLE_PER_S, dt)) {
         this.particles.spawnCodeSparkle(c.px + (Math.random() - 0.5) * 8, c.py - 12);
       }
 
@@ -197,7 +207,7 @@ export class Renderer {
       });
     }
 
-    // Mascot Cat (curled up on rug, occasionally sits or reacts)
+    // Mascot cat: curled up on the rug corner (CAT_TILE, not walkable), sits up now and then or when clicked.
     const cat = this.cat;
     const catHop = this.reactions.getHopOffset(cat.id);
     const isCatAwake = (time - cat.wakeTime) < 5.0 || ((Math.floor(time) % 24) < 4);
@@ -220,8 +230,7 @@ export class Renderer {
 
     // Bubbles (world space, above all sprites).
     for (const c of characters) {
-      const emote = this.reactions.getEmote(c.id);
-      const b = emote ? { kind: emote } : c.bubble();
+      const b = bubbleWithEmote(c.bubble(), this.reactions.getEmote(c.id));
       if (!b || c.alpha < 1) continue;
       const phase = ((c.agent.colorSeed >>> 0) % 997) / 997;
       const bob = Math.round(Math.sin((time + phase) * Math.PI * 4));
@@ -280,18 +289,15 @@ export class Renderer {
     ctx.globalAlpha = 1;
   }
 
-  /** CSS px relative to the canvas → character id or null (topmost wins). */
+  /**
+   * CSS px relative to the canvas → character id, CAT_ID or null. Agents come first (topmost by sortY wins);
+   * the cat only when no agent is under the pointer (v2.md H3).
+   */
   pickCharacter(characters, canvasX, canvasY) {
     const rect = this.canvas.getBoundingClientRect();
     if (!rect.width || !rect.height) return null;
     const wx = (canvasX * this.worldW) / rect.width;
     const wy = (canvasY * this.worldH) / rect.height;
-
-    // Check mascot cat first
-    const cat = this.cat;
-    if (wx >= cat.x && wx < cat.x + cat.w && wy >= cat.y && wy < cat.y + cat.h) {
-      return cat.id;
-    }
 
     let best = null;
     for (const c of characters) {
@@ -301,6 +307,9 @@ export class Renderer {
         if (!best || c.sortY >= best.sortY) best = c;
       }
     }
-    return best ? best.id : null;
+    if (best) return best.id;
+    const cat = this.cat;
+    if (wx >= cat.x && wx < cat.x + cat.w && wy >= cat.y && wy < cat.y + cat.h) return cat.id;
+    return null;
   }
 }

@@ -174,7 +174,7 @@ Ortam değişkenleri yalnızca **yeni** dağıtımlarda geçerli olur:
 
 Hep **production** adresini (`<proje>.vercel.app` ya da kendi alan adınız) kullanın. Vercel'in "preview" dağıtım adresleri ücretsiz planda varsayılan olarak giriş ister ve arkadaşlarınız açamaz.
 
-Sonraki güncellemeler için `git push` yeterlidir, Vercel her push'ta yeniden dağıtır. Yeni sürüm yayımlarken `web/sw.js` içindeki `VERSION` değerini artırın; böylece yüklü uygulamalar yeni dosyaları hemen alır.
+Sonraki güncellemeler için `git push` yeterlidir, Vercel her push'ta yeniden dağıtır. Yeni sürüm yayımlarken `web/sw.js` içindeki `VERSION` değerini ve `web/js/cloud.js` içindeki `APP_VERSION` değerini birlikte artırın (testler ikisinin aynı olmasını denetler); böylece yüklü uygulamalar yeni dosyaları hemen alır, açık kalmış eski sekmelerde "Yeni sürüm hazır — Yenile" uyarısı çıkar.
 
 ### Arkadaşlar nasıl katılır
 
@@ -191,7 +191,7 @@ python3 ~/.pixel-office/pixel_hook.py doctor      # her şey yolunda mı?
 python3 ~/.pixel-office/pixel_hook.py uninstall   # yalnızca Pixel Office kancalarını kaldırır
 ```
 
-**Sadece izleme bağlantısı** (`#key=` olmadan) ile açılan oda yalnızca izlenebilir. Ajan bağlanamaz, adlar değiştirilemez. Ekranda göstermek ya da merak eden birine vermek için bunu kullanın.
+**Sadece izleme bağlantısı** (`#key=` olmadan) ile açılan oda yalnızca izlenebilir. Ajan bağlanamaz, adlar değiştirilemez. Üst çubukta "Yalnızca izleme" rozeti, ajan listesinin üstünde de kısa bir açıklama görünür. Ekranda göstermek ya da merak eden birine vermek için bunu kullanın.
 
 ### Uygulama olarak yükleme ve mini pencere
 
@@ -442,7 +442,10 @@ sonra `pixel-connector runtimes start ollama`.
 
 - **Cihazlar sekmesi / görev kutusu hiç görünmüyor.** `https://<site>/api/config` çıktısında `"features":["control"]` olmalı.
   `"relay":null` ise Vercel'de `RELAY_SECRET` ya da `PIXEL_RELAY_URL` eksik/yanlış ya da **Redeploy** yapılmadı. Odayı
-  izleme bağlantısıyla açtıysanız da görünmez (katılma bağlantısı gerekir).
+  izleme bağlantısıyla açtıysanız da görünmez (katılma bağlantısı gerekir); bu durumda üst çubukta "Yalnızca izleme" yazar.
+- **"Bu tarayıcıdaki oda anahtarı geçersiz".** Tarayıcıda kayıtlı yazma anahtarı bu odaya ait değil (röle bileti 401).
+  Odanın katılım bağlantısını (`#key=…` içeren) yeniden açın. **"Sunucuda röle ayarlı değil"** ise Vercel'de röle
+  ayarları (`RELAY_SECRET`, `PIXEL_RELAY_URL`) eksiktir.
 - **"Röle: güvenlik politikası (CSP) röle adresini engelliyor".** `vercel.json` içindeki CSP'de röle adresi yanlış:
   `python3 tools/set_relay_host.py <alt-alan>` çalıştırın, commit + push.
 - **"Röle şu an meşgul ya da günlük kota doldu".** Cloudflare ücretsiz Durable Objects kotası (günde 100.000 istek) dolmuş
@@ -646,7 +649,7 @@ Sprite önizleme: yerel sunucu çalışırken **http://localhost:8765/sprite-pre
 - **401 / "Missing or invalid write key".** Bağlantı izleme bağlantısıdır ya da `PIXEL_SECRET` değiştirilmiştir. Katılma bağlantısıyla kurulumu yeniden yapın.
 - **Arkadaşım siteyi açamıyor, Vercel giriş sayfası çıkıyor.** Preview adresini paylaşmışsınız. Production adresini (`<proje>.vercel.app`) kullanın.
 - **Mini pencere düğmesi yok ya da pencere her zaman üstte değil.** Chrome ya da Edge kullanın. Diğer tarayıcılarda her zaman üstte kalmayan bir açılır pencere açılır; mobilde düğme gizlenir.
-- **Yeni sürüm yüklenmiyor.** Yüklü uygulama ilk açılışta eski dosyaları gösterip arka planda yenilerini indirir; bir kez daha açın. Yayımlarken `web/sw.js` içindeki `VERSION` değerini artırmayı unutmayın.
+- **Yeni sürüm yüklenmiyor.** İnternet varken sayfa ve kod dosyaları her açılışta sunucudan alınır, önbellek yalnızca çevrimdışıyken kullanılır. Açık kalmış eski bir sekmede "Yeni sürüm hazır" uyarısındaki **Yenile** düğmesine basın. Yayımlarken `web/sw.js` içindeki `VERSION` ile `web/js/cloud.js` içindeki `APP_VERSION` değerini artırmayı unutmayın.
 
 ## Bilinen sınırlamalar
 

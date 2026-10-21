@@ -4,13 +4,41 @@
 import { TILE } from './office.js';
 
 /** Maximum number of active particles to guarantee constant memory & 60fps. */
-const MAX_PARTICLES = 48;
+export const MAX_PARTICLES = 48;
 
-/** Check for reduced motion preference. */
-const prefersReduced = () =>
-  typeof window !== 'undefined' &&
-  window.matchMedia &&
-  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** Particle spawn rates per second and character (were 0.22 / 0.08 per frame at 60 Hz). */
+export const STEP_DUST_PER_S = 13.2;
+export const CODE_SPARKLE_PER_S = 4.8;
+
+/** How often the day/sunset/night phase is re-read from the clock. */
+const PHASE_RECHECK_MS = 30000;
+
+const DUST_COLORS = ['#d29a68', '#c68b59', '#e8cbb0'];
+const SPARK_COLORS = ['#8fd3ff', '#ffd84a', '#4caf50', '#ffffff'];
+const STAR_ON_1 = 'rgba(255, 255, 255, 0.9)';
+const STAR_OFF_1 = 'rgba(255, 255, 255, 0.2)';
+const STAR_ON_2 = 'rgba(210, 230, 255, 0.8)';
+const STAR_OFF_2 = 'rgba(210, 230, 255, 0.1)';
+const GLOW_COLOR = { night: 'rgba(76, 175, 80, 0.22)', sunset: 'rgba(255, 215, 64, 0.18)' };
+const GLOW_RADIUS = 14;
+
+// "Reduce motion": one MediaQueryList, read once and updated by its change event (v2.md H15: it used to be
+// queried several times per frame).
+let reducedMql;
+let reducedMotion = false;
+
+/** Current prefers-reduced-motion value (cached; follows changes of the OS setting). */
+export function prefersReduced() {
+  if (reducedMql === undefined) {
+    reducedMql = typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+    reducedMotion = !!(reducedMql && reducedMql.matches);
+    if (reducedMql && reducedMql.addEventListener) {
+      reducedMql.addEventListener('change', (e) => { reducedMotion = e.matches; });
+    }
+  }
+  return reducedMotion;
+}
 
 // ---------------------------------------------------------------------------
 // Particle System
@@ -63,13 +91,33 @@ class Particle {
 }
 
 export class ParticleSystem {
-  constructor() {
+  /**
+   * @param {object} [o]
+   * @param {() => boolean} [o.isReduced]  reduced-motion check (tests inject one)
+   * @param {() => number} [o.random]
+   */
+  constructor({ isReduced = prefersReduced, random = Math.random } = {}) {
+    this.isReduced = isReduced;
+    this.random = random;
     // Fixed object pool to prevent garbage collection spikes.
     this.pool = Array.from({ length: MAX_PARTICLES }, () => new Particle());
   }
 
+  /** Number of live particles. */
+  get activeCount() {
+    let n = 0;
+    for (const p of this.pool) if (p.active) n++;
+    return n;
+  }
+
+  /** Should one particle be spawned in this frame for a rate of `perSecond` over `dt` seconds? */
+  chance(perSecond, dt) {
+    if (this.isReduced() || !(dt > 0)) return false;
+    return this.random() < perSecond * dt;
+  }
+
   _acquire() {
-    if (prefersReduced()) return null;
+    if (this.isReduced()) return null;
     return this.pool.find((p) => !p.active) || null;
   }
 
@@ -77,21 +125,21 @@ export class ParticleSystem {
   spawnStepDust(x, y) {
     const p = this._acquire();
     if (!p) return;
-    const vx = (Math.random() - 0.5) * 8;
-    const vy = -Math.random() * 4 - 2;
-    const colors = ['#d29a68', '#c68b59', '#e8cbb0'];
-    const col = colors[Math.floor(Math.random() * colors.length)];
-    p.init(x + (Math.random() - 0.5) * 4, y, vx, vy, 0.35, 1, col);
+    const rnd = this.random;
+    const vx = (rnd() - 0.5) * 8;
+    const vy = -rnd() * 4 - 2;
+    const col = DUST_COLORS[Math.floor(rnd() * DUST_COLORS.length)];
+    p.init(x + (rnd() - 0.5) * 4, y, vx, vy, 0.35, 1, col);
   }
 
   /** Spawn tiny coding sparks / keystroke piksels. */
   spawnCodeSparkle(x, y) {
     const p = this._acquire();
     if (!p) return;
-    const vx = (Math.random() - 0.5) * 12;
-    const vy = -Math.random() * 10 - 4;
-    const colors = ['#8fd3ff', '#ffd84a', '#4caf50', '#ffffff'];
-    const col = colors[Math.floor(Math.random() * colors.length)];
+    const rnd = this.random;
+    const vx = (rnd() - 0.5) * 12;
+    const vy = -rnd() * 10 - 4;
+    const col = SPARK_COLORS[Math.floor(rnd() * SPARK_COLORS.length)];
     p.init(x, y, vx, vy, 0.45, 1, col);
   }
 
@@ -121,18 +169,38 @@ export class ParticleSystem {
 // ---------------------------------------------------------------------------
 
 export class LightingEngine {
-  constructor() {
+  /**
+   * @param {object} [o]
+   * @param {() => boolean} [o.isReduced]
+   * @param {() => number} [o.now]   epoch ms (tests)
+   */
+  constructor({ isReduced = prefersReduced, now = Date.now } = {}) {
     /** @type {'auto' | 'day' | 'sunset' | 'night'} */
     this.mode = 'auto';
+    this.isReduced = isReduced;
+    this.now = now;
+    this._autoPhase = 'day';
+    this._phaseAt = -Infinity;
+    /** Gradients are built once per phase/position and reused every frame (v2.md H15). */
+    this._gradients = new Map();
   }
 
-  /** Determine effective ambient lighting phase. */
+  /** Determine effective ambient lighting phase (the clock is re-read at most every 30 s). */
   currentPhase() {
     if (this.mode !== 'auto') return this.mode;
-    const hour = new Date().getHours();
-    if (hour >= 20 || hour < 6) return 'night';
-    if (hour >= 17 && hour < 20) return 'sunset';
-    return 'day';
+    const t = this.now();
+    if (t - this._phaseAt >= PHASE_RECHECK_MS) {
+      this._phaseAt = t;
+      const hour = new Date(t).getHours();
+      this._autoPhase = hour >= 20 || hour < 6 ? 'night' : hour >= 17 ? 'sunset' : 'day';
+    }
+    return this._autoPhase;
+  }
+
+  _gradient(key, make) {
+    let g = this._gradients.get(key);
+    if (!g) { g = make(); this._gradients.set(key, g); }
+    return g;
   }
 
   /**
@@ -140,7 +208,7 @@ export class LightingEngine {
    * Runs in world space coordinates.
    */
   drawAtmosphere(ctx, office, time) {
-    if (prefersReduced()) return;
+    if (this.isReduced()) return;
     const phase = this.currentPhase();
     if (phase === 'day') return;
 
@@ -150,10 +218,12 @@ export class LightingEngine {
     ctx.save();
     if (phase === 'sunset') {
       // Warm golden hour wash
-      const grad = ctx.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, 'rgba(255, 140, 50, 0.16)');
-      grad.addColorStop(1, 'rgba(180, 80, 40, 0.08)');
-      ctx.fillStyle = grad;
+      ctx.fillStyle = this._gradient(`sunset|${h}`, () => {
+        const grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad.addColorStop(0, 'rgba(255, 140, 50, 0.16)');
+        grad.addColorStop(1, 'rgba(180, 80, 40, 0.08)');
+        return grad;
+      });
       ctx.fillRect(0, 0, w, h);
     } else if (phase === 'night') {
       // Deep blue cozy night overlay
@@ -171,11 +241,9 @@ export class LightingEngine {
       if (office.tileAt(x, 0) === 'W') {
         const wx = x * TILE;
         // Two subtle star pixels per window pane
-        const blink1 = Math.sin(time * 3 + x) > 0.3 ? 0.9 : 0.2;
-        const blink2 = Math.sin(time * 2.5 + x * 2) > 0.1 ? 0.8 : 0.1;
-        ctx.fillStyle = `rgba(255, 255, 255, ${blink1})`;
+        ctx.fillStyle = Math.sin(time * 3 + x) > 0.3 ? STAR_ON_1 : STAR_OFF_1;
         ctx.fillRect(wx + 4, 3, 1, 1);
-        ctx.fillStyle = `rgba(210, 230, 255, ${blink2})`;
+        ctx.fillStyle = Math.sin(time * 2.5 + x * 2) > 0.1 ? STAR_ON_2 : STAR_OFF_2;
         ctx.fillRect(wx + 11, 6, 1, 1);
       }
     }
@@ -185,21 +253,22 @@ export class LightingEngine {
    * Draw glowing monitor halo around active desks during night/sunset.
    */
   drawMonitorGlow(ctx, deskX, deskY) {
-    if (prefersReduced()) return;
+    if (this.isReduced()) return;
     const phase = this.currentPhase();
     if (phase === 'day') return;
 
     const cx = deskX * TILE + 8;
     const cy = deskY * TILE + 10;
-    const radius = 14;
 
     ctx.save();
-    const glow = ctx.createRadialGradient(cx, cy, 2, cx, cy, radius);
-    glow.addColorStop(0, phase === 'night' ? 'rgba(76, 175, 80, 0.22)' : 'rgba(255, 215, 64, 0.18)');
-    glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = glow;
+    ctx.fillStyle = this._gradient(`${phase}|${deskX}|${deskY}`, () => {
+      const glow = ctx.createRadialGradient(cx, cy, 2, cx, cy, GLOW_RADIUS);
+      glow.addColorStop(0, GLOW_COLOR[phase] || GLOW_COLOR.sunset);
+      glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      return glow;
+    });
     ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.arc(cx, cy, GLOW_RADIUS, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -210,14 +279,15 @@ export class LightingEngine {
 // ---------------------------------------------------------------------------
 
 export class AgentReactions {
-  constructor() {
+  constructor({ isReduced = prefersReduced } = {}) {
     /** Map of agentId -> { startTime, duration, type } */
     this.reactions = new Map();
+    this.isReduced = isReduced;
   }
 
   /** Trigger a happy bounce & emote when user clicks on a character. */
   trigger(agentId, type = 'happy') {
-    if (prefersReduced()) return;
+    if (this.isReduced()) return;
     this.reactions.set(agentId, {
       startTime: performance.now(),
       duration: 1200, // 1.2 seconds total

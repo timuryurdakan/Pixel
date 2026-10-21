@@ -16,9 +16,10 @@
   <header id="topbar">
     <h1 class="logo"><span class="logo-icon" aria-hidden="true"></span>Pixel Office</h1>
     <span id="room-name" class="room-name" hidden></span>
+    <span id="view-only" class="view-only" hidden title="Kumanda ve görev vermek için odanın katılım bağlantısını açın.">Yalnızca izleme</span>
     <span id="mode-badge" class="mode-badge" data-mode="">…</span>
     <span id="conn-status" class="conn-status" data-status="connecting" role="status" aria-live="polite">Bağlanıyor…</span>
-    <button type="button" id="btn-sound" class="btn btn-sound" title="Sesi aç / kapat" aria-label="Sesi aç veya kapat">🔊</button>
+    <button type="button" id="btn-sound" class="btn btn-sound" data-muted="true" aria-pressed="false" title="Sesi aç" aria-label="Ses">🔇</button>
     <nav id="toolbar" class="toolbar" aria-label="Oda araçları" hidden>
       <button type="button" id="btn-invite" class="btn" data-cloud hidden title="Odaya davet bağlantısını kopyala">Davet et</button>
       <button type="button" id="btn-setup" class="btn accent" data-cloud hidden title="Claude Code ya da başka bir ajanı bu odaya bağla">Ajan bağla</button>
@@ -45,6 +46,7 @@
     </header>
     <header class="panel-head">
       <h2>Ajanlar</h2>
+      <p id="view-only-hint" class="view-only-hint" hidden>Yalnızca izleme: kumanda ve görev vermek için odanın katılım bağlantısını açın.</p>
       <div id="summary" class="summary"></div>
     </header>
     <ul id="agent-list" class="agent-list"></ul>

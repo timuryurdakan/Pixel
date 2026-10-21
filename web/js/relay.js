@@ -24,6 +24,19 @@ const PEER_RE = /^[a-z2-7]{16}$/;
 const URL_RE = /^(wss:\/\/[A-Za-z0-9.-]+(:\d{1,5})?|ws:\/\/127\.0\.0\.1(:\d{1,5})?)\/v1\/rooms\/[a-z2-7]{26}\/ws$/;
 const OPEN = 1;
 
+const ERROR_CODE_RE = /^[a-z_]{1,40}$/;
+
+/**
+ * Error code of a refused ticket request (v2.md H2): 401/403 always mean the write key in this browser is wrong
+ * ('unauthorized'), otherwise the server's own code when it looks like one ('relay_not_configured' on 503, …),
+ * else 'ticket'. The UI maps codes to Turkish text; the raw server message is never shown.
+ */
+export function ticketErrorCode(status, body) {
+  if (status === 401 || status === 403) return 'unauthorized';
+  const code = body && typeof body.error === 'string' ? body.error : '';
+  return ERROR_CODE_RE.test(code) ? code : 'ticket';
+}
+
 export class RelayClient {
   /**
    * @param {object} o
@@ -62,7 +75,7 @@ export class RelayClient {
     this._onVis = () => this._visibilityChanged();
     this._onCsp = (ev) => this._cspViolation(ev);
     this._lastUrl = null;        // relay URL of the latest attempt (CSP violation matching)
-    this.lastError = null;       // 'csp' after a CSP block (cleared by the next welcome)
+    this.lastError = null;       // 'csp' after a CSP block, or the ticket error code (cleared by the next welcome)
     if (doc && doc.addEventListener) {
       doc.addEventListener('visibilitychange', this._onVis);
       doc.addEventListener('securitypolicyviolation', this._onCsp);
@@ -155,7 +168,8 @@ export class RelayClient {
       if (gen !== this._gen) return;
       if (e && e.fatal) {                     // 401 / 404 / 503: retrying cannot help
         this._wanted = false;
-        this._setStatus('idle', { error: e.code || 'ticket' });
+        this.lastError = e.code;
+        this._setStatus('idle', { error: e.code });
         return;
       }
       if (e && e.status === 429) this._failures += 1;
@@ -235,7 +249,7 @@ export class RelayClient {
     let d = null;
     try { d = await r.json(); } catch { /* handled below */ }
     if (r.status !== 200) {
-      throw { status: r.status, code: d && d.error, fatal: [400, 401, 403, 404, 503].includes(r.status) };
+      throw { status: r.status, code: ticketErrorCode(r.status, d), fatal: [400, 401, 403, 404, 503].includes(r.status) };
     }
     if (!d || typeof d.ticket !== 'string' || typeof d.url !== 'string' || !URL_RE.test(d.url)) throw { status: 0 };
     return d;

@@ -74,6 +74,38 @@ function formatClock(ms) {
   return d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+/** Attributes that identify a focusable element across re-renders (list rows, details links, rename actions). */
+const FOCUS_KEYS = ['data-id', 'data-select', 'data-act'];
+
+/**
+ * Replace a container's markup while keeping keyboard focus and scroll position (v2.md H14): the list and the
+ * details are rebuilt on every update, which used to drop the focus of a row chosen with the keyboard.
+ * Unchanged markup is not touched at all.
+ */
+const lastMarkup = new WeakMap();
+
+export function replaceMarkup(container, html) {
+  if (lastMarkup.get(container) === html && container.childNodes.length) return;
+  lastMarkup.set(container, html);
+  const active = container.ownerDocument.activeElement;
+  let focusKey = null;
+  if (active && active !== container && container.contains(active)) {
+    const attr = FOCUS_KEYS.find((a) => active.hasAttribute(a));
+    if (attr) focusKey = [attr, active.getAttribute(attr)];
+  }
+  const scrolled = [];
+  for (let el = container; el && el.nodeType === 1; el = el.parentElement) {
+    if (el.scrollTop) scrolled.push([el, el.scrollTop]);
+  }
+  container.innerHTML = html;
+  for (const [el, top] of scrolled) el.scrollTop = top;
+  if (!focusKey) return;
+  const [attr, value] = focusKey;
+  for (const el of container.querySelectorAll(`[${attr}]`)) {
+    if (el.getAttribute(attr) === value) { el.focus({ preventScroll: true }); return; }
+  }
+}
+
 export class UI {
   /**
    * @param {{list:HTMLElement, details:HTMLElement, status:HTMLElement, mode:HTMLElement, banner?:HTMLElement, summary?:HTMLElement}} els
@@ -157,7 +189,7 @@ export class UI {
     }
 
     if (!agents.length) {
-      els.list.innerHTML = this.mode === 'cloud'
+      replaceMarkup(els.list, this.mode === 'cloud'
         ? `<li class="empty">
         <div class="empty-icon">☕</div>
         <div><b>Henüz ajan yok.</b></div>
@@ -167,7 +199,7 @@ export class UI {
         <div class="empty-icon">☕</div>
         <div><b>Ofis şu an boş.</b></div>
         <div class="muted">Bir Claude Code oturumu başlatınca burada belirecek.<br>Denemek için: <code>python3 server.py --demo</code></div>
-      </li>`;
+      </li>`);
       this._renderDetails();
       return;
     }
@@ -206,7 +238,7 @@ export class UI {
     } else {
       for (const m of mains) pushTree(m);
     }
-    els.list.innerHTML = rows.join('');
+    replaceMarkup(els.list, rows.join(''));
     this._renderDetails();
   }
 
@@ -254,9 +286,9 @@ export class UI {
     if (!a) this.editing = null;
     if (!a) {
       el.classList.add('placeholder');
-      el.innerHTML = this.agents.length
+      replaceMarkup(el, this.agents.length
         ? '<p class="muted">Ayrıntıları görmek için ofisteki bir karaktere ya da listedeki bir ajana tıklayın.</p>'
-        : '';
+        : '');
       return;
     }
     el.classList.remove('placeholder');
@@ -264,7 +296,7 @@ export class UI {
     const parent = a.parentId ? this.byId.get(a.parentId) : null;
     const subs = this.agents.filter((x) => x.parentId === a.id);
     const row = (k, v, cls = '') => (v === null || v === undefined || v === '' ? '' : `<dt>${k}</dt><dd class="${cls}">${v}</dd>`);
-    el.innerHTML = `
+    replaceMarkup(el, `
       <div class="det-head">
         <span class="swatch big" style="background:${esc(this._color(a))}"></span>
         <div>
@@ -291,7 +323,7 @@ export class UI {
         ${row('Başladı', formatClock(num(a.startedAt)))}
         ${row('Son etkinlik', `<span class="ago" data-at="${num(a.updatedAt)}">${formatDuration(now - (num(a.updatedAt) || now))} önce</span>`)}
         ${row('Kimlik', `<code class="id">${esc(a.id)}</code>`)}
-      </dl>`;
+      </dl>`);
   }
 
   setConnection(status) {
@@ -366,6 +398,7 @@ export class UI {
     hint.textContent = 'Enter: kaydet · Esc: vazgeç';
     box.appendChild(hint);
     holder.replaceWith(box);
+    lastMarkup.delete(this.els.details);   // the DOM no longer matches the last markup
     input.focus();
     input.select();
 

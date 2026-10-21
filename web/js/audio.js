@@ -34,8 +34,18 @@ class SoundEngine {
     return this.muted;
   }
 
+  /**
+   * Browsers only allow audio after a user gesture. The AudioContext is created only during one (transient user
+   * activation), so a sound requested from a timer or a data update never starts the engine (v2.md H33).
+   */
+  _inGesture() {
+    const ua = typeof navigator !== 'undefined' ? navigator.userActivation : null;
+    return !ua || ua.isActive;
+  }
+
   _getCtx() {
     if (this.muted) return null;
+    if (!this._ctx && !this._inGesture()) return null;
     if (!this._ctx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return null;

@@ -807,11 +807,16 @@ upscaled; maskable variant with a 20% safe-zone border). The generated PNGs are 
 
 ### 10.2 `sw.js` (registered only in cloud mode)
 
-- `const VERSION = 'po-v2.0.0'`. Bump it on every release (Phase 10 checklist).
+- `const VERSION = 'po-v2.0.0'`. Bump it on every release (Phase 10 checklist), together with `APP_VERSION` in
+  `js/cloud.js` (Phase 20: `tests/test_release.py` checks that they are equal and that SHELL covers every module
+  reachable from the cached pages).
 - install: precache the shell (`/`, `index.html`, `css/style.css`, all `js/*.js`, manifest, icons). `skipWaiting()`.
-- activate: delete other caches, `clients.claim()`.
-- fetch: `/api/*` and `/hook/*` → not intercepted (network). Navigations → network-first, fall back to the cached `/index.html`
-  (ignoring the query). Other same-origin GETs → stale-while-revalidate.
+- activate: delete other caches, `clients.claim()`, then post `{type: 'po-sw-version', version}` to open pages; a page
+  whose `APP_VERSION` differs (an older tab) shows "Yeni sürüm hazır" with a **Yenile** button.
+- fetch: `/api/*`, `/hook/*`, `/connector/*` → not intercepted (network). Navigations → network-first, fall back to the
+  cached `/index.html` (ignoring the query). Code and pages (`*.js`, `*.css`, `*.html`, manifest) → network-first with
+  the cache as offline fallback (Phase 20, v2.md H16: stale-while-revalidate could mix modules of two releases on the
+  first load after a deploy). Icons → stale-while-revalidate.
 - Vercel header for `/sw.js`: `Cache-Control: no-cache`, so updates are picked up.
 
 ---

@@ -69,7 +69,22 @@ export const PAIR_ERROR_TEXT = {
   mac: 'Cihazın kimliği doğrulanamadı (araya girilmiş olabilir). Cihazda yeni kod üretin.',
   relay: 'Röleye bağlanılamadı. İnternet bağlantınızı kontrol edin.',
   busy: 'Başka bir eşleştirme sürüyor.',
+  unauthorized: 'Bu tarayıcıdaki oda anahtarı geçersiz. Odanın katılım bağlantısını (#key=… içeren) yeniden açın.',
+  relay_not_configured: 'Sunucuda röle ayarlı değil.',
+  relay_csp: ERROR_TEXT.relay_csp,
+  relay_ticket: 'Sunucu röle bileti vermedi. Biraz sonra tekrar deneyin.',
 };
+
+/**
+ * v2.md H2: the relay client stopped for good (detail.error of an `idle` status) → pairing error code.
+ * The wrong write key and a server without relay settings get their own text; network failures keep 'relay'.
+ */
+export function relayErrorCode(error) {
+  if (!error) return 'relay';
+  if (error === 'unauthorized' || error === 'relay_not_configured') return error;
+  if (error === 'csp') return 'relay_csp';
+  return 'relay_ticket';
+}
 
 /** "Chrome · Linux", "Safari · iPhone" … (≤ 40 chars, shown in the device terminal). */
 export function browserLabel(ua = (globalThis.navigator && navigator.userAgent) || '') {
@@ -145,7 +160,7 @@ export class DeviceHub {
     this._listeners = new Map();
     this._pairing = null;
     this._lastStatus = 'idle';
-    this.relayError = null;            // e.g. 'csp' when the page's CSP blocks the relay host
+    this.relayError = null;            // why the relay client stopped: 'csp', 'unauthorized', 'relay_not_configured' …
     this._roomNeeds = false;
     this._roomAgents = [];
   }
@@ -218,14 +233,14 @@ export class DeviceHub {
   _onStatus(s, detail) {
     const was = this._lastStatus;
     this._lastStatus = s;
-    if (s === 'live') this.relayError = null;
+    if (s === 'live' || s === 'connecting') this.relayError = null;   // a new attempt: forget the old reason
     else if (detail && detail.error) this.relayError = detail.error;
     if (detail && detail.error === 'csp') this._emit('notice', ERROR_TEXT.relay_csp);
     if (s !== 'live') {
       for (const d of this.devices.values()) d.online = false;
       if (was === 'live') this._dropAll('device_offline');
     }
-    this._emit('status', s);
+    this._emit('status', s, detail || null);
     this._changed();
   }
 
@@ -503,14 +518,20 @@ export class DeviceHub {
     }
   }
 
+  /**
+   * Resolves once the relay is live. Rejects at once when the relay client gives up (v2.md H2: ticket refused with
+   * 401/503, CSP block → its own code) or reports `quota`; otherwise after `ms` with 'relay' (network).
+   */
   _waitLive(ms) {
     if (this.relayStatus === 'live') return Promise.resolve();
     return new Promise((resolve, reject) => {
-      const off = this.on('status', (s) => {
-        if (s === 'live') { off(); clearTimeout(t); resolve(); }
-        else if (s === 'quota') { off(); clearTimeout(t); reject(new ControlError('relay')); }
+      const done = (err) => { off(); clearTimeout(t); if (err) reject(err); else resolve(); };
+      const off = this.on('status', (s, detail) => {
+        if (s === 'live') done(null);
+        else if (s === 'quota') done(new ControlError('relay'));
+        else if (s === 'idle' && detail && detail.error) done(new ControlError(relayErrorCode(detail.error)));
       });
-      const t = setTimeout(() => { off(); reject(new ControlError('relay')); }, ms);
+      const t = setTimeout(() => done(new ControlError('relay')), ms);
     });
   }
 

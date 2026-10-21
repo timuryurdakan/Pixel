@@ -4,7 +4,7 @@
 
 import { Office } from './office.js';
 import { CharacterManager } from './agents.js';
-import { Renderer } from './renderer.js';
+import { Renderer, CAT_ID } from './renderer.js';
 import { UI, summaryText } from './ui.js';
 import { SseTransport, PollingTransport } from './transport.js';
 import { MiniWindow } from './pip.js';
@@ -54,11 +54,15 @@ function refreshUI() {
   if (v3) v3Sync();
 }
 
-function select(id) {
+/**
+ * Select an agent (null = none). Silent by default: only a direct user gesture asks for a sound, and at most one
+ * per click (v2.md H33) — list clicks blip here, canvas clicks play their own hop.
+ */
+function select(id, { blip = false } = {}) {
   const prev = selectedId;
   selectedId = id || null;
   ui.setSelected(selectedId);
-  if (selectedId && selectedId !== prev) sound.playBlip();
+  if (blip && selectedId && selectedId !== prev) sound.playBlip();
   if (v3) v3Sync();
 }
 
@@ -384,7 +388,7 @@ function bootCommon() {
     banner: document.getElementById('conn-banner'),
     summary: document.getElementById('summary'),
   }, {
-    onSelect: (id) => select(id),
+    onSelect: (id) => select(id, { blip: true }),   // list row / details link: a click or a key press
     colorOf: (a) => manager.characters.get(a.id)?.palette.shirt || null,
     onRename,
   });
@@ -392,9 +396,9 @@ function bootCommon() {
   canvas.addEventListener('click', (e) => {
     const [x, y] = canvasPoint(e);
     const picked = renderer.pickCharacter(manager.list(), x, y);
-    if (picked === 'mascot-cat') {
+    if (picked === CAT_ID) {
       sound.playMeow();
-      renderer.reactions.trigger('mascot-cat', 'heart');
+      renderer.reactions.trigger(CAT_ID, 'heart');
       renderer.cat.wakeTime = gameTime;
       return;
     }
@@ -428,9 +432,11 @@ function bootCommon() {
 function setupSoundButton() {
   const btn = document.getElementById('btn-sound');
   if (!btn) return;
+  // aria-pressed = sound on; the icon, title and data-muted follow the same state (v2.md H34).
   const sync = () => {
     btn.textContent = sound.muted ? '🔇' : '🔊';
     btn.dataset.muted = sound.muted ? 'true' : 'false';
+    btn.setAttribute('aria-pressed', sound.muted ? 'false' : 'true');
     btn.title = sound.muted ? 'Sesi aç' : 'Sesi kapat';
   };
   btn.addEventListener('click', () => {

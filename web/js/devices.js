@@ -1,7 +1,7 @@
 // Pixel Office v3 — "Cihazlar" page, 3-step "Cihaz ekle" pairing wizard and the "Yeni ajan" dialog
 // (V3.md §11.4, §11.5, §11.6). Device data is rendered with textContent only.
 
-import { ControlError, errorText, PAIR_ERROR_TEXT } from './control.js';
+import { ControlError, errorText, PAIR_ERROR_TEXT, relayErrorCode } from './control.js';
 import { formatCode } from './e2e.js';
 import { fmtCompact, gaugeEl, totalCostLabel, claudeLimitText, ENGINE_LABELS, WEIGHT_NOTE } from './usage.js';
 import { PROFILE_TEXT } from './prompt.js';
@@ -9,6 +9,29 @@ import { PROFILE_TEXT } from './prompt.js';
 export const RUNTIME_POLL_MS = 10000;
 const OS_LABEL = { linux: 'Linux', darwin: 'macOS', windows: 'Windows' };
 const RT_STATE = { running: 'Çalışıyor', stopped: 'Durdu', starting: 'Başlatılıyor', unknown: 'Durum bilinmiyor' };
+
+const RELAY_STATUS_TEXT = {
+  live: 'Röle: bağlı', connecting: 'Röle: bağlanıyor…', reconnecting: 'Röle: yeniden bağlanıyor…',
+  quota: 'Röle şu an meşgul ya da günlük kota doldu', idle: 'Röle: bağlı değil',
+};
+const RELAY_STOP_TEXT = {
+  relay_csp: 'Röle: güvenlik politikası (CSP) röle adresini engelliyor',
+  unauthorized: 'Röle: bu tarayıcıdaki oda anahtarı geçersiz. Katılım bağlantısını (#key=… içeren) yeniden açın.',
+  relay_not_configured: 'Röle: sunucuda röle ayarlı değil',
+  relay_ticket: 'Röle: sunucu bilet vermedi',
+};
+
+/**
+ * "Röle: …" line of the Cihazlar page (v2.md H2). When the relay client stopped for good (idle + error) the reason is
+ * shown instead of a plain "bağlı değil": a wrong key in this browser and a server without relay settings differ.
+ */
+export function relayStatusText(status, relayError) {
+  if (status === 'idle' && relayError) {
+    const code = relayErrorCode(relayError);
+    if (Object.hasOwn(RELAY_STOP_TEXT, code)) return RELAY_STOP_TEXT[code];
+  }
+  return Object.hasOwn(RELAY_STATUS_TEXT, status) ? RELAY_STATUS_TEXT[status] : RELAY_STATUS_TEXT.idle;
+}
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -223,10 +246,7 @@ export class DevicesPage {
 
   _relayLine() {
     const s = this.hub.relayStatus;
-    const t = s === 'idle' && this.hub.relayError === 'csp' ? 'Röle: güvenlik politikası (CSP) röle adresini engelliyor'
-      : { live: 'Röle: bağlı', connecting: 'Röle: bağlanıyor…', reconnecting: 'Röle: yeniden bağlanıyor…',
-        quota: 'Röle şu an meşgul ya da günlük kota doldu', idle: 'Röle: bağlı değil' }[s] || s;
-    this.relayEl.textContent = t;
+    this.relayEl.textContent = relayStatusText(s, this.hub.relayError);
     this.relayEl.dataset.status = s;
   }
 
@@ -629,6 +649,13 @@ export class PairWizard {
     dialog.addEventListener('click', (e) => { if (e.target === dialog && !this.busy) dialog.close(); });
     dialog.addEventListener('cancel', (e) => { if (this.busy) e.preventDefault(); });
     dialog.addEventListener('close', () => this.hub.need('pairdlg', false));
+    // v2.md H2: opening the dialog starts the relay; when it is refused (wrong key, no relay on the server) say so
+    // before the user types a code, instead of failing only after "Eşleştir".
+    hub.on('status', (st, detail) => {
+      if (!this.dialog.open || this.busy || st !== 'idle' || !detail || !detail.error) return;
+      const code = relayErrorCode(detail.error);
+      this._status(PAIR_ERROR_TEXT[code] || errorText(code), 'error');
+    });
     const nameInput = $('#pair-name');
     if (nameInput) nameInput.addEventListener('input', () => this._fill());
   }
