@@ -414,7 +414,7 @@ Genel inceleme raporu: [`v2.md`](v2.md) (2026-10-21). Paketler sırayla, her bir
 - [x] Paket 3 — Arayüz hataları (H2, E4, H3, H14–H16, H33–H35, E3; E2'nin testleri de burada yazıldı)
 - [x] Paket 4 — Aşama 18 (Antigravity) yarım işin tamamlanması
 - [x] Paket 5 — Aşama 19 (ofisten onay)
-- [ ] Paket 6 — Bulut temizliği (F1, H12, H17, H19–H23, D5, D9, F3)
+- [x] Paket 6 — Bulut temizliği (Antigravity A11) (F1, H12, H17, H19–H23, D5, D9, F3)
 - [x] Paket 7 — Windows/macOS (H10, H31)
 - [ ] Paket 8 — Belgeler ve testler (D1–D4, D7, D8, E6–E7, F4–F6, H36, E9, Antigravity v4 belgesi; E2 Paket 3'te yapıldı)
 - [ ] Kullanıcıyla: push, bağlayıcı güncellemesi (iki bilgisayar), Aşama 19 telefon testi; `relay/package-lock.json` yalnızca onayla (indirme gerekir)

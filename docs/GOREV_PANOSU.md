@@ -200,3 +200,5 @@ görüntüleri, bilinen sorunlar.
   - **F3 (Kullanılmayan kodlar):** `Storage.count` ve `reset_storage` kaldırıldı (`tests/test_cloud_storage.py` güncellendi); `Settings.extra` silindi; `_update_to_dict` sadeleştirildi; `derive_room_name` kaldırılarak doğrudan `clean_room_name` çağrıldı; `relay.py` içindeki mükerrer `ROOM_RE` yerine `.ids`'ten içe aktarıldı.
   - **Belgeler:** `docs/CLOUD.md` §12.2 HKEYS düzeltmesi yapıldı, resident anmaları kaldırıldı; `docs/V3.md` resident anmaları temizlendi; `v2.md` işaretlendi.
   - **Doğrulama & Testler:** `python3 -m unittest discover -s tests` → 627 test, 1 atlandı (pwsh yok), hepsi başarılı. `python3 tools/build_connector.py --check` güncel. Kendi dalında commit'lendi, push yapılmadı.
+- **2026-10-21, Claude:** A11 birleştirildi (694 test geçiyor). Yeni görev **A12** (Paket 8b, belgeler): ayrıntı
+  `docs/V4_ANTIGRAVITY.md` §3 A12. Claude'un 8a işi (testler/kod) kenarda bekliyor; A12 yalnızca belgelere dokunur.

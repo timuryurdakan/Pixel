@@ -13,7 +13,7 @@ token'ı biterse yarım kalan işlerin nasıl devralınacağını ve **push'un n
 
 | Durum | Ne yapılır |
 |---|---|
-| Panoda **C3** satırı ⬜ ya da 🔄 (Claude hâlâ Aşama 20 paketleri üzerinde) | Yalnızca **A6** ve **A11** yapılabilir (kendi dalında, push yok). Diğer görevlere başlanmaz. |
+| Panoda **C3** satırı ⬜ ya da 🔄 (Claude hâlâ Aşama 20 paketleri üzerinde) | Yalnızca **A6**, **A11** ve **A12** yapılabilir (kendi dalında, push yok). Diğer görevlere başlanmaz. |
 | Panoda **C3 ✅** (Claude paketleri bitirdi) | A8 → A9 → A10 sırayla. Her görev bitince §2'deki yolla push. |
 | Kullanıcı "Claude'un token'ı bitti, devral" derse | Önce **A7** (Claude'un kalan paketleri), sonra A8 → A10. |
 
@@ -183,6 +183,30 @@ anmaları), `README.md` (yalnızca resident anmaları), `v2.md` (yalnızca bu ma
 `PROJECT.md` §6 en alta kayıt (Paket 6 kutusunu Claude işaretler).
 **Dokunulmayacaklar:** `pixel_connector/`, `web/` (tamamı), `web/hook/`, `vercel.json`.
 **Teslim:** tüm testler geçer; `[A11] Paket 6: bulut temizliği` commit'i; panoya teslim notu (silinen dosyalar, test sayısı).
+
+### A12: Aşama 20 / Paket 8b — Belgeler (şimdi yapılabilir)
+Önce `git merge main`. **Yalnızca belge dosyaları:** `README.md`, `PROJECT.md`, `docs/*.md`, `v2.md` (✅ işaretleri).
+Kod, test, `web/` dosyalarına dokunma. Push yok: `[A12] Paket 8b: belgeler` commit'i, Claude birleştirir.
+Maddeler (`v2.md` §3–§5'te ayrıntı):
+- **D1** Tek doğru `.pyz` SHA: yalnızca README ve `web/connector/SHA256SUMS` güncel değeri taşır (şu anki değer
+  `web/connector/SHA256SUMS` içinde). PROJECT.md, GOREV_PANOSU, SECURITY_AUDIT'teki eski SHA'ların yanına "(geçmiş)" yaz.
+- **D2** README'deki sabit test sayılarını kaldır ("tüm testler geçer" yeterli).
+- **D3** PROJECT.md: en üstteki durum satırını güncelle (v3 yayında, alan adı `www.pixeloffice.com.tr`, Aşama 18–19
+  bitti, Aşama 20 sürüyor). §6 ilerleme günlüğünü `docs/gunluk/2026-10.md` dosyasına **aynen** taşı, PROJECT.md'de
+  günlüğün yerine bu dosyaya bağlantı ve yalnızca son 5 kaydı bırak. README ve PROJECT.md'de tekrar eden "yayına alma
+  kontrol listesi"ni tek yerde (`docs/YAYIN.md`) topla, diğerlerinde bağlantı kalsın.
+- **D4** GOREV_PANOSU kural 3 ile görev izinleri arasındaki çelişkiyi gider ("görevin dosya listesi kural 3'ün önüne
+  geçer" diye tek cümle yeterli).
+- **F5** Eski alan adları: `pixel-rouge-phi.vercel.app`, `pixel-ofis.vercel.app` belge anmaları → `www.pixeloffice.com.tr`
+  (yalnızca belgeler; `web/rehber.html`'e dokunma, onu Claude yapar).
+- **F6** PROJECT.md'deki A5 kaydında teslim edilmeyen portre/filtre/zoom ifadelerini düzelt (üstü çizili ya da
+  "teslim edilmedi" notu).
+- **E7** README ve `docs/ARCHITECTURE.md`'ye A5 efektleri (ses düğmesi, varsayılan kapalı, kedi, ışık, hareketi azalt),
+  "Yalnızca izleme" rozeti, Aşama 19 uzaktan onay ve Antigravity izleyicisi için kısa bölümler (her biri birkaç cümle).
+- Röle alan adı taşınıyor (`relay.pixeloffice.com.tr`, internet sağlayıcıları `*.workers.dev`'i engelliyor). Belgelerde
+  röle adresini şimdilik değiştirme; README'nin sorun giderme bölümüne bir not ekle: "Röleye bağlanılamıyorsa ve
+  `workers.dev` engelliyse kendi alan adınızı Workers'a bağlayın" (kısa).
+Kabul: `python3 -m unittest discover -s tests` geçer (belgeler testlerde de denetleniyor, örn. README SHA satırı).
 
 ---
 
