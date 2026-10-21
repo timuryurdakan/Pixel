@@ -13,7 +13,7 @@ token'ı biterse yarım kalan işlerin nasıl devralınacağını ve **push'un n
 
 | Durum | Ne yapılır |
 |---|---|
-| Panoda **C3** satırı ⬜ ya da 🔄 (Claude hâlâ Aşama 20 paketleri üzerinde) | Yalnızca **A6** yapılabilir (kendi belgen, kendi dalında). Diğer görevlere başlanmaz, push yapılmaz. |
+| Panoda **C3** satırı ⬜ ya da 🔄 (Claude hâlâ Aşama 20 paketleri üzerinde) | Yalnızca **A6** ve **A11** yapılabilir (kendi dalında, push yok). Diğer görevlere başlanmaz. |
 | Panoda **C3 ✅** (Claude paketleri bitirdi) | A8 → A9 → A10 sırayla. Her görev bitince §2'deki yolla push. |
 | Kullanıcı "Claude'un token'ı bitti, devral" derse | Önce **A7** (Claude'un kalan paketleri), sonra A8 → A10. |
 
@@ -150,6 +150,39 @@ dosya:satır ve önerilen düzeltme yazıyor. Sıra: Paket 5 → 6 → 7 → 8. 
 - Kabul: sahte motorlarla tüm durum geçişleri, maliyet tavanı aşımı, onay reddi, iptal testleri; gerçek bir küçük denemenin
   sonucu teslim notuna yazılır (kullanıcı onayıyla, bütçe sınırı düşük).
 - Gece Nöbetçisi, GitHub tetikleyicileri, video şablonu: **bu görevde yok** (sürekli açık bilgisayar ve dış servis gerekir).
+
+### A11: Aşama 20 / Paket 6 — Bulut temizliği (şimdi yapılabilir, C3'ü beklemez)
+Claude aynı anda Paket 5 (bağlayıcı, kanca, arayüz), 7 ve 8 üzerinde çalışıyor. Bu görev yalnızca bulut tarafına
+dokunduğu için onlarla çakışmaz. **Push yok:** kendi dalında `[A11]` commit'i, Claude birleştirir.
+Önce `git merge main` (A6 sonrası ana dal).
+
+Maddeler (`v2.md`'de dosya:satır, kanıt ve önerilen düzeltme yazıyor):
+- **F1** Kaldırılmış "sabit ajan" (resident) özelliğini sil: `api/residents.py`, `pixel_cloud/residents.py`, `derive.py` ve
+  `app.py` içindeki resident dalları, `tests/test_residents.py` (özellik silindiği için bu test dosyası da silinir; bu
+  kuraldaki "test silinmez" yasağının tek istisnası, teslim notunda belirt), `tests/test_release.py`'deki ilgili satırlar,
+  `docs/CLOUD.md`/`V3.md`/README'deki anmalar. Redis'te kalmış `_res` alanı varsa okuma yolu onu sessizce yok saysın.
+  Bu silme H18 ve H23'ü de kapatır (v2.md'de ikisine de ` ✅ (Paket 6, F1 ile)` yaz).
+- **H12** `pixel_office/reported.py:82-106` hayalet ajan çakışması (yerel mod). Çakışmayı yakalayan test yaz.
+- **H17** `pixel_cloud/app.py` `room_full` 429'unda gruptaki güncellemelerin yarım yazılması.
+- **H19** Sahip adı (`no:`) alanlarının hiç temizlenmemesi.
+- **H20** Upstash çağrıları için toplam süre sınırı (Vercel 10 sn sınırının altında kalsın, 503 dönsün).
+- **H21** Röle ayarı yarım/geçersizken bir kez uyarı kaydı (değeri yazmadan).
+- **H22** İsimlerde görünmez karakter süzme (Unicode `Cf` kategorisi + U+3164, U+115F, U+1160, U+FFA0, U+E0000–E007F).
+- **D5 (yalnızca bulut)** `pixel_cloud/__init__.py` sürümü `3.0.0` (veya 3.1.0) yap, `tests/test_cloud_app.py`'deki iki
+  beklentiyi bilinçli sürüm değişikliği olarak güncelle; `pixel_office` (yerel sunucu) sürüm etiketi.
+  **`web/hook/pixel_hook.py` sürümüne dokunma** (Claude Paket 5'te o dosyada çalışıyor).
+- **D9** `app.py:565` `ids` gölgelemesi (F1 ile kod tamamen gidiyorsa ayrıca gerekmez).
+- **F3 (yalnızca bulut)** `Storage.count` (kullanılmıyorsa), `reset_storage`, `Settings.extra`, `_update_to_dict` fazla dalları,
+  `derive_room_name`, `ids.bearer()` çift başlık, `pixel_cloud/relay.py` ikinci `ROOM_RE`.
+- Belge: `docs/CLOUD.md` §12.2'deki HLEN/HKEYS düzeltmesi; `POST /api/residents` anmaları kalkar.
+
+**Dokunulabilecek dosyalar:** `api/`, `pixel_cloud/`, `pixel_office/`, `server.py`, `dev_server.py` (gerekirse),
+`tests/test_cloud_*.py`, `tests/test_residents.py`, `tests/test_release.py` (yalnızca resident satırları),
+`tests/test_store.py`, `tests/test_local_status.py`, yeni test dosyaları, `docs/CLOUD.md`, `docs/V3.md` (yalnızca resident
+anmaları), `README.md` (yalnızca resident anmaları), `v2.md` (yalnızca bu maddelerin ✅ işaretleri), panoya teslim notu,
+`PROJECT.md` §6 en alta kayıt (Paket 6 kutusunu Claude işaretler).
+**Dokunulmayacaklar:** `pixel_connector/`, `web/` (tamamı), `web/hook/`, `vercel.json`.
+**Teslim:** tüm testler geçer; `[A11] Paket 6: bulut temizliği` commit'i; panoya teslim notu (silinen dosyalar, test sayısı).
 
 ---
 

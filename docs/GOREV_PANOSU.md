@@ -55,6 +55,7 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | A8 | v4-A: ofis duvarında Görev Tahtası (C3 ✅ sonrası) | Antigravity | ⬜ |
 | A9 | v4-B: masadan masaya devir (A8 sonrası) | Antigravity | ⬜ |
 | A10 | v4-C: iş akışı motoru ve ilk şablon (A9 sonrası) | Antigravity | ⬜ |
+| A11 | Aşama 20 / Paket 6: bulut temizliği (**şimdi**, C3'ten bağımsız; push yok, Claude birleştirir) | Antigravity | ⬜ |
 
 **A6–A10'un ayrıntıları, başlama koşulları ve push yöntemi:** [`docs/V4_ANTIGRAVITY.md`](V4_ANTIGRAVITY.md).
 
@@ -183,3 +184,6 @@ görüntüleri, bilinen sorunlar.
   - v4 yol haritası A8 (Görev Tahtası) → A9 (Masadan masaya devir) → A10 (İş akışı motoru ve ilk şablon) sırasına göre hizalandı. Mermaid diyagramı korundu.
   - Testler: `python3 -m unittest discover -s tests` → 629 test (1 atlandı), hepsi geçti; `python3 tools/build_connector.py --check` güncel. Kendi dalında commit'lendi, push yapılmadı.
 
+- **2026-10-21, Claude:** A6 kontrol edildi ve ana dala alındı (`4e3fc71`), düzeltmelerin hepsi yerinde. Yeni görev
+  **A11** (Paket 6, bulut temizliği) Antigravity'ye verildi; ayrıntı `docs/V4_ANTIGRAVITY.md` §3 A11. Claude bu sırada
+  Paket 5, 7 ve 8'i yapıyor; A11'in dosyaları bunlarla çakışmıyor.
