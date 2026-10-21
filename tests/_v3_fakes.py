@@ -13,17 +13,17 @@ from pathlib import Path
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 FAKE_CLAUDE = r'''#!{python}
-"""Fake claude for tests. Plan file ($FAKE_CLAUDE_DIR/plan.json): list of steps, one consumed per run:
+"""Fake claude for tests. Plan file ($CLAUDE_FAKE_DIR/plan.json): list of steps, one consumed per run:
 {"fixture": "claude_stream_x.jsonl", "delay": 0.0, "stderr": "...", "exit": 0, "ignore_int": false, "ignore_term": false,
- "hang": 0}. Every run is logged to $FAKE_CLAUDE_DIR/calls.jsonl (argv, stdin, cwd, env flags)."""
+ "hang": 0}. Every run is logged to $CLAUDE_FAKE_DIR/calls.jsonl (argv, stdin, cwd, env flags)."""
 import json, os, signal, sys, time
-d = os.environ["FAKE_CLAUDE_DIR"]
+d = os.environ["CLAUDE_FAKE_DIR"]
 argv = sys.argv[1:]
 if argv[:1] == ["--version"]:
-    print(os.environ.get("FAKE_CLAUDE_VERSION", "2.1.301 (Claude Code)"))
+    print(os.environ.get("CLAUDE_FAKE_VERSION", "2.1.301 (Claude Code)"))
     sys.exit(0)
 if argv[:2] == ["auth", "status"]:
-    print(json.dumps({{"loggedIn": True, "authMethod": os.environ.get("FAKE_CLAUDE_AUTH", "claude.ai"),
+    print(json.dumps({{"loggedIn": True, "authMethod": os.environ.get("CLAUDE_FAKE_AUTH", "claude.ai"),
                       "apiProvider": "firstParty"}}))
     sys.exit(0)
 stdin = sys.stdin.read()
@@ -37,7 +37,8 @@ sid = argv[argv.index("--session-id") + 1] if "--session-id" in argv else argv[a
 with open(os.path.join(d, "calls.jsonl"), "a") as f:
     f.write(json.dumps({{"argv": argv, "stdin": stdin, "cwd": os.getcwd(), "pid": os.getpid(),
                         "disable": os.environ.get("PIXEL_OFFICE_DISABLE"),
-                        "office_env": sorted(k for k in os.environ if k.startswith("PIXEL_OFFICE_"))}}) + "\n")
+                        "office_env": sorted(k for k in os.environ if k.startswith("PIXEL_OFFICE_")),
+                        "env_keys": sorted(os.environ)}}) + "\n")
 if step.get("ignore_int"):
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 else:
@@ -66,6 +67,8 @@ sys.exit(step.get("exit", 0))
 '''
 
 
+# The fake's settings use the CLAUDE_* prefix because the connector hands Claude Code only an allow-listed environment
+# (Phase 20, child_env), exactly as a real Claude Code setting such as CLAUDE_CONFIG_DIR would pass.
 def write_fake_claude(dirpath, plan=None) -> str:
     d = Path(dirpath)
     d.mkdir(parents=True, exist_ok=True)

@@ -173,7 +173,11 @@ class ClaudeChildEnv(unittest.TestCase):
         env = CL.child_env({"PATH": "/bin", "HOME": "/h", "RELAY_SECRET": "x", "PIXEL_SECRET": "y",
                             "PIXEL_RELAY_URL": "wss://r", "UPSTASH_REDIS_REST_TOKEN": "z", "KV_REST_API_TOKEN": "w",
                             "PIXEL_OFFICE_HOME": "/p", "ANTHROPIC_MODEL": "m"})
-        self.assertEqual(env, {"PATH": "/bin", "HOME": "/h", "ANTHROPIC_MODEL": "m", "PIXEL_OFFICE_DISABLE": "1"})
+        self.assertEqual(env, {"PATH": "/bin", "HOME": "/h", "ANTHROPIC_MODEL": "m", "PIXEL_OFFICE_DISABLE": "1",
+                               # Phase 20 (S20-01): git pins are always added
+                               "GIT_CONFIG_COUNT": "3", "GIT_CONFIG_KEY_0": "core.fsmonitor", "GIT_CONFIG_VALUE_0": "false",
+                               "GIT_CONFIG_KEY_1": "core.hooksPath", "GIT_CONFIG_VALUE_1": os.devnull,
+                               "GIT_CONFIG_KEY_2": "core.pager", "GIT_CONFIG_VALUE_2": "cat"})
 
 
 class ReleaseChecks(unittest.TestCase):

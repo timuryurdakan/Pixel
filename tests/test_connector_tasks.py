@@ -32,7 +32,7 @@ class Base(unittest.TestCase):
         self.llm = F.FakeLLM(words=["Merhaba ", OUT_CANARY, " — ", "tamam."])
         self.fake_dir = os.path.join(self.env.tmp, "fakeclaude")
         self.claude = F.write_fake_claude(self.fake_dir)
-        os.environ["FAKE_CLAUDE_DIR"] = self.fake_dir
+        os.environ["CLAUDE_FAKE_DIR"] = self.fake_dir
         ov = {"engines": {"claude": {"path": self.claude, "enabled": True, "maxTurns": 50, "maxBudgetUsdPerTask": 2.0},
                           "ollama": {"url": self.llm.url, "enabled": True, "keepAlive": "10m", "historyMessages": 40},
                           "openai": []},
@@ -49,7 +49,7 @@ class Base(unittest.TestCase):
         self.conn.stop()
         self.llm.stop()
         self.env.stop()
-        os.environ.pop("FAKE_CLAUDE_DIR", None)
+        os.environ.pop("CLAUDE_FAKE_DIR", None)
 
     def req(self, obj, timeout=15.0):
         return self.br.request(self.dev, obj, timeout)

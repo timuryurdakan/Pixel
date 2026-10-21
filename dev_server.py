@@ -165,18 +165,27 @@ def _sigterm(signum, frame) -> None:  # noqa: ANN001
 
 def start_relay(port: int, web_port: int):
     """Start tools/dev_relay.py in-process for --relay; sets RELAY_SECRET / PIXEL_RELAY_URL for this process so the
-    Vercel-style app issues tickets for it. → (server, ws_url, secret)."""
+    Vercel-style app issues tickets for it. → (server, ws_url, secret, generated); `generated` is False when the secret
+    came from the environment."""
     sys.path.insert(0, str(Path(__file__).resolve().parent / "tools"))
     import dev_relay
     secret = os.environ.get("RELAY_SECRET") or ""
-    if len(secret) < 32:
+    generated = len(secret) < 32
+    if generated:
         secret = secrets.token_urlsafe(32)
     relay = dev_relay.Relay(secret, dev_relay.default_origins(web_port))
     srv, url = dev_relay.serve_in_thread(relay, "127.0.0.1", port)
     srv.relay = relay
     os.environ["RELAY_SECRET"] = secret
     os.environ["PIXEL_RELAY_URL"] = url
-    return srv, url, secret
+    return srv, url, secret, generated
+
+
+def relay_secret_line(secret: str, generated: bool) -> str:
+    """Only a secret made for this run is shown; one from the environment may be the real production value (H13)."""
+    if generated:
+        return f"RELAY_SECRET={secret}  (this run only)"
+    return "RELAY_SECRET: ortamdan alındı (gösterilmiyor)"
 
 
 def main(argv=None) -> int:
@@ -185,7 +194,7 @@ def main(argv=None) -> int:
     headers = SECURITY_HEADERS
     if args.relay:
         try:
-            relay_srv, relay_url, relay_secret = start_relay(args.relay_port, args.port)
+            relay_srv, relay_url, relay_secret, relay_secret_generated = start_relay(args.relay_port, args.port)
         except OSError as e:
             print(f"Cannot start the relay on 127.0.0.1:{args.relay_port}: {e}", file=sys.stderr)
             return 1
@@ -207,7 +216,7 @@ def main(argv=None) -> int:
         from pixel_cloud.relay import parse_origins
         relay_srv.relay.allowed = parse_origins(f"http://127.0.0.1:{port},http://localhost:{port},{base}")
         print(f"Relay (dev_relay) at {relay_url}  — PIXEL_RELAY_URL={relay_url}", flush=True)
-        print(f"RELAY_SECRET={relay_secret}  (this run only)", flush=True)
+        print(relay_secret_line(relay_secret, relay_secret_generated), flush=True)
     if app.settings.secret_generated:
         print("PIXEL_SECRET not set: using a random secret for this run (write keys change on restart).", flush=True)
     demo = None

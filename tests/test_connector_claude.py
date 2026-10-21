@@ -143,7 +143,10 @@ class ArgvTests(unittest.TestCase):
 
     def test_child_env(self):
         env = CL.child_env({"PATH": "/bin", "PIXEL_OFFICE_KEY": "secret", "PIXEL_OFFICE_HOME": "/x", "HOME": "/h"})
-        self.assertEqual(env, {"PATH": "/bin", "HOME": "/h", "PIXEL_OFFICE_DISABLE": "1"})
+        self.assertEqual(env, {"PATH": "/bin", "HOME": "/h", "PIXEL_OFFICE_DISABLE": "1", "GIT_CONFIG_COUNT": "3",
+                               "GIT_CONFIG_KEY_0": "core.fsmonitor", "GIT_CONFIG_VALUE_0": "false",
+                               "GIT_CONFIG_KEY_1": "core.hooksPath", "GIT_CONFIG_VALUE_1": os.devnull,
+                               "GIT_CONFIG_KEY_2": "core.pager", "GIT_CONFIG_VALUE_2": "cat"})
 
     def test_canceller_escalation_with_fake_clock(self):
         sent, waits = [], []
@@ -170,7 +173,7 @@ class RunTests(unittest.TestCase):
         self.cfg = {"path": self.path, "enabled": True, "bare": False, "showThinking": False, "maxTurns": 50,
                     "maxBudgetUsdPerTask": 2.0, "defaultModel": None, "cancelGraceS": 5.0, "cancelTermS": 10.0}
         self.limits = []
-        self.env = dict(os.environ, FAKE_CLAUDE_DIR=self.fake_dir, PIXEL_OFFICE_KEY="must-not-leak",
+        self.env = dict(os.environ, CLAUDE_FAKE_DIR=self.fake_dir, PIXEL_OFFICE_KEY="must-not-leak",
                         PIXEL_OFFICE_URL="http://x")
         self.eng = CL.ClaudeEngine(self.cfg, PROFILES, env=self.env, ledger_note=self.limits.append)
         self.agent = {"key": "a1", "name": "Kâtip", "engine": "claude", "claudeSession": None,
@@ -198,7 +201,7 @@ class RunTests(unittest.TestCase):
     def test_available(self):
         av = self.eng.available()
         self.assertEqual(av, {"available": True, "version": "2.1.301", "auth": "subscription"})
-        e2 = CL.ClaudeEngine(dict(self.cfg), PROFILES, env=dict(self.env, FAKE_CLAUDE_AUTH="api_key"))
+        e2 = CL.ClaudeEngine(dict(self.cfg), PROFILES, env=dict(self.env, CLAUDE_FAKE_AUTH="api_key"))
         self.assertEqual(e2.available()["auth"], "api_key")
         e3 = CL.ClaudeEngine(dict(self.cfg, path=os.path.join(self.tmp.name, "nope")), PROFILES, env=self.env)
         self.assertFalse(e3.available()["available"])

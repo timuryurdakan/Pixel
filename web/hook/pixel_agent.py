@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import atexit
 import functools
+import ipaddress
 import json
 import os
 import re
@@ -133,6 +134,25 @@ def resolve_target(url: object = None, room: object = None, key: object = None, 
     return t
 
 
+def _is_loopback_url(url: str) -> bool:
+    host = (urllib.parse.urlsplit(url).hostname or "").rstrip(".").lower()
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def _urlopen(req, timeout: float):
+    """urlopen that sends loopback requests directly: an `http_proxy` without `no_proxy` would otherwise get the
+    local-mode traffic, write key included (v2.md H8)."""
+    url = req.full_url if isinstance(req, urllib.request.Request) else req
+    if _is_loopback_url(url):
+        return urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=timeout)
+    return urllib.request.urlopen(req, timeout=timeout)
+
+
 def status_url(target: dict) -> str:
     url = target["url"] + "/api/status"
     if target.get("room"):
@@ -154,7 +174,7 @@ def post_updates(target: dict, updates: list, timeout: float = POST_TIMEOUT, ret
     for attempt in range(retries + 1):
         try:
             req = urllib.request.Request(status_url(target), data=data, headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with _urlopen(req, timeout=timeout) as resp:
                 resp.read(65536)
                 return resp.status
         except urllib.error.HTTPError as e:

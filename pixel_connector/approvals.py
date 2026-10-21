@@ -28,6 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlsplit
 
+from . import localhttp
 from .config import CONTROL_FILE, read_json, write_json
 
 MAX_BODY = 16 * 1024
@@ -336,7 +337,7 @@ def ctl_request(home: str, method: str, path: str, body: Optional[dict] = None, 
     req = urllib.request.Request(url, data=data, method=method,
                                  headers={"X-Pixel-Ctl": c["token"], "Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with localhttp.urlopen(req, timeout=timeout) as r:      # never via a proxy (H8)
             return r.status, json.loads(r.read() or b"null")
     except urllib.error.HTTPError as e:
         try:

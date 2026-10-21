@@ -7,8 +7,8 @@
 
 The prompt goes to stdin (never argv). No shell. `bypassPermissions` / `--dangerously-skip-permissions` have no code
 path here: `build_argv` asserts their absence and tests grep this file. cwd = the resolved workspace; the child env is
-the connector's env without PIXEL_*, RELAY_SECRET, UPSTASH_*, KV_REST_* plus PIXEL_OFFICE_DISABLE=1 (no duplicate
-office character from a v2 hook).
+built from an allow-list (`child_env`, Phase 20) plus PIXEL_OFFICE_DISABLE=1 (no duplicate office character from a v2
+hook) and pinned git settings (GIT_CONFIG_COUNT/KEY/VALUE).
 Cancel: SIGINT to the process group → SIGTERM after 5 s → SIGKILL after 10 s more.
 """
 
@@ -23,7 +23,7 @@ import sys
 import threading
 import time
 import uuid
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
 from .base import Cached, Running, TaskContext, empty_usage, short
 
@@ -39,20 +39,41 @@ BUILTIN_DENY = ["Bash(sudo *)", "Read(~/.ssh/**)", "Read(~/.gnupg/**)", "Read(~/
 # services/autostart, PATH shims, the Claude Code binary itself (~/.local/share/claude, VS Code extension builds). `Edit(...)` rules
 # cover every built-in file-editing tool (Edit, Write, NotebookEdit). Both the absolute (`//`) and the cwd-relative
 # form are listed, so a parent repository's .git is covered as well.
+# Phase 20 (SECURITY_AUDIT.md S20-01, v2.md H1) closes what S16-01 left open. The rule for adding a path here: an edit
+# to it runs code *without a further deliberate step by the user* (next git command, next `claude -p`, opening or
+# entering the folder in an editor/shell) or it lives outside version control. Tracked build files (Makefile,
+# package.json scripts, .husky/*) stay editable: that is the feature, and they show up in `git diff`.
+#  - a `.git` *file* (`gitdir: <dir>`) redirects git to a directory whose config the agent wrote
+#    (core.fsmonitor runs on the next `git status`, which the dev profile allows) → `**/.git` as well as `**/.git/**`;
+#  - the whole `.claude/` tree: hook scripts, commands, agents, skills and output styles that settings*.json point at;
+#  - JetBrains `.idea/` (run configurations, startup tasks), VS Code `*.code-workspace` (tasks/settings like
+#    `.vscode/`), `.devcontainer/` (postCreate/postStart commands when the folder is reopened in a container);
+#  - `~/.npmrc` (`script-shell`, `node-options` apply to every npm run outside the workspace).
 EXEC_SENSITIVE_DENY = [
-    "Edit(//**/.git/**)", "Edit(**/.git/**)",
+    "Edit(//**/.git/**)", "Edit(**/.git/**)", "Edit(//**/.git)", "Edit(**/.git)",
     "Edit(//**/.claude/settings.json)", "Edit(//**/.claude/settings.local.json)", "Edit(//**/.mcp.json)",
     "Edit(**/.claude/settings.json)", "Edit(**/.claude/settings.local.json)", "Edit(**/.mcp.json)",
-    "Edit(//**/.vscode/**)", "Edit(**/.vscode/**)", "Edit(//**/.envrc)", "Edit(**/.envrc)",
+    "Edit(//**/.claude/**)", "Edit(**/.claude/**)",
+    "Edit(//**/.vscode/**)", "Edit(**/.vscode/**)", "Edit(//**/*.code-workspace)", "Edit(**/*.code-workspace)",
+    "Edit(//**/.idea/**)", "Edit(**/.idea/**)", "Edit(//**/.devcontainer/**)", "Edit(**/.devcontainer/**)",
+    "Edit(//**/.envrc)", "Edit(**/.envrc)",
     "Edit(~/.claude/**)", "Edit(~/.claude.json)", "Edit(~/.ssh/**)", "Edit(~/.gitconfig)", "Edit(~/.config/**)",
     "Edit(~/.local/bin/**)", "Edit(~/.local/share/**)", "Edit(~/.vscode/**)", "Edit(~/AppData/**)",
-    "Edit(~/Library/LaunchAgents/**)",
+    "Edit(~/Library/LaunchAgents/**)", "Edit(~/.npmrc)",
     "Edit(~/.bashrc)", "Edit(~/.bash_profile)", "Edit(~/.bash_login)", "Edit(~/.profile)",
     "Edit(~/.zshrc)", "Edit(~/.zprofile)", "Edit(~/.zshenv)",
 ]
-# Credentials that a prompt-injected run should not even read (it could copy them into the workspace).
+# Credentials that a prompt-injected run should not even read (it could copy them into the workspace). Phase 20 (H30):
+# other agents' logins (Gemini CLI, Codex), package-registry tokens, desktop keyrings and browser profiles (cookies,
+# saved passwords), cloud CLIs. Every directory here is also a denied workspace root (workspaces.HOME_DENY_DIRS; a
+# test keeps the two lists consistent). macOS browser profiles live under "Application Support" (a space, which these
+# rules can't express); ~/Library/Keychains is covered.
 SECRET_READ_DENY = ["Read(~/.claude.json)", "Read(~/.config/gh/**)", "Read(~/.netrc)", "Read(~/.git-credentials)",
-                    "Read(~/.docker/config.json)", "Read(~/.kube/**)"]
+                    "Read(~/.docker/config.json)", "Read(~/.kube/**)",
+                    "Read(~/.gemini/**)", "Read(~/.codex/**)", "Read(~/.npmrc)", "Read(~/.pypirc)",
+                    "Read(~/.cargo/credentials)", "Read(~/.cargo/credentials.toml)", "Read(~/.config/gcloud/**)",
+                    "Read(~/.azure/**)", "Read(~/.local/share/keyrings/**)", "Read(~/Library/Keychains/**)",
+                    "Read(~/.mozilla/**)", "Read(~/.config/google-chrome/**)", "Read(~/.config/chromium/**)"]
 BUILTIN_DENY = BUILTIN_DENY + EXEC_SENSITIVE_DENY + SECRET_READ_DENY
 EDIT_TOOLS = ["Edit", "Write", "NotebookEdit"]
 FORBIDDEN_ARGS = ("--dangerously-skip-permissions", "--allow-dangerously-skip-permissions", "bypassPermissions")
@@ -66,16 +87,52 @@ def parse_version(text: str) -> Optional[Tuple[int, int, int]]:
     return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
 
 
-# Never handed to Claude Code (a prompt-injected run with a shell could read its environment). Phase 15: besides
-# PIXEL_OFFICE_*, the server-side secrets a developer may have exported in the same shell.
+# Phase 20 (v2.md H7): the child env is an allow-list, so GH_TOKEN, AWS_*, OpenAI keys and whatever else the user
+# exported never reach a run that may be prompt-injected and has a shell. What stays is what Claude Code (Node) needs:
+# locating itself and its config (PATH, HOME, ~/.claude via HOME/USERPROFILE), locale, terminal, temp dirs, time zone,
+# the Windows system variables a process needs to start, its own configuration and API auth (ANTHROPIC_*, CLAUDE_*),
+# corporate proxies and CA bundles. Names are compared upper-cased (Windows env names are case-insensitive).
+# Not passed (documented limit): cloud-provider credentials in the env (AWS_* for Bedrock, GOOGLE_APPLICATION_CREDENTIALS
+# for Vertex); use the provider's credential files instead.
+CHILD_ENV_NAMES = frozenset((
+    "PATH", "HOME", "USER", "LOGNAME", "USERNAME", "SHELL", "LANG", "LANGUAGE", "TERM", "COLORTERM",
+    "TMPDIR", "TEMP", "TMP", "TZ",
+    "SYSTEMROOT", "SYSTEMDRIVE", "COMSPEC", "PATHEXT", "APPDATA", "LOCALAPPDATA", "USERPROFILE", "PROGRAMDATA",
+    "PROGRAMFILES", "PROGRAMFILES(X86)", "COMMONPROGRAMFILES", "WINDIR", "HOMEDRIVE", "HOMEPATH",
+    "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE", "OS",
+    "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY",
+    "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "SSL_CERT_DIR",
+))
+CHILD_ENV_PREFIXES = ("LC_", "XDG_", "ANTHROPIC_", "CLAUDE_")
+# Never handed over even if an allowed prefix matched (Phase 15: the connector's own and server-side secrets).
 SECRET_ENV_PREFIXES = ("PIXEL_", "UPSTASH_", "KV_REST_")
 SECRET_ENV_NAMES = ("RELAY_SECRET",)
+# Command-scope git config beats repository config, so a config the agent managed to plant (S20-01) can't run code via
+# git commands the dev profile allows. Inherited GIT_* variables (GIT_CONFIG_*, GIT_DIR, GIT_SSH_COMMAND …) are
+# dropped by the allow-list on purpose, so these pins replace rather than append to any user-set GIT_CONFIG_COUNT.
+# `diff.external` is not pinned: git has no "unset" value for it and an empty one makes every `git diff` fail
+# ("cannot run"); it can only come from repository config, which the Edit rules above cover. hooksPath = the null
+# device (/dev/null, or NUL on Windows) is a path with no hook files under it, so no hook runs.
+GIT_CONFIG_PINS = (("core.fsmonitor", "false"), ("core.hooksPath", os.devnull), ("core.pager", "cat"))
 
 
-def child_env(base: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+def _child_env_allowed(name: str) -> bool:
+    n = name.upper()
+    if n.startswith(SECRET_ENV_PREFIXES) or n in SECRET_ENV_NAMES:
+        return False
+    return n in CHILD_ENV_NAMES or n.startswith(CHILD_ENV_PREFIXES)
+
+
+def child_env(base: Optional[Dict[str, str]] = None, drop: Iterable[str] = ()) -> Dict[str, str]:
+    """Environment for every Claude Code process. `drop`: further names to remove (configured `apiKeyEnv`s)."""
+    dropped = {d.upper() for d in drop}
     env = {k: v for k, v in (os.environ if base is None else base).items()
-           if not k.upper().startswith(SECRET_ENV_PREFIXES) and k.upper() not in SECRET_ENV_NAMES}
+           if _child_env_allowed(k) and k.upper() not in dropped}
     env["PIXEL_OFFICE_DISABLE"] = "1"
+    env["GIT_CONFIG_COUNT"] = str(len(GIT_CONFIG_PINS))
+    for i, (key, value) in enumerate(GIT_CONFIG_PINS):
+        env["GIT_CONFIG_KEY_%d" % i] = key
+        env["GIT_CONFIG_VALUE_%d" % i] = value
     return env
 
 
@@ -207,8 +264,10 @@ class ClaudeEngine:
     name = "claude"
 
     def __init__(self, cfg: dict, profiles: dict, popen=subprocess.Popen, run=subprocess.run,
-                 env: Optional[Dict[str, str]] = None, ledger_note: Optional[Callable[[dict], None]] = None) -> None:
+                 env: Optional[Dict[str, str]] = None, ledger_note: Optional[Callable[[dict], None]] = None,
+                 drop_env: Iterable[str] = ()) -> None:
         self.cfg = cfg
+        self.drop_env = tuple(drop_env)
         self.profiles = profiles
         self.popen = popen
         self.run_cmd = run
@@ -218,6 +277,9 @@ class ClaudeEngine:
         self._auth = Cached(self._probe_auth, 3600)
         self.last_init: Optional[dict] = None
 
+    def child_env(self) -> Dict[str, str]:
+        return child_env(self.env, self.drop_env)
+
     # -- probes ----------------------------------------------------------------------------------
     def _probe_version(self):
         path = self.cfg.get("path")
@@ -225,7 +287,7 @@ class ClaudeEngine:
             return None
         try:
             r = self.run_cmd([path, "--version"], capture_output=True, text=True, timeout=20,
-                             stdin=subprocess.DEVNULL, env=child_env(self.env))
+                             stdin=subprocess.DEVNULL, env=self.child_env())
             return parse_version(r.stdout)
         except (OSError, subprocess.SubprocessError):
             return None
@@ -236,7 +298,7 @@ class ClaudeEngine:
             return "unknown"
         try:
             r = self.run_cmd([path, "auth", "status", "--json"], capture_output=True, text=True, timeout=20,
-                             stdin=subprocess.DEVNULL, env=child_env(self.env))
+                             stdin=subprocess.DEVNULL, env=self.child_env())
             d = json.loads(r.stdout or "{}")
             return AUTH_MAP.get(d.get("authMethod"), "other") if isinstance(d, dict) else "unknown"
         except (OSError, subprocess.SubprocessError, ValueError):
@@ -335,7 +397,7 @@ class ClaudeRun(Running):
                 return None
             try:
                 proc = eng.popen(argv, cwd=self.ctx.cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE, env=child_env(eng.env), **kwargs)
+                                 stderr=subprocess.PIPE, env=eng.child_env(), **kwargs)
             except OSError as e:
                 self._end("error", None, empty_usage(), None, "unknown",
                           error={"code": "engine_unavailable", "message": short(str(e), 300)})

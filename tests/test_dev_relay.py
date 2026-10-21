@@ -151,8 +151,10 @@ class DevServerRelayFlagTests(unittest.TestCase):
         import dev_server
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("RELAY_SECRET", None)
-            srv, url, secret = dev_server.start_relay(0, 8787)
+            srv, url, secret, generated = dev_server.start_relay(0, 8787)
             try:
+                self.assertTrue(generated)
+                self.assertEqual(os.environ["RELAY_SECRET"], secret)
                 self.assertRegex(url, r"^ws://127\.0\.0\.1:\d+$")
                 self.assertEqual(os.environ["PIXEL_RELAY_URL"], url)
                 self.assertGreaterEqual(len(os.environ["RELAY_SECRET"]), 32)

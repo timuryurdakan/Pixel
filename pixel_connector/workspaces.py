@@ -31,10 +31,20 @@ def _fold(p: str) -> str:
     return os.path.normcase(p).lower() if sys.platform in ("darwin", "win32") else p
 
 
+# Folders under home that may never be (or contain) a workspace: credentials, agent logins, keyrings, browser profiles,
+# and places where an edit becomes code execution. Phase 20 (v2.md H30) added everything below ".claude"; every
+# `Read(~/<dir>/**)` rule in engines/claude.py has its folder here (test-enforced). ".config" covers gh, gcloud,
+# google-chrome and chromium.
+HOME_DENY_DIRS = (".ssh", ".gnupg", ".aws", ".config", ".pixel-office", ".claude",
+                  ".gemini", ".codex", ".docker", ".kube", ".azure", ".cargo", ".mozilla",
+                  os.path.join(".local", "share"), os.path.join(".local", "bin"),
+                  os.path.join("Library", "Keychains"), os.path.join("Library", "LaunchAgents"))
+
+
 def deny_list(home: Optional[str] = None) -> List[str]:
     """Built-in denied roots (always applied, even if configured)."""
     home = os.path.realpath(home or os.path.expanduser("~"))
-    out = [os.path.join(home, d) for d in (".ssh", ".gnupg", ".aws", ".config", ".pixel-office", ".claude")]
+    out = [os.path.join(home, d) for d in HOME_DENY_DIRS]
     out += ["/etc", "/usr", "/bin", "/sbin", "/System"]
     if sys.platform == "win32":
         sysdrive = os.environ.get("SystemDrive", "C:")

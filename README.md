@@ -315,7 +315,7 @@ içine kurar, `~/.pixel-office/bin/pixel-connector` kısayolunu ve ayar dosyası
 Ekrana yazdığı özeti bu sürümün özetiyle karşılaştırın:
 
 ```
-pixel-connector.pyz SHA-256: 3d7f98613028a50474950c803a0b6743fa77b199cd40cc8e06852e38232eed53
+pixel-connector.pyz SHA-256: 03a128ed4816314a3777d4d65454b1934370fd265cde2ad54e6f34666ee5b170
 ```
 
 Windows (PowerShell): komut kutusundaki **Windows** sekmesini kullanın (`irm …/install.ps1 -OutFile install.ps1`, sonra
@@ -387,7 +387,7 @@ model, ad, izin profili ve isteğe bağlı bir bütçe seçin. İzin profilleri 
 | **Otomatik** | Claude Code'un otomatik modu. Yalnızca `profiles.auto.enabled: true` ise seçilebilir; `confirm.task: "always"` ile önerilir. |
 
 `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.pixel-office` ve Claude kimlik bilgilerini okuma ve `sudo` her profilde yasaktır.
-Ayrıca her profilde, düzenlenince sonradan kod çalıştıran dosyalara yazmak yasaktır: `.git/` (kancalar, `core.fsmonitor`), `.claude/settings*.json`, `.mcp.json`, `.vscode/`, `.envrc`, `~/.claude`, `~/.config`, `~/.local/bin`, `~/.local/share`, kabuk başlangıç dosyaları (`~/.bashrc`, `~/.zshrc`, `~/.profile` …). `~/.claude.json`, `~/.netrc`, `~/.git-credentials`, `~/.config/gh`, `~/.docker/config.json`, `~/.kube` okunamaz (docs/SECURITY_AUDIT.md S16-01).
+Ayrıca her profilde, düzenlenince sonradan kod çalıştıran dosyalara yazmak yasaktır: `.git/` ve `.git` dosyası (kancalar, `core.fsmonitor`), `.claude/` klasörünün tamamı, `.mcp.json`, `.vscode/`, `*.code-workspace`, `.idea/`, `.devcontainer/`, `.envrc`, `~/.claude`, `~/.config`, `~/.local/bin`, `~/.local/share`, `~/.npmrc`, kabuk başlangıç dosyaları (`~/.bashrc`, `~/.zshrc`, `~/.profile` …). `~/.claude.json`, `~/.netrc`, `~/.git-credentials`, `~/.config/gh`, `~/.docker/config.json`, `~/.kube`, `~/.gemini`, `~/.codex`, `~/.npmrc`, `~/.pypirc`, `~/.cargo/credentials`, anahtarlıklar ve tarayıcı profilleri okunamaz. Claude'a ortam değişkenlerinden yalnızca izin listesindekiler geçer (`PATH`, `HOME`, dil, vekil sunucu, `ANTHROPIC_*`, `CLAUDE_*` …); `GH_TOKEN`, `AWS_*` gibi anahtarlar geçmez (docs/SECURITY_AUDIT.md S16-01, S20).
 
 ### Görev verme
 

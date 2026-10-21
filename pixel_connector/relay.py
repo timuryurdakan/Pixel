@@ -18,6 +18,7 @@ import urllib.request
 from typing import Callable, Optional
 
 from . import __version__
+from . import localhttp
 from . import ws as W
 
 PING_S = 30.0
@@ -43,7 +44,7 @@ def fetch_ticket(server: str, room: str, key: str, device_id: str, timeout: floa
                                  headers={"Authorization": "Bearer " + key, "Content-Type": "application/json",
                                           "User-Agent": "pixel-connector/" + __version__})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with localhttp.urlopen(req, timeout=timeout) as r:      # a local dev server: no proxy (H8)
             d = json.loads(r.read(65536))
     except urllib.error.HTTPError as e:
         try:

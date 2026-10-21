@@ -73,8 +73,10 @@ class Connector:
         self.runtimes = Runtimes(self.cfg["runtimes"], home=user_home)
         self.claude_limit: Optional[dict] = None
         eng = engines or {}
+        # The OpenAI-compatible servers' API keys are this process's business only, never the Claude child's (H7).
+        api_key_envs = [e["apiKeyEnv"] for e in self.cfg["engines"]["openai"] if e.get("apiKeyEnv")]
         self.claude = eng.get("claude") or ClaudeEngine(self.cfg["engines"]["claude"], self.cfg["profiles"],
-                                                        ledger_note=self._rate_limit_event)
+                                                        ledger_note=self._rate_limit_event, drop_env=api_key_envs)
         if getattr(self.claude, "on_rate_limit", None) is not None and engines:
             self.claude.on_rate_limit = self._rate_limit_event
         self.ollama = eng.get("ollama") or OllamaEngine(self.cfg["engines"]["ollama"])

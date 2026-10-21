@@ -28,6 +28,7 @@ from typing import Callable, Optional
 
 from . import __version__
 from . import config as CFG
+from . import localhttp
 from .approvals import ctl_request
 
 OUT = print
@@ -600,7 +601,7 @@ def server_clock_skew(server: str, opener=None, now: Callable[[], float] = time.
     """
     import urllib.request
     from email.utils import parsedate_to_datetime
-    opener = opener or urllib.request.urlopen
+    opener = opener or localhttp.urlopen
     for ep in ("/api/health", "/api/config"):
         try:
             req = urllib.request.Request(server + ep, headers={"Cache-Control": "no-cache", "Pragma": "no-cache"})
@@ -654,8 +655,7 @@ def cmd_doctor(args) -> int:
     else:
         OUT("Çalışma klasörleri: ✓ %d tane (pixel-connector workspace list)" % len(cfg.data["workspaces"]))
     try:
-        import urllib.request
-        with urllib.request.urlopen(cfg.data["server"] + "/api/config", timeout=10) as r:
+        with localhttp.urlopen(cfg.data["server"] + "/api/config", timeout=10) as r:
             d = json.loads(r.read())
         relay = d.get("relay")
         OUT("Sunucu: ✓ %s · röle: %s" % (cfg.data["server"], relay["url"] if relay else "yapılandırılmamış ✗"))

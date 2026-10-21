@@ -342,7 +342,7 @@ class V3UiTests(unittest.TestCase):
                              + ["kelime "] * 20 + ["bitti."], delay=0.25)
         self.fake_dir = os.path.join(self.env.tmp, "fakeclaude")
         claude = F.write_fake_claude(self.fake_dir)
-        os.environ["FAKE_CLAUDE_DIR"] = self.fake_dir
+        os.environ["CLAUDE_FAKE_DIR"] = self.fake_dir
         url = self.llm.url
         home = self.env.connector_home(
             engines={"claude": {"path": claude, "enabled": True}, "ollama": {"url": url, "enabled": True}},
@@ -356,7 +356,7 @@ class V3UiTests(unittest.TestCase):
         self.conn.stop()
         self.llm.stop()
         self.env.stop()
-        os.environ.pop("FAKE_CLAUDE_DIR", None)
+        os.environ.pop("CLAUDE_FAKE_DIR", None)
 
     def test_full_flow(self):
         run_scenario(self, self.env.base, self.env.room, self.env.key, InProcPairing(self.conn), self.llm, self.fake_dir,

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -341,6 +342,25 @@ def log_line(home: str, text: str) -> None:
 # HTTP
 # --------------------------------------------------------------------------------------------------
 
+def _is_loopback_url(url: str) -> bool:
+    host = (urllib.parse.urlsplit(url).hostname or "").rstrip(".").lower()
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def _urlopen(req, timeout: float):
+    """urlopen that sends loopback requests directly: an `http_proxy` without `no_proxy` would otherwise get the
+    local-mode traffic, write key included (v2.md H8)."""
+    url = req.full_url if isinstance(req, urllib.request.Request) else req
+    if _is_loopback_url(url):
+        return urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=timeout)
+    return urllib.request.urlopen(req, timeout=timeout)
+
+
 def status_url(cfg: dict) -> str:
     base = str(cfg.get("server") or "http://127.0.0.1:8765").rstrip("/")
     room = cfg.get("room")
@@ -364,7 +384,7 @@ def post_updates(cfg: dict, updates: list, timeout: float = POST_TIMEOUT, retrie
     for attempt in range(retries + 1):
         try:
             req = urllib.request.Request(status_url(cfg), data=data, headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with _urlopen(req, timeout=timeout) as resp:
                 resp.read(65536)
                 return resp.status
         except urllib.error.HTTPError as e:
@@ -1048,7 +1068,7 @@ def cmd_doctor(a) -> int:
         print("Günlük yok.")
     if cfg.get("server"):
         try:
-            with urllib.request.urlopen(str(cfg["server"]).rstrip("/") + "/api/health", timeout=5) as r:
+            with _urlopen(str(cfg["server"]).rstrip("/") + "/api/health", timeout=5) as r:
                 print("Sunucu: %s → HTTP %s" % (cfg["server"], r.status))
         except urllib.error.HTTPError as e:
             print("Sunucu: %s → HTTP %s" % (cfg["server"], e.code))
