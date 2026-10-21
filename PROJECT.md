@@ -72,7 +72,7 @@ Teknik ayrıntılar: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — **tüm a
 | 17 | Çalışma klasörü kurulum düzeltmesi | Bağlayıcı Mühendisi | kurulumda `~/PixelOfficeIsler`, `pixel-connector workspace` komutu, arayüz ipucu, `doctor` saat farkı | ✅ Tamamlandı |
 | 18 | Antigravity bağlantısı | Entegrasyon Mühendisi | `pixel_agent.py antigravity` izleyicisi, `pixel-antigravity` kısayolu, servis, belgeler, testler | 🔄 Devam ediyor |
 | 19 | Ofisten kontrol: uzaktan onay | Bağlayıcı/Güvenlik Mühendisi + Frontend | izin isteklerini ve seçmeli soruları eşleşmiş telefondan onaylama/reddetme (tüm kullanıcılar, tüm ajan türleri) | ⬜ Bekliyor |
-| 20 | Kalan görevler | Koordinatör (Claude) + uzmanlar | yanıltıcı röle hatası, A5 birleştirme, bağlayıcı güncellemesi, kalan küçük işler | ⬜ Bekliyor |
+| 20 | Kalan görevler | Koordinatör (Claude) + uzmanlar | `v2.md` raporundaki 8 paket | 🔄 Devam ediyor |
 
 Durum işaretleri: ⬜ Bekliyor · 🔄 Devam ediyor · ✅ Tamamlandı · ⚠️ Sorunlu
 
@@ -407,12 +407,19 @@ Amaç: bir ajan izin istediğinde ya da soru sorduğunda kullanıcı telefondan 
 
 **Kabul kriterleri:** VS Code'da çalışan bir Claude Code oturumunun izin isteği telefondan onaylanınca araç çalışır, reddedilince çalışmaz; özellik kapalıyken ya da telefon cevap vermezken davranış eskisiyle aynıdır. Eşleşmemiş bir tarayıcı isteği göremez. Tüm testler geçer.
 
-### Aşama 20 — Kalan görevler (Koordinatör + uzmanlar) ⬜
-- [ ] Yanıltıcı "Röleye bağlanılamadı" hatası: yazma anahtarı yoksa (izleme bağlantısı) bunu açıkça söyleyen mesaj
-- [ ] Antigravity'nin A5 efekt teslimini incelemek ve birleştirmek (`sw.js` sürümü)
-- [ ] Bu bilgisayardaki bağlayıcıyı yeni sürüme güncellemek, `doctor`, eşleşmeler ve rölenin "canlı" durumunu doğrulamak
-- [ ] Kullanıcıyla: telefonu katılım bağlantısıyla eşleştirmek, ilk gerçek görev, diğer cihazda kurulumu yeniden çalıştırmak
-- [ ] İsteğe bağlı: `~/.pixel-test-room` temizliği, `relay/package-lock.json` (Node gerekir), GitHub noreply e-postası ve secret scanning (kullanıcı)
+### Aşama 20 — Kalan görevler (Koordinatör + uzmanlar) 🔄
+Genel inceleme raporu: [`v2.md`](v2.md) (2026-10-21). Paketler sırayla, her biri ayrı bir uzman ajanla yürütülür:
+- [ ] Paket 1 — Güvenlik (v2.md: H1, H7, H8, H13, H30)
+- [ ] Paket 2 — Bağlayıcı sağlamlığı (E1, H4–H6, H9, H11, H24–H29, H32, E5)
+- [ ] Paket 3 — Arayüz hataları (H2, E4, H3, H14–H16, H33–H35, E3)
+- [ ] Paket 4 — Aşama 18 (Antigravity) yarım işin tamamlanması
+- [ ] Paket 5 — Aşama 19 (ofisten onay)
+- [ ] Paket 6 — Bulut temizliği (F1, H12, H17, H19–H23, D5, D9, F3)
+- [ ] Paket 7 — Windows/macOS (H10, H31)
+- [ ] Paket 8 — Belgeler ve testler (D1–D4, D7, D8, E2, E6–E7, F4–F6, H36, E9, Antigravity v4 belgesi)
+- [ ] Kullanıcıyla: push, bağlayıcı güncellemesi (iki bilgisayar), Aşama 19 telefon testi; `relay/package-lock.json` yalnızca onayla (indirme gerekir)
+
+Kullanıcı kararları (2026-10-21): `tanitim.html` ana sayfa yapılmaz, olduğu gibi kalır; kullanılmayan A5 parçalarına (zoom, ek sesler) dokunulmaz.
 
 ### Yayına alma kontrol listesi (v3)
 
@@ -833,3 +840,4 @@ Her ajan işini bitirince buraya tarihli bir kayıt ekler (en yeni en altta).
   - **Ajan 4 (UI/HUD & Canlı Portreler):** Müfettiş (details) panelinde seçili ajanın kendi ten, saç ve kıyafet paletiyle oluşturulan 32x48 canlı animasyonlu piksel portresi; ajan listesi üstünde dinamik sayaçlı durum filtre çubuğu (`[Tümü] [Çalışan] [Bekleyen] [Kahve] [Uyuyan]`).
   - **Doğrulama:** Chrome CDP ile 1280 px, 390 px ve 360 px ekranlarda test edildi; 0 konsol hatası, 0 yatay taşma (scrollWidth === clientWidth). Unit testleri ve sprite validation tam başarıyla geçti.
   - **Birleştirme notu (Claude):** Pano kuralları gereği `ui.js` değişikliği Antigravity tarafından geri alındığı için canlı portre ve durum filtre çubuğu bu teslimde **yok**; zoom için yalnızca `renderer.setZoom()` var, ekranda düğme yok. Ses varsayılan kapalı (`localStorage` değeri yalnızca kullanıcı açınca `0` olur), parçacıklar `prefers-reduced-motion` ayarında kapanıyor, bağlayıcı dosyalarına dokunulmadı. `sw.js` sürümü `po-v3.0.5` yapıldı.
+- **2026-10-21 — Genel inceleme:** Üç uzman inceleyici (bulut/röle, bağlayıcı/kanca, arayüz/belgeler/testler) ve otomatik kontrollerle tüm proje incelendi; sonuçlar `v2.md`de (36 hata, 10 eksik, 6 fazlalık, 9 düzen maddesi). Kritik bulgu yok, bir yüksek güvenlik bulgusu var (H1). A5 birleştirildi ve yayında (`po-v3.0.5`). İş sırası: Paket 1→8 (Aşama 18 ve 19 dahil), her paket ayrı uzman ajanla.
