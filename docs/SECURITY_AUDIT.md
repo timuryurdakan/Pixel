@@ -211,3 +211,20 @@ first and confirmed failing against the previous code). The connector was rebuil
 Not verified on this machine: real Claude Code rule matching for the new `Edit(...)` patterns in a live `claude -p` run
 (the argv is test-checked; the gitignore-style matching itself belongs to Claude Code), and git's handling of
 `core.hooksPath=nul` on Windows.
+
+## 9. Phase 19 / Package 5 — Remote approvals threat model (2026-10-21)
+
+Feature: Claude Code permission requests and `AskUserQuestion` answered from paired browsers (design: `docs/V3.md` §6.9).
+Off by default; only `pixel-connector remote-approvals on` (local CLI, writes `connector.json`) enables it. Tests:
+`tests/test_phase19_approvals.py`, `tests/test_phase19_ui.py`.
+
+| Threat | Mitigation | Residual risk |
+|---|---|---|
+| **Stolen / lost phone** answers requests | Only paired, non-revoked browsers with an open E2E channel get `approval.request`; revoke from the CLI (`pixel-connector peers revoke <bid>`) or another browser closes its channels; every decision is audited with the browser id; Claude Code deny rules still win over an allow; no "approve all" | Until revocation, the phone (its unlocked browser profile) can approve each request one by one — the same window as giving it tasks (V3.md T8) |
+| **Replay / duplicate answers** | E2E seq numbers + per-connection keys reject replayed frames; each request has a random single-use id (`a` + 96 bits), expiry (`timeoutS` ≤ 280 s) and first-answer-wins under a lock; later answers get `unknown_approval` and change nothing | — |
+| **Wrong peer** (unpaired room member, revoked browser, relay) | The relay and the server only see ciphertext; an unpaired browser has no channel; a revoked peer is skipped and its channel closed; remote peers can answer only `toolApproval` items, never the local confirmations (task/agentCreate/runtime/peerRevoke) | — |
+| **Malformed answers** | `approval.answer` allow-list: id regex, `decision` ∈ allow/deny, `answers` only for questions, one index list per question, indices in range, exactly one for single choice, no duplicates; the hook checks the indices again against Claude Code's original input | — |
+| **CSRF / page token on `/onay`** | Unchanged Phase 15 design: HttpOnly SameSite=Strict cookie holding a page token derived from the control token, CSRF token on every form, Host check; the page token never unlocks `/ctl` (tested); questions can only be denied there | A local page cannot read the cookie or the CSRF token; the user must open the CLI-printed link |
+| **Hook spoofing** (a local process calls `/ctl/approvals/tool` or answers) | `/ctl` needs the control token from `~/.pixel-office/connector/control.json` (0600) — exactly what the CLI uses; Host check against DNS rebinding; at most 16 pending requests; a 401 closes the connection | Any process running as the same OS user can read the token and post fake cards or approve them (same as the CLI, V3.md T14). Connector-run agents can't read it (`Read(~/.pixel-office/**)` denied) — unless the user approves such a read from the phone |
+| **Information leak** | Summary only: command ≤ 200 chars, file basename, URL host; MCP tool input never sent; text cleaned of control/zero-width/bidi characters; rendered with `textContent` (XSS test); audit stores a 12-hex hash, not the text; the office still gets only `waiting_for_user` | The command text is visible to every paired browser of the owner (by design) |
+| **Fail-open** | Feature off, old async hook entry, connector down, timeout, withdrawal, malformed reply, exception → no output, Claude Code shows its own dialog; the hook never allows by itself | — |

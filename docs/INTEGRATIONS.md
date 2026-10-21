@@ -79,6 +79,22 @@ Durum dosyaları `~/.pixel-office/state/` altında tutulur. Günlük `~/.pixel-o
 
 Testlerde kullanılan ortam değişkenleri `PIXEL_OFFICE_HOME` ve `PIXEL_OFFICE_CLAUDE_SETTINGS`'tir. Bunlarla gerçek `~/.claude` klasörüne hiç dokunulmaz.
 
+### Telefondan onay (Aşama 19)
+
+Claude Code bir izin istediğinde (ör. bir `Bash` komutu) ya da seçmeli soru sorduğunda (`AskUserQuestion`), eşleşmiş telefonunuzda ofisin üstünde bir kart çıkar: araç, kısa özet (komut, dosya adı ya da adres), ajan, proje ve kalan süre; **Onayla** / **Reddet** düğmeleri, sorularda seçenekler ve **Gönder**. Bilgisayardaki Claude Code penceresi de aynı anda açık kalır; önce hangisi cevaplanırsa o geçerli olur, kart diğer cihazlardan kalkar.
+
+Açmak için (bağlayıcı kurulu ve telefon eşleşmiş olmalı):
+```sh
+pixel-connector remote-approvals on      # kapatmak: off · durum: status (doctor da gösterir)
+```
+Sonra kancayı bir kez yeniden kurun (Ajan bağla komutunu yeniden çalıştırın): kurulum artık `PermissionRequest` için beklemeli bir giriş yazar (`pixel_hook.py hook --decide`, `"timeout": 300`). Açık Claude Code oturumlarını yeniden başlatın.
+
+- Varsayılan **kapalı**; kapalıyken kanca eskisi gibi yalnızca durumu bildirir.
+- Cevap 240 sn içinde gelmezse, bağlayıcı kapalıysa ya da bir sorun olursa kanca hiçbir şey yazmaz: Claude Code'un kendi penceresi kalır. Kanca kendiliğinden asla izin vermez.
+- Özet bilgisayarda hazırlanır, yalnızca uçtan uca şifreli kanaldan eşleşmiş tarayıcılarınıza gider; sunucu ve röle göremez, ofiste yine yalnızca "İzin bekliyor" görünür.
+- Plan onayı (`ExitPlanMode`) telefona gönderilmez. Bilgisayarda `http://127.0.0.1:8766/onay` sayfası (`pixel-connector approve --link`) ve `pixel-connector approve|deny <id>` de aynı istekleri cevaplar (soruları yalnızca reddedebilir).
+- Çalışmayanlar: PowerShell istemcisi (`pixel_hook.ps1`; Windows'ta Python istemcisini kullanın), Antigravity (onay arayüzü yok, §6), `pixel-run` / `pixel-proxy` (izin istemi yok), bağlayıcının çalıştırdığı Claude ajanları (izin profilleriyle çalışır, soru sormaz).
+
 ## 2. Windows (`pixel_hook.ps1`, Python gerekmez)
 
 ```powershell
@@ -309,7 +325,7 @@ Neden bu değerler:
 
 Bunlar dil sunucusunun `/_sidecar/get-conversation-metadata`, `/_sidecar/new-conversation`, `/_sidecar/send-message` uçlarına gidiyor; araç Antigravity içindeki arka plan "sidecar"ları ve zamanlanmış görevler için yapılmış (`ANTIGRAVITY_AGENTAPI_EXE`). **Araç onayı ya da reddi için bir komut yok.** Dil sunucusunun içinde `LanguageServerService/HandleCascadeUserInteraction` ve `CancelCascadeInvocation` gibi iç RPC adları var; onaylar büyük olasılıkla IDE arayüzü ile dil sunucusu arasındaki bu belgelenmemiş iç bağlantıdan geçiyor. Bu bağlantı dışarıya açık bir arayüz değil, kullanmak desteklenmez ve her güncellemede bozulabilir.
 
-Sonuç: Aşama 19'da Antigravity için telefondan "onayla/reddet" bugünkü haliyle yapılamaz. Yapılabilecek olan, `send-message` ile bir konuşmaya metin cevap ya da `new-conversation` ile yeni görev göndermek. Bu da yalnızca açık bir kullanıcı eylemiyle olmalı. Araştırmada hiçbir konuşmaya mesaj gönderilmedi.
+Sonuç (Aşama 19'da uygulandı ve böyle kaldı, 2026-10-21): Antigravity için telefondan "onayla/reddet" yapılamaz; uzaktan onay yalnızca Claude Code kancasıyla çalışır (§1, "Telefondan onay"). Yapılabilecek olan, `send-message` ile bir konuşmaya metin cevap ya da `new-conversation` ile yeni görev göndermek. Bu da yalnızca açık bir kullanıcı eylemiyle olmalı. Araştırmada hiçbir konuşmaya mesaj gönderilmedi.
 
 ---
 

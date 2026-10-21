@@ -6,11 +6,20 @@
     python3 pixel_hook.py uninstall | test | doctor
     python3 pixel_hook.py status --session build --state working --tool Build --label "Derleniyor"
     python3 pixel_hook.py hook          # what Claude Code runs: hook JSON on stdin, always exit 0, no output
+    python3 pixel_hook.py hook --decide # PermissionRequest only (synchronous entry): may print a decision (Phase 19)
 
 Privacy (§7.4): the hook JSON is parsed, but only these keys are ever read: hook_event_name, session_id
 (hashed), agent_id (hashed), agent_type (built-in names only), cwd (basename / alias), source, tool_name,
 is_interrupt, notification_type, error (allow-listed enum). Prompts, tool input/output, messages,
 paths and raw ids never leave the machine and are never written to disk.
+
+Remote approvals (Phase 19, V3.md §6.9): only when the local connector has them switched on
+(`pixel-connector remote-approvals on`), the PermissionRequest hook also reads tool_input to build a short summary
+(command ≤ 200 chars, file *basename*, URL host, search query) or the AskUserQuestion options, and sends it over
+loopback to the connector's control API (token from connector/control.json, never through a proxy). The connector
+forwards it end-to-end encrypted to the user's paired browsers only; the office server still gets only the state.
+Fail-safe: no answer, timeout, connector down, feature off or anything unexpected → no output, so Claude Code keeps
+its own permission dialog (which is shown at the same time; the first answer wins). The hook never allows on its own.
 
 Environment: PIXEL_OFFICE_HOME (default ~/.pixel-office), PIXEL_OFFICE_CLAUDE_SETTINGS (default
 ~/.claude/settings.json), PIXEL_OFFICE_DISABLE=1 (report nothing for this process).
@@ -28,6 +37,7 @@ import secrets
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -86,6 +96,24 @@ KNOWN_EVENTS = ("SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionReq
                 "SubagentStop", "SessionEnd")
 # Events registered by the installer, and which take a tool matcher (§7.5.1).
 MATCHER_EVENTS = ("PreToolUse", "PermissionRequest", "PostToolUse", "PostToolUseFailure")
+
+# Phase 19: remote approvals through the local connector (V3.md §6.9).
+DECIDE_FLAG = "--decide"
+DECIDE_TIMEOUT = 300            # s; settings.json "timeout" of the synchronous PermissionRequest entry
+DECIDE_WATCHDOG = 295           # s; the --decide process never outlives Claude Code's timeout
+STATUS_JOIN = 12.0              # s; the office status report runs next to the wait
+APPROVAL_WAIT_DEFAULT = 240     # s; connector.json remoteApprovals.timeoutS (bounds below)
+APPROVAL_WAIT_BOUNDS = (5, 280)
+APPROVAL_HTTP_SLACK = 10        # s; read timeout = connector wait + this
+WITHDRAW_TIMEOUT = 1.5          # s
+WITHDRAW_EVENTS = ("PostToolUse", "PostToolUseFailure", "UserPromptSubmit", "Stop", "SessionEnd")
+NO_REMOTE_TOOLS = frozenset({"ExitPlanMode"})       # a plan is not something to approve unseen on a phone
+SUMMARY_MAX = 200
+REMOTE_TOOL_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
+MAX_QUESTIONS = 4
+MAX_OPTIONS = 6
+L_REMOTE_DENIED = "Kullanıcı bu isteği eşleşmiş cihazından (Pixel Office) reddetti."
+L_REMOTE_QUESTION_DENIED = "Kullanıcı soruyu eşleşmiş cihazından (Pixel Office) cevaplamadan kapattı."
 
 
 # --------------------------------------------------------------------------------------------------
@@ -638,8 +666,8 @@ class HookRunner:
         return "sent:%s" % status
 
 
-def run_hook(stdin=None, home: object = None) -> int:
-    """`hook` subcommand. Always returns 0 and prints nothing."""
+def run_hook(stdin=None, home: object = None, decide: bool = False, out=None) -> int:
+    """`hook` subcommand. Always returns 0. Prints nothing, except a PermissionRequest decision with `decide`."""
     try:
         if os.environ.get("PIXEL_OFFICE_DISABLE") == "1":
             _drain(stdin)
@@ -656,7 +684,18 @@ def run_hook(stdin=None, home: object = None) -> int:
         del raw
         if not isinstance(event, dict):
             return 0
-        _watchdog(4 if event.get("hook_event_name") == "SessionEnd" else WATCHDOG)
+        name = event.get("hook_event_name")
+        if decide and name == "PermissionRequest":
+            _watchdog(DECIDE_WATCHDOG)
+            res = decide_permission(event, cfg, home)
+            if res is not None:
+                dst = out or sys.stdout
+                dst.write(json.dumps(res, ensure_ascii=False, separators=(",", ":")))
+                dst.flush()
+            return 0
+        _watchdog(4 if name == "SessionEnd" else WATCHDOG)
+        if name in WITHDRAW_EVENTS:
+            withdraw_remote(event, cfg, home)
         HookRunner(cfg, home).handle(event)
     except BaseException:
         pass
@@ -700,6 +739,235 @@ def _watchdog(seconds: int) -> None:
 
 
 # --------------------------------------------------------------------------------------------------
+# Remote approvals (Phase 19): PermissionRequest → local connector → paired browser → allow/deny
+# --------------------------------------------------------------------------------------------------
+
+def remote_state(home: str) -> object:
+    """{"port", "token", "wait"} when ~/.pixel-office/connector/connector.json has remoteApprovals.enabled === true and
+    the running connector's control.json is there; otherwise None (feature off → the hook behaves as before)."""
+    chome = os.path.join(home, "connector")
+    conf = load_json_file(os.path.join(chome, "connector.json"))
+    ra = conf.get("remoteApprovals") if isinstance(conf, dict) else None
+    if not isinstance(ra, dict) or ra.get("enabled") is not True:
+        return None
+    wait = ra.get("timeoutS")
+    lo, hi = APPROVAL_WAIT_BOUNDS
+    if isinstance(wait, bool) or not isinstance(wait, int):
+        wait = APPROVAL_WAIT_DEFAULT
+    wait = min(hi, max(lo, wait))               # the same clamping as the connector's config validation
+    ctl = load_json_file(os.path.join(chome, "control.json"))
+    if not isinstance(ctl, dict):
+        return None
+    port, token = ctl.get("port"), ctl.get("token")
+    if isinstance(port, bool) or not isinstance(port, int) or not 0 < port < 65536:
+        return None
+    if not isinstance(token, str) or not token:
+        return None
+    return {"port": port, "token": token, "wait": wait}
+
+
+def ctl_post(state: dict, path: str, body: dict, timeout: float) -> object:
+    """POST JSON to the connector's loopback control API (never through a proxy). → parsed JSON or None."""
+    data = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    req = urllib.request.Request("http://127.0.0.1:%d%s" % (state["port"], path), data=data, method="POST",
+                                 headers={"Content-Type": "application/json", "X-Pixel-Ctl": state["token"],
+                                          "User-Agent": "pixel-hook/" + VERSION})
+    try:
+        with _urlopen(req, timeout=timeout) as resp:
+            if resp.status != 200:
+                return None
+            out = json.loads(resp.read(65536).decode("utf-8"))
+    except Exception:
+        return None
+    return out if isinstance(out, dict) else None
+
+
+def _basename(path: object) -> str:
+    parts = split_path(path) if isinstance(path, str) else []
+    return parts[-1] if parts else ""
+
+
+def tool_summary(tool: str, inp: object) -> str:
+    """Short text for the approval card: the command (≤ 200), a file *basename*, a URL host, a search pattern."""
+    if not isinstance(inp, dict):
+        return ""
+    v = None
+    if tool in ("Bash", "PowerShell"):
+        v = inp.get("command")
+    elif tool in ("Read", "Edit", "Write", "NotebookEdit", "MultiEdit"):
+        v = _basename(inp.get("file_path") or inp.get("notebook_path"))
+    elif tool in ("Glob", "Grep"):
+        v = inp.get("pattern")
+    elif tool == "WebFetch":
+        try:
+            v = urllib.parse.urlsplit(str(inp.get("url") or "")).hostname
+        except ValueError:
+            v = None
+    elif tool == "WebSearch":
+        v = inp.get("query")
+    elif tool in ("Agent", "Task"):
+        v = inp.get("description")
+    return _clean(v, SUMMARY_MAX) if isinstance(v, str) else ""
+
+
+def match_key(tool: object, inp: object) -> str:
+    """Links a PermissionRequest to the PostToolUse of the same call (withdraws the card once it ran)."""
+    try:
+        text = json.dumps(inp, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    except (TypeError, ValueError):
+        text = ""
+    return _sha("%s\0%s" % (tool if isinstance(tool, str) else "", text))[:32]
+
+
+def wire_questions(inp: object) -> object:
+    """AskUserQuestion input → the connector's question list, or None if it is not the documented shape."""
+    qs = inp.get("questions") if isinstance(inp, dict) else None
+    if not isinstance(qs, list) or not 1 <= len(qs) <= MAX_QUESTIONS:
+        return None
+    out = []
+    for q in qs:
+        if not isinstance(q, dict) or not isinstance(q.get("question"), str) or not q["question"].strip():
+            return None
+        opts = q.get("options")
+        multi = q.get("multiSelect", False)
+        if not isinstance(opts, list) or not 1 <= len(opts) <= MAX_OPTIONS or not isinstance(multi, bool):
+            return None
+        wire_opts = []
+        for o in opts:
+            if not isinstance(o, dict) or not isinstance(o.get("label"), str) or not o["label"].strip():
+                return None
+            d = o.get("description")
+            wire_opts.append({"label": o["label"][:200], "description": d[:400] if isinstance(d, str) else None})
+        h = q.get("header")
+        out.append({"question": q["question"][:1000], "header": h[:100] if isinstance(h, str) else None,
+                    "multiSelect": multi, "options": wire_opts})
+    return out
+
+
+def build_request(event: dict, cfg: dict) -> object:
+    """PermissionRequest event → /ctl/approvals/tool body, or None when this request is not sent to the phone."""
+    tool = event.get("tool_name")
+    if not isinstance(tool, str) or tool in NO_REMOTE_TOOLS or not REMOTE_TOOL_RE.match(tool):
+        return None
+    inp = event.get("tool_input")
+    session, sub = record_ids(event, cfg)
+    agent = "Claude Code"
+    atype = agent_type_for(event.get("agent_type")) if sub else None
+    if atype:
+        agent += " · " + atype
+    body = {"ask": "tool", "tool": tool, "summary": tool_summary(tool, inp), "agent": agent,
+            "session": session, "match": match_key(tool, inp)}
+    proj = project_for(event.get("cwd"), cfg)
+    if isinstance(proj, str) and proj:
+        body["project"] = proj
+    if tool == "AskUserQuestion":
+        qs = wire_questions(inp)
+        if qs is None:
+            return None
+        body["ask"] = "question"
+        body["questions"] = qs
+        body["summary"] = ""
+    return body
+
+
+def decision_output(event: dict, reply: object) -> object:
+    """Connector reply → Claude Code PermissionRequest output (docs: hooks → PermissionRequest decision control).
+    Anything but a clean allow/deny → None (Claude Code keeps its dialog)."""
+    if not isinstance(reply, dict):
+        return None
+    decision = reply.get("decision")
+    tool = event.get("tool_name")
+    if decision == "deny":
+        msg = L_REMOTE_QUESTION_DENIED if tool == "AskUserQuestion" else L_REMOTE_DENIED
+        return {"hookSpecificOutput": {"hookEventName": "PermissionRequest",
+                                       "decision": {"behavior": "deny", "message": msg}}}
+    if decision != "allow":
+        return None
+    out = {"behavior": "allow"}
+    if tool == "AskUserQuestion":
+        updated = question_input(event.get("tool_input"), reply.get("answers"))
+        if updated is None:
+            return None
+        out["updatedInput"] = updated
+    return {"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": out}}
+
+
+def question_input(inp: object, answers: object) -> object:
+    """Original AskUserQuestion input + `answers` {question text: label, multi-select labels joined with ", "}.
+    The answers are option indices; they are checked again against the *original* input here."""
+    qs = inp.get("questions") if isinstance(inp, dict) else None
+    if not isinstance(qs, list) or not isinstance(answers, list) or len(answers) != len(qs):
+        return None
+    mapped = {}
+    for q, idx in zip(qs, answers):
+        opts = q.get("options") if isinstance(q, dict) else None
+        if not isinstance(opts, list) or not isinstance(idx, list) or not idx:
+            return None
+        if any(isinstance(i, bool) or not isinstance(i, int) or not 0 <= i < len(opts) for i in idx):
+            return None
+        if len(set(idx)) != len(idx) or (q.get("multiSelect") is not True and len(idx) != 1):
+            return None
+        labels = [opts[i].get("label") if isinstance(opts[i], dict) else None for i in idx]
+        if not all(isinstance(x, str) for x in labels):
+            return None
+        mapped[q.get("question")] = ", ".join(labels)
+    updated = dict(inp)
+    updated["answers"] = mapped
+    return updated
+
+
+def remote_decision(event: dict, cfg: dict, home: str, post=None) -> object:
+    """Ask the paired devices through the connector; → hook output dict or None. Never raises."""
+    try:
+        if ignored_cwd(event.get("cwd")):
+            return None
+        state = remote_state(home)
+        if state is None:
+            return None
+        body = build_request(event, cfg)
+        if body is None:
+            return None
+        post = post or ctl_post
+        reply = post(state, "/ctl/approvals/tool", body, float(state["wait"] + APPROVAL_HTTP_SLACK))
+        out = decision_output(event, reply)
+        log_line(home, "PermissionRequest remote %s" % (reply.get("decision") if isinstance(reply, dict) else "neterr"))
+        return out
+    except Exception:
+        return None
+
+
+def withdraw_remote(event: dict, cfg: dict, home: str, post=None) -> None:
+    """The call ran, failed, or the turn moved on: take the session's card off the phones. Best effort."""
+    try:
+        state = remote_state(home)
+        if state is None:
+            return
+        session, _ = record_ids(event, cfg)
+        body = {"session": session}
+        if event.get("hook_event_name") in ("PostToolUse", "PostToolUseFailure"):
+            body["match"] = match_key(event.get("tool_name"), event.get("tool_input"))
+        (post or ctl_post)(state, "/ctl/approvals/withdraw", body, WITHDRAW_TIMEOUT)
+    except Exception:
+        pass
+
+
+def decide_permission(event: dict, cfg: dict, home: str, post=None, runner=None) -> object:
+    """`hook --decide` on PermissionRequest: the office status (waiting_for_user) is reported next to the wait."""
+    runner = runner or HookRunner(cfg, home)
+
+    def report():
+        try:
+            runner.handle(event)
+        except Exception:
+            pass
+    th = threading.Thread(target=report, daemon=True)
+    th.start()
+    out = remote_decision(event, cfg, home, post)
+    th.join(STATUS_JOIN)
+    return out
+
+
+# --------------------------------------------------------------------------------------------------
 # settings.json merge (§7.5.1)
 # --------------------------------------------------------------------------------------------------
 
@@ -714,14 +982,21 @@ def _is_ours(hook: object) -> bool:
     return any(isinstance(p, str) and MARKER in p for p in parts)
 
 
-def build_entries(command: str, args: object) -> dict:
-    """Matcher groups for every event. `args` None → shell-string form (command only)."""
+def build_entries(command: str, args: object, decide: bool = True) -> dict:
+    """Matcher groups for every event. `args` None → shell-string form (command only). With `decide`, PermissionRequest
+    is a synchronous entry (`hook --decide`, timeout 300 s) so a remote approval can answer it (Phase 19); Claude Code
+    shows its dialog meanwhile, so the wait never blocks the user at the computer. Every other event stays async."""
     def one(event: str) -> dict:
+        sync_decide = decide and event == "PermissionRequest"
         h = {"type": "command", "command": command}
         if args is not None:
-            h["args"] = list(args)
+            h["args"] = list(args) + ([DECIDE_FLAG] if sync_decide else [])
+        elif sync_decide:
+            h["command"] = "%s %s" % (command, DECIDE_FLAG)
         if event == "SessionEnd":
             h["timeout"] = 5
+        elif sync_decide:
+            h["timeout"] = DECIDE_TIMEOUT
         else:
             h["async"] = True
         g = {}
@@ -827,11 +1102,11 @@ def _real(path: str) -> str:
         return path
 
 
-def install_hooks(settings_path: str, command: str, args: object) -> dict:
+def install_hooks(settings_path: str, command: str, args: object, decide: bool = True) -> dict:
     settings_path = _real(settings_path)
     data = read_settings(settings_path)           # raises on invalid JSON before anything is written
     backup = backup_settings(settings_path)
-    merge_settings(data, build_entries(command, args))
+    merge_settings(data, build_entries(command, args, decide))
     write_settings(settings_path, data)
     return {"settings": settings_path, "backup": backup}
 
@@ -941,7 +1216,8 @@ def cmd_install(a) -> int:
     write_json_atomic(os.path.join(home, "config.json"), cfg, mode=0o600, indent=2)
     settings_path = claude_settings_path(a.settings_path)
     try:
-        res = install_hooks(settings_path, command, args)
+        # The PowerShell client has no remote-approval path (V3.md §6.9): its PermissionRequest entry stays async.
+        res = install_hooks(settings_path, command, args, decide=not a.force_powershell)
     except (SettingsError, OSError) as e:
         print("Hata: %s" % e, file=sys.stderr)
         return 1
@@ -1056,6 +1332,14 @@ def cmd_doctor(a) -> int:
         missing = [ev for ev in KNOWN_EVENTS if ev not in found]
         print("settings.json: %s — kancalı olaylar: %d/%d%s" % (
             path, len(found), len(KNOWN_EVENTS), (" (eksik: %s)" % ", ".join(missing)) if missing else ""))
+        decide_ok = any(isinstance(h, dict) and _is_ours(h) and not h.get("async") and DECIDE_FLAG in (
+            [h.get("command")] + (h.get("args") if isinstance(h.get("args"), list) else []) + [
+                (h.get("command") or "").split(" ")[-1]])
+            for g in (hooks.get("PermissionRequest") or []) if isinstance(g, dict)
+            for h in (g.get("hooks") if isinstance(g.get("hooks"), list) else []))
+        print("Uzaktan onay: bağlayıcıda %s · PermissionRequest girişi %s" % (
+            "açık" if remote_state(home) is not None else "kapalı ya da bağlayıcı çalışmıyor",
+            "hazır (--decide)" if decide_ok else "eski (uzaktan onay için kancayı yeniden kurun)"))
     except SettingsError as e:
         print("settings.json: %s" % e)
     try:
@@ -1126,7 +1410,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: object = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] == "hook":
-        return run_hook()
+        return run_hook(decide=DECIDE_FLAG in argv[1:])
     a = build_parser().parse_args(argv)
     handlers = {"install": cmd_install, "uninstall": cmd_uninstall, "test": cmd_test, "status": cmd_status,
                 "doctor": cmd_doctor, "map": cmd_map, "_offline-later": cmd_offline_later}

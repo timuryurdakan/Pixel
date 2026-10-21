@@ -445,10 +445,16 @@ class InstallerTests(unittest.TestCase):
             ours = [g for g in data["hooks"][e] if any(ph._is_ours(h) for h in g["hooks"])]
             self.assertEqual(len(ours), 1, e)
             h = ours[0]["hooks"][0]
+            # Phase 19: PermissionRequest is the synchronous "--decide" entry (remote approvals), with a timeout
+            # longer than the connector's longest wait (280 s); every other event stays async.
+            extra = ["--decide"] if e == "PermissionRequest" else []
             self.assertEqual((h["type"], h["command"], h["args"]),
-                             ("command", "/usr/bin/python3", ["/h/.pixel-office/pixel_hook.py", "hook"]))
+                             ("command", "/usr/bin/python3", ["/h/.pixel-office/pixel_hook.py", "hook"] + extra))
             if e == "SessionEnd":
                 self.assertEqual(h.get("timeout"), 5)
+                self.assertNotIn("async", h)
+            elif e == "PermissionRequest":
+                self.assertEqual(h.get("timeout"), 300)
                 self.assertNotIn("async", h)
             else:
                 self.assertIs(h["async"], True)

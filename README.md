@@ -316,7 +316,7 @@ içine kurar, `~/.pixel-office/bin/pixel-connector` kısayolunu ve ayar dosyası
 Ekrana yazdığı özeti bu sürümün özetiyle karşılaştırın:
 
 ```
-pixel-connector.pyz SHA-256: 395e5f513969bf6b6147880d3eec70beaa25e51d58b9bb96b02fe6e1c0270884
+pixel-connector.pyz SHA-256: 6e0f83b597e11a9c48ada6168cd9df38821d30424e00bf48b071e0bd2fca83f1
 ```
 
 Windows (PowerShell): komut kutusundaki **Windows** sekmesini kullanın (`irm …/install.ps1 -OutFile install.ps1`, sonra
@@ -398,6 +398,24 @@ Karaktere tıklayın; ayrıntılar panelinde görev kutusu açılır (telefonda 
 (ör. `Read src/app.py`) ayrıca listelenir. **Durdur** görevi keser (Claude Code'a önce nazikçe, en geç ~15 sn sonra zorla). **Yeni sohbet** Claude Code
 oturumunu sıfırlar (yoksa sohbet kaldığı yerden devam eder). **Son görevler** listesinden eski bir görevin istemi ve
 sonucu yeniden açılabilir (bunlar yalnızca bilgisayarınızda saklanır). Ajan meşgulse yeni görev sıraya girer (en fazla 1).
+
+### Telefondan onay (izin istekleri ve sorular)
+
+Bilgisayardaki Claude Code (VS Code ya da terminal) bir izin istediğinde ya da seçmeli soru sorduğunda, eşleşmiş
+telefonunuzda ofisin üstünde bir kart çıkar: araç, kısa özet, ajan, proje, kalan süre ve **Onayla** / **Reddet**
+(sorularda seçenekler ve **Gönder**). Kart **Cihazlar** sayfasında da görünür. Bilgisayardaki pencere de açık kalır, önce
+gelen cevap geçerlidir. Açmak için bilgisayarda:
+
+```sh
+pixel-connector remote-approvals on       # kapatmak: off · durum: status
+```
+
+Ardından kancayı bir kez yeniden kurun (**Ajan bağla** komutunu yeniden çalıştırın; `PermissionRequest` için 300 sn
+beklemeli bir giriş yazılır) ve açık Claude Code oturumlarını yeniden başlatın. Varsayılan kapalıdır. 240 sn içinde
+cevap gelmezse ya da bağlayıcı kapalıysa bilgisayardaki normal pencere kalır; kendiliğinden izin verilmez. İstekler
+yalnızca uçtan uca şifreli kanaldan eşleşmiş tarayıcılarınıza gider. Antigravity, `pixel-run`/`pixel-proxy`, PowerShell
+kanca istemcisi ve bağlayıcının kendi ajanları desteklenmez (ayrıntı: [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md) §1,
+[`docs/V3.md`](docs/V3.md) §6.9).
 
 ### Token göstergesi ve bütçeler
 

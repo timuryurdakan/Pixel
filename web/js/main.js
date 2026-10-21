@@ -527,8 +527,9 @@ function bootCloud(config) {
 
 // --- v3: device control (V3.md §11) ---------------------------------------------------------------------
 async function setupV3(roomId, key) {
-  const [{ DeviceHub }, { PromptPanel }, { DevicesPage, PairWizard, NewAgentDialog }, { fmtCompact: fmtTok }] = await Promise.all([
-    import('./control.js'), import('./prompt.js'), import('./devices.js'), import('./usage.js')]);
+  const [{ DeviceHub }, { PromptPanel }, { DevicesPage, PairWizard, NewAgentDialog }, { fmtCompact: fmtTok },
+    { ApprovalCenter }] = await Promise.all([
+    import('./control.js'), import('./prompt.js'), import('./devices.js'), import('./usage.js'), import('./approvals.js')]);
   const $ = (id) => document.getElementById(id);
   const hub = new DeviceHub({ roomId, writeKey: key,
     isVisible: () => document.visibilityState !== 'hidden' || !!(mini && mini.window) });
@@ -567,7 +568,13 @@ async function setupV3(roomId, key) {
       setTab(phone() ? 'agents' : 'office');
       if (hit) select(hit.id); else { v3.pendingSelect = ctl; toast('Ajan ofise girince açılacak'); }
     },
-    onToggle: (open) => { if (!open && document.body.dataset.tab === 'devices') setTab('office'); } });
+    onToggle: (open) => {
+      approvals.placeOnPage(open);
+      if (!open && document.body.dataset.tab === 'devices') setTab('office');
+    } });
+  // Phase 19: permission requests / questions from paired computers, answered here (V3.md §6.9).
+  const approvals = new ApprovalCenter({ hub, banner: $('approvals'), pageSlot: $('dev-approvals'), sound,
+    badges: [$('btn-devices'), document.querySelector('#tabbar [data-tab="devices"]')] });
   let boosted = false;
   const panel = new PromptPanel({ hub, slot: $('agent-control'), toast, headStop: $('sheet-stop'),
     onPair: () => wizard.open(2), onDevices: () => devices.open(),
@@ -577,7 +584,7 @@ async function setupV3(roomId, key) {
       if (!running && transport && transport.boost) transport.boost({ ms: 30000 });
       boosted = running;
     } });
-  v3 = { hub, panel, devices, wizard, newAgent, pendingSelect: null, setTab };
+  v3 = { hub, panel, devices, wizard, newAgent, approvals, pendingSelect: null, setTab };
   window.pixelOffice.v3 = v3;
 
   ui.ctlInfo = (a) => {

@@ -57,6 +57,9 @@
   </aside>
 </main>
 
+<!-- v3: remote approval cards over the office (Phase 19, approvals.js); filled by script, hidden when empty -->
+<section id="approvals" class="approvals" hidden aria-label="Onay bekleyen istekler" aria-live="polite"></section>
+
 <!-- v3: phone tab bar (V3.md §11.6); shown only when device control is available -->
 <nav id="tabbar" class="tabbar" aria-label="Bölümler" hidden>
   <button type="button" data-tab="office" aria-current="page">Ofis</button>
@@ -73,6 +76,9 @@
       <button type="button" class="btn accent" data-dev-add>+ Cihaz ekle</button>
       <button type="button" class="close" data-dev-close aria-label="Kapat">✕</button>
     </header>
+    <section id="dev-approvals" class="dev-approvals" hidden aria-label="Onay bekleyenler">
+      <h3>Onay bekleyenler</h3>
+    </section>
     <div class="dev-body"></div>
   </div>
 </section>

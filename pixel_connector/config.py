@@ -46,6 +46,10 @@ DEFAULT_LIMITS = {"maxConcurrent": 2, "taskTimeoutS": 3600, "maxPromptBytes": 32
 DEFAULT_CONFIRM = {"task": "never", "agentCreate": False, "runtime": False, "peerRevoke": False, "timeoutS": 120}
 DEFAULT_CLAUDE = {"path": None, "enabled": True, "bare": False, "showThinking": False, "maxTurns": 50,
                   "maxBudgetUsdPerTask": 2.0, "defaultModel": None, "cancelGraceS": 5.0, "cancelTermS": 10.0}
+# Phase 19: answering Claude Code permission requests from paired devices. Off unless the user runs
+# `pixel-connector remote-approvals on` (local CLI only). The wait stays below the hook's 300 s command timeout.
+DEFAULT_REMOTE_APPROVALS = {"enabled": False, "timeoutS": 240}
+REMOTE_APPROVAL_TIMEOUT_BOUNDS = (5, 280)
 DEFAULT_OLLAMA = {"url": "http://127.0.0.1:11434", "enabled": True, "keepAlive": "10m", "numCtx": None,
                   "historyMessages": 40, "allowRemote": False, "showThinking": False}
 
@@ -219,7 +223,7 @@ def validate_budget(b, errors: List[str], where: str, need_scope: bool = True) -
 # --------------------------------------------------------------------------------------------------
 
 KNOWN_TOP = {"v", "server", "room", "key", "owner", "deviceName", "workspaces", "engines", "profiles", "runtimes",
-             "confirm", "budgets", "limits", "remote", "audit", "approvalPort"}
+             "confirm", "budgets", "limits", "remote", "audit", "approvalPort", "remoteApprovals"}
 
 
 class Config:
@@ -463,6 +467,7 @@ def validate(raw: Any, home: Optional[str] = None, which=shutil.which) -> Tuple[
     au = raw.get("audit") if isinstance(raw.get("audit"), dict) else {}
     d["audit"] = {"storePrompts": _bool(au.get("storePrompts"), False)}
     d["approvalPort"] = _num(raw.get("approvalPort"), 8766, 0, 65535, integer=True)
+    d["remoteApprovals"] = remote_approvals_from(raw)
 
     budgets = []
     for i, b in enumerate(raw.get("budgets") or []):
@@ -472,6 +477,24 @@ def validate(raw: Any, home: Optional[str] = None, which=shutil.which) -> Tuple[
             budgets.append(v)
     d["budgets"] = budgets
     return d, errors, warnings
+
+
+def remote_approvals_from(raw) -> dict:
+    """`remoteApprovals` of a raw connector.json → {"enabled", "timeoutS"}. Only a literal `true` enables it."""
+    ra = raw.get("remoteApprovals") if isinstance(raw, dict) and isinstance(raw.get("remoteApprovals"), dict) else {}
+    lo, hi = REMOTE_APPROVAL_TIMEOUT_BOUNDS
+    return {"enabled": ra.get("enabled") is True,
+            "timeoutS": _num(ra.get("timeoutS"), DEFAULT_REMOTE_APPROVALS["timeoutS"], lo, hi, integer=True)}
+
+
+def remote_approvals_state(home: str) -> dict:
+    """Read live from connector.json on every request, so `remote-approvals on|off` needs no restart. Unreadable or
+    invalid file → off (fail closed)."""
+    try:
+        raw = read_json(os.path.join(home, CONFIG_FILE))
+    except (OSError, ValueError, UnicodeDecodeError):
+        raw = None
+    return remote_approvals_from(raw)
 
 
 def _default_device_name() -> str:

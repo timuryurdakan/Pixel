@@ -18,7 +18,8 @@ KEEP = 3
 
 EVENTS = {"pair.ok", "pair.fail", "peer.revoke", "hs.ok", "hs.fail", "tamper", "task.start", "task.end", "task.cancel",
           "confirm", "agent.create", "agent.update", "agent.delete", "agent.reset", "runtime.start", "runtime.stop",
-          "model.load", "model.unload", "budget.set", "denied", "config.load", "service.start", "service.stop"}
+          "model.load", "model.unload", "budget.set", "denied", "config.load", "service.start", "service.stop",
+          "approval.request", "approval.approve", "approval.deny", "approval.expire", "approval.withdraw"}
 
 
 def iso_now(t: Optional[float] = None) -> str:

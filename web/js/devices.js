@@ -77,6 +77,7 @@ const confirmBox = (text) => window.confirm(text);
 // Phase 17: a paired device with an empty workspace allow-list. Static text plus the local command; nothing here
 // comes from the browser or the device, and the allow-list can only be widened on the computer itself.
 export const NO_WORKSPACE_CMD = 'pixel-connector workspace add ~/projem';
+export const REMOTE_APPROVALS_CMD = 'pixel-connector remote-approvals on';
 export const NO_WORKSPACE_HINT = `Bu cihazda izinli klasör yok. Bilgisayarda şunu çalıştırın: ${NO_WORKSPACE_CMD} `
   + '(ya da varsayılan ~/PixelOfficeIsler klasörünü kullanmak için bağlayıcıyı güncelleyin).';
 
@@ -320,6 +321,11 @@ export class DevicesPage {
         if (c.headToken !== headToken || !connectorOutdated(info, sha)) return;
         c.head.appendChild(el('p', 'dev-hint dev-update small', UPDATE_HINT));
       });
+    }
+    if (d.ready && d.info && d.info.approvals && typeof d.info.approvals.remote === 'boolean') {
+      c.head.appendChild(el('p', 'dev-hint muted small dev-apv', d.info.approvals.remote
+        ? 'Uzaktan onay: açık — Claude Code izin istekleri ve soruları burada da görünür.'
+        : `Uzaktan onay kapalı. Açmak için bu bilgisayarda: ${REMOTE_APPROVALS_CMD}`));
     }
     if (d.status === 'error' || (!d.ready && d.online)) {
       c.head.appendChild(btn('Yeniden dene', 'btn small', () => this.hub.connect(id).catch((e) => this.toast(e instanceof ControlError ? e.text : 'Bağlanılamadı', { error: true }))));

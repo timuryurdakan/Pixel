@@ -9,6 +9,7 @@
     pixel-connector usage [--period day|week|month]
     pixel-connector workspace [list|add <yol> [--name AD] [--id KİMLİK] [--children]|remove <kimlik>]
     pixel-connector approve [<id>|--link] | deny <id>
+    pixel-connector remote-approvals [on|off|status]
     pixel-connector doctor | config-check | install-service [--dry-run] | uninstall-service [--dry-run] | reset-keys
 """
 
@@ -508,13 +509,111 @@ def cmd_approve(args, ok: bool = True) -> int:
         if not d["pending"]:
             OUT("Onay bekleyen bir şey yok.")
         for p in d["pending"]:
-            OUT("%s  %s  %s\n    %s" % (term_safe(p["id"], 16), term_safe(p["agent"], 40), term_safe(p["title"], 80),
+            OUT("%s  %s  %s\n    %s" % (term_safe(p["id"], 24), term_safe(p["agent"], 40), term_safe(p["title"], 80),
                                          term_safe(p["preview"])))
         return 0
     st, d = _service_call(home, "POST", "/ctl/approvals/resolve", {"id": args.id, "ok": ok})
+    if st == 409:
+        return _err("bu bir soru: seçenekleri telefondan ya da Claude Code penceresinden seçin "
+                    "(buradan yalnızca reddedilebilir: pixel-connector deny %s)." % term_safe(args.id, 24))
     if st != 200:
-        return _err("böyle bekleyen bir onay yok: %s" % args.id)
+        return _err("böyle bekleyen bir onay yok: %s" % term_safe(args.id, 24))
     OUT("Onaylandı." if ok else "Reddedildi.")
+    return 0
+
+
+# --------------------------------------------------------------------------------------------------
+# remote-approvals on|off|status (Phase 19). Local CLI only: no E2E message and no /ctl route changes it, so neither a
+# paired browser nor the /onay page token can switch it on.
+# --------------------------------------------------------------------------------------------------
+
+HOOK_DECIDE_FLAG = "--decide"
+HOOK_MARKER = "pixel_hook"
+
+
+def claude_settings_path() -> str:
+    env = os.environ.get("PIXEL_OFFICE_CLAUDE_SETTINGS")
+    if env:
+        return os.path.abspath(os.path.expanduser(env))
+    return os.path.join(os.path.expanduser("~"), ".claude", "settings.json")
+
+
+def hook_entry_state(path: Optional[str] = None, wait_s: int = CFG.DEFAULT_REMOTE_APPROVALS["timeoutS"]) -> str:
+    """Read-only look at Claude Code's settings.json: is our PermissionRequest hook the synchronous "--decide" entry with
+    a timeout longer than the connector's wait? → "ok" | "old" (async entry from before Phase 19, or too short a
+    timeout) | "missing" | "unreadable"."""
+    path = path or claude_settings_path()
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return "missing"
+    except (OSError, ValueError):
+        return "unreadable"
+    groups = (data.get("hooks") or {}).get("PermissionRequest") if isinstance(data, dict) and isinstance(
+        data.get("hooks"), dict) else None
+    found = False
+    for g in groups if isinstance(groups, list) else []:
+        for h in (g.get("hooks") if isinstance(g, dict) and isinstance(g.get("hooks"), list) else []):
+            if not isinstance(h, dict):
+                continue
+            parts = [h.get("command")] + (h.get("args") if isinstance(h.get("args"), list) else [])
+            text = " ".join(p for p in parts if isinstance(p, str))
+            if HOOK_MARKER not in text:
+                continue
+            found = True
+            timeout = h.get("timeout")
+            if HOOK_DECIDE_FLAG in text and not h.get("async") and isinstance(timeout, (int, float)) \
+                    and timeout > wait_s:
+                return "ok"
+    return "old" if found else "missing"
+
+
+HOOK_STATE_TEXT = {
+    "ok": "hazır (PermissionRequest kancası onay bekleyebiliyor)",
+    "old": "eski kurulum — kancayı yeniden kurun (Ofis → Ajan bağla komutu), yoksa telefondan gelen cevap Claude Code'a "
+           "ulaşmaz",
+    "missing": "Pixel Office kancası kurulu değil (Ofis → Ajan bağla)",
+    "unreadable": "~/.claude/settings.json okunamadı",
+}
+
+
+def remote_approvals_line(home: str) -> str:
+    st = CFG.remote_approvals_state(home)
+    hook = hook_entry_state(wait_s=st["timeoutS"])
+    return "Uzaktan onay: %s (bekleme %d sn) · Claude Code kancası: %s" % (
+        "açık" if st["enabled"] else "kapalı", st["timeoutS"], HOOK_STATE_TEXT[hook])
+
+
+def cmd_remote_approvals(args) -> int:
+    home = _home(args)
+    if args.action == "status":
+        OUT(remote_approvals_line(home))
+        return 0
+    path = os.path.join(home, CFG.CONFIG_FILE)
+    try:
+        raw = CFG.read_json(path)
+    except (ValueError, UnicodeDecodeError) as e:
+        return _err("connector.json geçerli JSON değil (%s)." % e)
+    if not isinstance(raw, dict):
+        return _err("%s yok ya da geçersiz. Önce kurulum: pixel-connector setup …" % path)
+    ra = raw.get("remoteApprovals") if isinstance(raw.get("remoteApprovals"), dict) else {}
+    ra = dict(ra, enabled=args.action == "on")
+    ra.setdefault("timeoutS", CFG.DEFAULT_REMOTE_APPROVALS["timeoutS"])
+    raw["remoteApprovals"] = ra
+    CFG.write_json(path, raw)
+    if args.action == "off":
+        OUT("Uzaktan onay kapatıldı. İzin istekleri yalnızca bilgisayardaki Claude Code penceresinde sorulur.")
+        return 0
+    OUT("Uzaktan onay açıldı (bağlayıcıyı yeniden başlatmak gerekmez).")
+    OUT("Claude Code bir izin istediğinde ya da seçmeli soru sorduğunda, eşleşmiş tarayıcılarınızda (telefon dahil) "
+        "Onayla / Reddet kartı çıkar; bilgisayardaki pencere de açık kalır, önce gelen cevap geçerli olur. "
+        "%d sn içinde cevap gelmezse yalnızca bilgisayardaki pencere kalır." % CFG.remote_approvals_state(home)["timeoutS"])
+    OUT(remote_approvals_line(home))
+    if hook_entry_state(wait_s=CFG.remote_approvals_state(home)["timeoutS"]) != "ok":
+        OUT("Kancayı yeniden kurun: Ofis → Ajan bağla → komutu yeniden çalıştırın (ya da: "
+            "python3 ~/.pixel-office/pixel_hook.py install --server … --room … --key … --name …). "
+            "Sonra açık Claude Code oturumlarını yeniden başlatın.")
     return 0
 
 
@@ -743,6 +842,7 @@ def cmd_doctor(args) -> int:
         bad += 1
         OUT("Sunucu: ✗ (%s)" % type(e).__name__)
     OUT(update_line(cfg.data["server"], running_pyz_sha256()))
+    OUT(remote_approvals_line(home))
     from . import service
     OUT("Servis: %s" % service.status())
     OUT(running_status_line(home))
@@ -871,6 +971,8 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("deny")
     s.add_argument("id")
     s.set_defaults(link=False)
+    s = sub.add_parser("remote-approvals", help="eşleşmiş cihazlardan izin onayı: on | off | status")
+    s.add_argument("action", nargs="?", default="status", choices=["on", "off", "status"])
     s = sub.add_parser("workspace", help="çalışma klasörleri: list | add <yol> | remove <kimlik>")
     s.add_argument("action", nargs="?", default="list", choices=["list", "add", "remove"])
     s.add_argument("target", nargs="?", help="add: klasör yolu · remove: kimlik")
@@ -901,7 +1003,7 @@ def main(argv=None) -> int:
         return _err("klasör yolunu yazın: pixel-connector workspace add ~/projem" if args.action == "add"
                     else "kaldırılacak klasörün kimliğini yazın (liste: pixel-connector workspace list).")
     table = {"setup": cmd_setup, "workspace": cmd_workspace, "run": cmd_run, "pair": cmd_pair, "peers": cmd_peers, "agents": cmd_agents,
-             "runtimes": cmd_runtimes, "usage": cmd_usage, "approve": cmd_approve,
+             "runtimes": cmd_runtimes, "usage": cmd_usage, "approve": cmd_approve, "remote-approvals": cmd_remote_approvals,
              "deny": lambda a: cmd_approve(a, ok=False), "doctor": cmd_doctor, "config-check": cmd_config_check,
              "install-service": cmd_install_service, "uninstall-service": cmd_uninstall_service,
              "reset-keys": cmd_reset_keys}

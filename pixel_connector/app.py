@@ -21,9 +21,10 @@ from typing import Callable, Dict, List, Optional
 from . import __build__, __version__
 from . import crypto as C
 from .agents import LABELS, AgentError, AgentStore, OfficeReporter
-from .approvals import Approvals, ControlServer
+from .approvals import (TOOL_ID_RE, Approvals, ControlServer, ToolApproval, ToolLimit, summary_hash,
+                        validate_tool_request)
 from .audit import AuditLog
-from .config import AUDIT_FILE, LEDGER_FILE, Config, ensure_dir
+from .config import AUDIT_FILE, LEDGER_FILE, Config, ensure_dir, remote_approvals_state
 from .engines.base import TaskContext, clear_history
 from .engines.claude import ClaudeEngine
 from .engines.ollama import OllamaEngine
@@ -40,6 +41,10 @@ REQ_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}\Z")
 TASK_RE = re.compile(r"^t_[A-Za-z0-9_-]{10}\Z")
 PROFILE_LABELS = {"readonly": "Sadece okuma", "edit": "Düzenleyebilir", "dev": "Geliştirici", "auto": "Otomatik"}
 STOP_WAIT_S = 10.0          # stop(): how long all cancelled runs together may take to end (v2.md H11)
+APPROVAL_RESULT = {"ok": "allow", "denied": "deny", "timeout": "expired", "withdrawn": "withdrawn"}
+APPROVAL_AUDIT = {"ok": "approval.approve", "denied": "approval.deny", "timeout": "approval.expire",
+                  "withdrawn": "approval.withdraw"}
+APPROVAL_POLL_S = 0.5       # how often a waiting /ctl/approvals/tool call checks that its hook is still there
 SLOW_TYPES = {"peer.hello", "runtime.list", "runtime.start", "runtime.stop", "model.load", "model.unload",
               "workspace.list", "agent.create", "peer.revoke"}
 
@@ -443,13 +448,84 @@ class Connector:
                 "profiles": [{"id": p, "label": PROFILE_LABELS[p],
                               "enabled": p != "auto" or self.cfg["profiles"]["auto"]["enabled"]}
                              for p in ("readonly", "edit", "dev", "auto")],
-                "remote": dict(self.cfg["remote"]), "time": int(self.clock() * 1000), "tz": tz_name()}
+                "remote": dict(self.cfg["remote"]), "approvals": {"remote": self.remote_approvals()["enabled"]},
+                "time": int(self.clock() * 1000), "tz": tz_name()}
 
-    def h_peer_hello(self, peer: Peer, msg: dict) -> dict:
+    def h_peer_hello(self, peer: Peer, msg: dict) -> None:
         lbl = msg.get("label")
         if isinstance(lbl, str) and lbl.strip():
             peer.label = "".join(ch for ch in lbl if ch.isprintable())[:40]
-        return self.device_info()
+        self.reply(peer, msg, self.device_info())
+        for p in self._tool_pending():                  # a phone that opens the office now still sees them
+            self._send_peer(peer, {"type": "approval.request", "approval": p.wire()})
+        return None
+
+    # -- handlers: remote approvals (Phase 19) ---------------------------------------------------
+    def remote_approvals(self) -> dict:
+        return remote_approvals_state(self.home)
+
+    def _tool_pending(self) -> List[ToolApproval]:
+        with self.approvals._lock:
+            return [p for p in self.approvals.pending.values() if isinstance(p, ToolApproval)]
+
+    def _send_peer(self, peer: Peer, obj: dict) -> None:
+        if self.peers.active(peer.bid) is None:         # revoked meanwhile: nothing more for this channel
+            return
+        try:
+            self.router.send(peer, obj)
+        except ValueError:
+            pass
+
+    def broadcast(self, obj: dict) -> None:
+        """Every open E2E channel of an active paired browser. Every paired browser has full control (V3.md §6.8:
+        there is no view-only pairing); unpaired browsers have no channel and the relay sees ciphertext only."""
+        for p in self.router.all_peers():
+            self._send_peer(p, obj)
+
+    def h_approval_list(self, peer, msg) -> dict:
+        return {"type": "approval.list.result", "approvals": [p.wire() for p in self._tool_pending()]}
+
+    def h_approval_answer(self, peer, msg) -> dict:
+        aid, decision, answers = msg.get("approval"), msg.get("decision"), msg.get("answers")
+        if not isinstance(aid, str) or not TOOL_ID_RE.match(aid):
+            raise Reply("bad_request", "approval")
+        if decision not in ("allow", "deny"):
+            raise Reply("bad_request", "decision")
+        if answers is not None and (decision != "allow" or not isinstance(answers, list) or len(answers) > 4):
+            raise Reply("bad_request", "answers")
+        res = self.approvals.answer(aid, decision == "allow", answers, by=peer.bid, tool_only=True)
+        if res == "unknown":
+            raise Reply("unknown_approval", "no such pending approval (answered elsewhere or expired)")
+        if res == "bad_answer":
+            raise Reply("bad_request", "answers")
+        return {"type": "approval.answered", "approval": aid, "decision": decision}
+
+    def _tool_done(self, p: ToolApproval, result: str) -> None:
+        self.audit.write(APPROVAL_AUDIT.get(result, "approval.withdraw"), id=p.id, tool=p.req["tool"],
+                         ask=p.req["ask"], by=p.by)
+        self.broadcast({"type": "approval.resolved", "approval": p.id, "result": APPROVAL_RESULT.get(result, "withdrawn")})
+
+    def ctl_tool_approval(self, body: dict, query: dict, gone: Callable[[], bool]):
+        """POST /ctl/approvals/tool (the PermissionRequest hook): long-poll until the first answer, expiry, withdrawal or
+        the hook going away. → {"decision": "allow"|"deny"|"timeout"|"withdrawn"|"off", "answers"?}."""
+        state = self.remote_approvals()
+        if not state["enabled"]:
+            return 200, {"decision": "off"}
+        try:
+            req = validate_tool_request(body)
+        except ValueError as e:
+            return 400, {"error": "bad_request", "field": str(e)}
+        try:
+            p = self.approvals.request_tool(req, float(state["timeoutS"]), self._tool_done)
+        except ToolLimit:
+            return 429, {"error": "too_many"}
+        self.audit.write("approval.request", id=p.id, tool=req["tool"], ask=req["ask"],
+                         summarySha=summary_hash(req["summary"]) if req["summary"] else None)
+        self.broadcast({"type": "approval.request", "approval": p.wire()})
+        while not p.done.wait(APPROVAL_POLL_S):
+            if gone() or self._stop.is_set():
+                self.approvals.withdraw(pid=p.id)
+        return 200, p.outcome()
 
     def h_agent_list(self, peer, msg) -> dict:
         return {"type": "agent.list.result", "agents": [self.agent_public(a) for a in self.agents.list()]}
@@ -801,7 +877,10 @@ class Connector:
             return 200, {"pending": self.approvals.list(), "link": self.ctl.page_link() if self.ctl else None}
 
         def approvals_resolve(b, q):
-            if not self.approvals.resolve(str(b.get("id")), bool(b.get("ok"))):
+            res = self.approvals.answer(str(b.get("id")), b.get("ok") is True, None, by="cli")
+            if res == "bad_answer":
+                return 409, {"error": "question"}         # a question can only be answered with its options
+            if res != "ok":
                 return 404, {"error": "unknown"}
             return 200, {"ok": True}
 
@@ -811,10 +890,23 @@ class Connector:
             except Reply as e:
                 return 400, {"error": e.code}
 
+        def tool_approval(b, q, gone):
+            return self.ctl_tool_approval(b, q, gone)
+        tool_approval.long_poll = True
+
+        def approvals_withdraw(b, q):
+            session, match = b.get("session"), b.get("match")
+            if not isinstance(session, str) or not re.match(r"^[0-9a-f]{20}\Z", session):
+                return 400, {"error": "bad_request"}
+            if match is not None and (not isinstance(match, str) or not re.match(r"^[0-9a-f]{16,64}\Z", match)):
+                return 400, {"error": "bad_request"}
+            return 200, {"withdrawn": len(self.approvals.withdraw(session, match))}
+
         return {("GET", "/ctl/status"): status, ("POST", "/ctl/pair/start"): pair_start,
                 ("GET", "/ctl/pair/status"): pair_status, ("POST", "/ctl/pair/confirm"): pair_confirm,
                 ("GET", "/ctl/peers"): peers, ("POST", "/ctl/peers/revoke"): peers_revoke,
                 ("GET", "/ctl/agents"): agents, ("POST", "/ctl/agents/delete"): agents_delete,
                 ("GET", "/ctl/runtimes"): runtimes, ("POST", "/ctl/runtimes/start"): rt("start"),
                 ("POST", "/ctl/runtimes/stop"): rt("stop"), ("GET", "/ctl/approvals"): approvals,
-                ("POST", "/ctl/approvals/resolve"): approvals_resolve, ("GET", "/ctl/usage"): usage}
+                ("POST", "/ctl/approvals/resolve"): approvals_resolve, ("GET", "/ctl/usage"): usage,
+                ("POST", "/ctl/approvals/tool"): tool_approval, ("POST", "/ctl/approvals/withdraw"): approvals_withdraw}

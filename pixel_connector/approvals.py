@@ -2,6 +2,10 @@
 
 - `Approvals`: pending confirmations (task, agentCreate, runtime, peerRevoke) with a timeout; answered from the CLI
   (`pixel-connector approve|deny <id>`) or the page `http://127.0.0.1:<port>/onay`.
+- `ToolApproval` (Phase 19, kind `toolApproval`): a Claude Code permission request or multiple-choice question sent by
+  the local hook over /ctl. Besides the CLI and /onay it can be answered by a paired browser over E2E
+  (`approval.answer`). Single-use random id, expiry, first answer wins; answers to questions are option *indices*
+  checked against the request.
 - `notify(name)`: OS notification with a fixed text that never includes the prompt.
 - `ControlServer`: `http://127.0.0.1:<port>/ctl/*` JSON API for the CLI, protected by the token in control.json
   (`X-Pixel-Ctl` header, constant-time compare) and a strict Host check (DNS rebinding). The /onay page uses a
@@ -19,6 +23,7 @@ import json
 import os
 import re
 import secrets
+import select
 import shutil
 import socket
 import subprocess
@@ -47,10 +52,165 @@ class Pending:
         self.expires = expires
         self.created = created
         self.result: Optional[str] = None
+        self.by: Optional[str] = None
 
     def public(self) -> dict:
         return {"id": self.id, "kind": self.kind, "title": self.title, "preview": self.preview, "agent": self.agent,
                 "expiresAt": int(self.expires * 1000), "createdAt": int(self.created * 1000)}
+
+
+# --------------------------------------------------------------------------------------------------
+# Phase 19: tool approvals (Claude Code PermissionRequest hook → connector → paired browsers)
+# --------------------------------------------------------------------------------------------------
+
+TOOL_KIND = "toolApproval"
+TOOL_ID_RE = re.compile(r"^a[A-Za-z0-9_-]{16}\Z")
+TOOL_NAME_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}\Z")
+SESSION_RE = re.compile(r"^[0-9a-f]{20}\Z")
+MATCH_RE = re.compile(r"^[0-9a-f]{16,64}\Z")
+MAX_TOOL_PENDING = 16
+SUMMARY_MAX = 200
+AGENT_MAX = 40
+PROJECT_MAX = 32
+MAX_QUESTIONS = 4
+MAX_OPTIONS = 6
+QUESTION_MAX = 200
+HEADER_MAX = 30
+LABEL_MAX = 60
+DESCRIPTION_MAX = 120
+RAW_TEXT_MAX = 4096           # longer input strings are refused, not truncated (they are not from our hook)
+# Control characters, zero-width and bidirectional formatting characters (Trojan Source) never reach a screen.
+_INVISIBLE_RE = re.compile("[\x00-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]")
+
+
+class ToolLimit(Exception):
+    """Too many tool approvals are waiting at once."""
+
+
+def clean_text(value, limit: int) -> str:
+    """Display text from the hook: invisible characters → space, whitespace collapsed, cut to `limit` with "…"."""
+    s = " ".join(_INVISIBLE_RE.sub(" ", value).split())
+    return s if len(s) <= limit else s[:limit - 1].rstrip() + "…"
+
+
+def _text(body: dict, key: str, limit: int, required: bool = False) -> Optional[str]:
+    v = body.get(key)
+    if v is None and not required:
+        return None
+    if not isinstance(v, str) or len(v) > RAW_TEXT_MAX:
+        raise ValueError(key)
+    out = clean_text(v, limit)
+    if required and not out:
+        raise ValueError(key)
+    return out or None
+
+
+def validate_tool_request(body) -> dict:
+    """/ctl/approvals/tool body → normalized request. Raises ValueError(field) for anything outside the allow-list."""
+    if not isinstance(body, dict):
+        raise ValueError("body")
+    ask = body.get("ask", "tool")
+    if ask not in ("tool", "question"):
+        raise ValueError("ask")
+    tool = body.get("tool")
+    if not isinstance(tool, str) or not TOOL_NAME_RE.match(tool):
+        raise ValueError("tool")
+    req = {"ask": ask, "tool": tool, "summary": _text(body, "summary", SUMMARY_MAX) or "",
+           "agent": _text(body, "agent", AGENT_MAX) or "Claude Code", "project": _text(body, "project", PROJECT_MAX)}
+    for key, rx in (("session", SESSION_RE), ("match", MATCH_RE)):
+        v = body.get(key)
+        if v is not None and (not isinstance(v, str) or not rx.match(v)):
+            raise ValueError(key)
+        req[key] = v
+    if ask == "question":
+        qs = body.get("questions")
+        if not isinstance(qs, list) or not 1 <= len(qs) <= MAX_QUESTIONS:
+            raise ValueError("questions")
+        req["questions"] = [_question(q) for q in qs]
+    elif body.get("questions") is not None:
+        raise ValueError("questions")
+    return req
+
+
+def _question(q) -> dict:
+    if not isinstance(q, dict):
+        raise ValueError("questions")
+    opts = q.get("options")
+    multi = q.get("multiSelect", False)
+    if not isinstance(multi, bool) or not isinstance(opts, list) or not 1 <= len(opts) <= MAX_OPTIONS:
+        raise ValueError("questions")
+    out_opts = []
+    for o in opts:
+        if not isinstance(o, dict):
+            raise ValueError("questions")
+        out_opts.append({"label": _text(o, "label", LABEL_MAX, required=True),
+                         "description": _text(o, "description", DESCRIPTION_MAX)})
+    return {"question": _text(q, "question", QUESTION_MAX, required=True), "header": _text(q, "header", HEADER_MAX),
+            "multiSelect": multi, "options": out_opts}
+
+
+def check_answers(questions: List[dict], answers) -> Optional[List[List[int]]]:
+    """Answers are one list of option indices per question: exactly one for single choice, at least one (no duplicates)
+    for multiSelect. → normalized (sorted) lists, or None when anything is off."""
+    if not isinstance(answers, list) or len(answers) != len(questions):
+        return None
+    out = []
+    for q, a in zip(questions, answers):
+        if not isinstance(a, list) or not a or len(a) > len(q["options"]):
+            return None
+        if any(not isinstance(i, int) or isinstance(i, bool) or not 0 <= i < len(q["options"]) for i in a):
+            return None
+        if len(set(a)) != len(a) or (not q["multiSelect"] and len(a) != 1):
+            return None
+        out.append(sorted(a))
+    return out
+
+
+def summary_hash(text: str) -> str:
+    """Audit: a short hash instead of the command/summary text (never logged in full)."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+
+class ToolApproval(Pending):
+    def __init__(self, pid: str, req: dict, on_done: Callable[[str], None], expires: float, created: float) -> None:
+        if req["ask"] == "question":
+            title = "Soru: %s" % (req["questions"][0]["header"] or req["questions"][0]["question"])
+            preview = "\n".join(q["question"] + " — " + " / ".join(o["label"] for o in q["options"])
+                                for q in req["questions"])
+        else:
+            title = "İzin: %s" % req["tool"]
+            preview = req["summary"]
+        super().__init__(pid, TOOL_KIND, title[:80], preview, req["agent"], on_done, expires, created)
+        self.req = req
+        self.answers: Optional[List[List[int]]] = None
+        self.done = threading.Event()
+
+    @property
+    def is_question(self) -> bool:
+        return self.req["ask"] == "question"
+
+    def wire(self) -> dict:
+        """The `approval` object of `approval.request` (V3.md §3.4)."""
+        out = {"id": self.id, "ask": self.req["ask"], "agent": self.req["agent"], "tool": self.req["tool"],
+               "summary": self.req["summary"], "project": self.req["project"],
+               "expiresAt": int(self.expires * 1000), "createdAt": int(self.created * 1000)}
+        if self.is_question:
+            out["questions"] = self.req["questions"]
+        return out
+
+    def public(self) -> dict:
+        d = super().public()
+        d.update(self.wire())
+        d["kind"] = TOOL_KIND
+        return d
+
+    def outcome(self) -> dict:
+        """What the hook gets back from /ctl/approvals/tool."""
+        decision = {"ok": "allow", "denied": "deny", "timeout": "timeout"}.get(self.result or "", "withdrawn")
+        out = {"decision": decision, "id": self.id}
+        if decision == "allow" and self.is_question:
+            out["answers"] = self.answers
+        return out
 
 
 class Approvals:
@@ -76,20 +236,73 @@ class Approvals:
             pass
         return p
 
-    def resolve(self, pid: str, ok: bool) -> bool:
-        return self._finish(pid, "ok" if ok else "denied")
+    def request_tool(self, req: dict, timeout_s: float, on_done: Callable[[ToolApproval, str], None]) -> ToolApproval:
+        """Phase 19: register a validated tool approval (no desktop notification: Claude Code shows its own dialog)."""
+        now = self.clock()
+        holder: List[ToolApproval] = []
+        p = ToolApproval("a" + secrets.token_urlsafe(12), req, lambda res: on_done(holder[0], res), now + timeout_s,
+                         now)
+        holder.append(p)
+        with self._lock:
+            if sum(1 for x in self.pending.values() if isinstance(x, ToolApproval)) >= MAX_TOOL_PENDING:
+                raise ToolLimit()
+            self.pending[p.id] = p
+        return p
+
+    def resolve(self, pid: str, ok: bool, by: str = "local") -> bool:
+        return self.answer(pid, ok, None, by) == "ok"
+
+    def answer(self, pid: str, ok: bool, answers=None, by: str = "local", tool_only: bool = False) -> str:
+        """First answer wins. → "ok" | "unknown" (no such pending, already answered or expired; also any non-tool
+        item when `tool_only`) | "bad_answer" (a question approved without valid answers, or answers where none
+        belong). A question can only be approved with answers, so the CLI and /onay can only deny it."""
+        with self._lock:
+            p = self.pending.get(pid)
+            if p is None or (tool_only and not isinstance(p, ToolApproval)):
+                return "unknown"
+            if isinstance(p, ToolApproval) and p.is_question and ok:
+                norm = check_answers(p.req["questions"], answers)
+                if norm is None:
+                    return "bad_answer"
+                p.answers = norm
+            elif answers is not None:
+                return "bad_answer"
+            p.by = by
+            del self.pending[pid]
+        self._done(p, "ok" if ok else "denied")
+        return "ok"
+
+    def withdraw(self, session: Optional[str] = None, match: Optional[str] = None, pid: Optional[str] = None) -> List[str]:
+        """The question was answered elsewhere (Claude Code's own dialog, the hook process went away): drop matching
+        tool approvals with result "withdrawn". `session` + optional `match`, or one `pid`."""
+        with self._lock:
+            hit = [p for p in self.pending.values() if isinstance(p, ToolApproval)
+                   and ((pid is not None and p.id == pid)
+                        or (pid is None and session is not None and p.req.get("session") == session
+                            and (match is None or p.req.get("match") == match)))]
+            for p in hit:
+                del self.pending[p.id]
+        for p in hit:
+            self._done(p, "withdrawn")
+        return [p.id for p in hit]
 
     def _finish(self, pid: str, result: str) -> bool:
         with self._lock:
             p = self.pending.pop(pid, None)
         if p is None:
             return False
+        self._done(p, result)
+        return True
+
+    @staticmethod
+    def _done(p: Pending, result: str) -> None:
         p.result = result
         try:
             p.on_done(result)
         except Exception:
             pass
-        return True
+        if isinstance(p, ToolApproval):
+            p.done.set()
 
     def list(self) -> List[dict]:
         with self._lock:
@@ -247,6 +460,17 @@ class _Handler(BaseHTTPRequestHandler):
                 return v
         return None
 
+    def _client_gone(self) -> bool:
+        """Long-poll routes (Phase 19): True once the client has closed its end (the hook process ended or was
+        killed). A readable socket with nothing to read means EOF."""
+        try:
+            readable, _, _ = select.select([self.connection], [], [], 0)
+            if not readable:
+                return False
+            return self.connection.recv(1, socket.MSG_PEEK) == b""
+        except (OSError, ValueError):
+            return True
+
     def do_GET(self):
         self._dispatch("GET")
 
@@ -266,6 +490,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._json(404, {"error": "not_found"})
             return
         if not self._token_ok(self.headers.get("X-Pixel-Ctl")):
+            self.close_connection = True            # the body was not read: never parse it as the next request
             self._json(401, {"error": "unauthorized"})
             return
         body = {}
@@ -286,7 +511,10 @@ class _Handler(BaseHTTPRequestHandler):
             self._json(404, {"error": "not_found"})
             return
         try:
-            status, obj = fn(body, query)
+            if getattr(fn, "long_poll", False):
+                status, obj = fn(body, query, self._client_gone)
+            else:
+                status, obj = fn(body, query)
         except Exception as e:
             status, obj = 500, {"error": "internal", "message": type(e).__name__}
         self._json(status, obj)
@@ -312,7 +540,7 @@ class _Handler(BaseHTTPRequestHandler):
             if not hmac.compare_digest(form.get("csrf", "").encode(), self.server.csrf.encode()):
                 self._send(403, "CSRF".encode(), "text/plain; charset=utf-8")
                 return
-            self.server.approvals.resolve(form.get("id", ""), form.get("karar") == "onayla")
+            self.server.approvals.resolve(form.get("id", ""), form.get("karar") == "onayla", by="page")
             self._send(303, b"", "text/plain", [("Location", "/onay")])
             return
         if method != "GET" or path != "/onay":
@@ -320,12 +548,15 @@ class _Handler(BaseHTTPRequestHandler):
             return
         rows = []
         for p in self.server.approvals.list():
+            question = p.get("ask") == "question"
+            approve = ("<small>Seçenekleri telefondan ya da Claude Code penceresinden seçin.</small> " if question
+                       else "<button name=karar value=onayla>Onayla</button> ")
             rows.append(
                 "<li><b>%s</b> · %s<br><pre>%s</pre><form method=post action=/onay/karar>"
                 "<input type=hidden name=csrf value=%s><input type=hidden name=id value=%s>"
-                "<button name=karar value=onayla>Onayla</button> <button name=karar value=reddet>Reddet</button>"
+                "%s<button name=karar value=reddet>Reddet</button>"
                 "</form></li>" % (html.escape(p["agent"] or ""), html.escape(p["title"]),
-                                  html.escape(p["preview"] or ""), self.server.csrf, html.escape(p["id"])))
+                                  html.escape(p["preview"] or ""), self.server.csrf, html.escape(p["id"]), approve))
         page = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
                 "<meta http-equiv=refresh content=5><title>Pixel Office onay</title>"
                 "<style>body{font:15px system-ui;margin:2em;max-width:50em}pre{white-space:pre-wrap;background:#eee;"
