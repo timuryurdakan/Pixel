@@ -873,7 +873,7 @@ paid overage on Hobby). **Upstash free**: 500K commands/month, 10 GB bandwidth, 
 | Viewer polls (CDN requests) | 10 viewers × 28 800 s × (0.5/10 + 0.4/30 + 0.1/60) | **18 720** |
 | CDN-miss reads (function invocations = Redis HGETALL) | 36 000 s × (0.5/6 + 0.4/16 + 0.1/6) (≈ one per TTL+1 s while polls arrive; empty rooms: every 60 s poll of 10 viewers ≈ 1/6 s, so the 5 s TTL caps nothing) | **≈ 4 500** |
 | Hook/API writes (CDN requests + invocations) | 60 session-h × 100 | **6 000** |
-| Redis commands for writes | 6 000 × 1.1 (EXPIRE ≤ 1/h, HLEN on new agents, rare purge) | **6 600** |
+| Redis commands for writes | 6 000 × 1.1 (EXPIRE ≤ 1/h, HKEYS on new agents, rare purge) | **6 600** |
 | Static/PWA requests | SW caches the shell; ~2 cold loads × 20 files × 10 people + SW update checks | **≈ 500** |
 | Boost polls (§17.10) | pessimistic 30 boost windows/day (room opens while empty + "Ajan bağla" uses) × 36 polls (3 min at 5 s), each counted as a CDN request **and** a miss | **≈ 1 000** |
 

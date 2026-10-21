@@ -25,6 +25,10 @@ class SanitizeTests(unittest.TestCase):
         self.assertEqual(sanitize("🙂" * 30, 24), "🙂" * 24)                  # code points, not bytes
         self.assertEqual(sanitize("abc   def", 4), "abc")                    # truncate, then trim
         self.assertEqual(sanitize("\u200b\u200b", 5), "")
+        # H22: Cf category, Hangul fillers, tags
+        self.assertEqual(sanitize("a\u3164b\u115Fc\u1160d\uFFA0e", 40), "abcde")
+        self.assertEqual(sanitize("x\U000e0001\U000e0020y\U000e007Fz", 40), "xyz")
+        self.assertEqual(sanitize("\u3164\u115F", 40), "")
 
     def test_clean_name(self):
         self.assertIsNone(clean_name(None))
@@ -33,6 +37,10 @@ class SanitizeTests(unittest.TestCase):
         self.assertEqual(len(clean_name("x" * 100)), 24)
         with self.assertRaises(ValidationError):
             clean_name("\u200b\u202e ")
+        with self.assertRaises(ValidationError):
+            clean_name("\u3164\u115F")
+        with self.assertRaises(ValidationError):
+            clean_name("\U000e0020\U000e007F")
         with self.assertRaises(ValidationError):
             clean_name(5)
         self.assertEqual(clean_room_name(None), S.DEFAULT_ROOM_NAME)

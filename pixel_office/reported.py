@@ -92,14 +92,19 @@ class ReportedAgents(threading.Thread):
                 gone.append(aid)
                 continue
             agents.append(self._agent(aid, rec, d, recs))
+        actually_gone: list[str] = []
         if gone:
             with self._lock:
                 for aid in gone:
-                    if self._records.get(aid) == recs[aid]:
+                    if self._records.get(aid) == recs.get(aid):
                         del self._records[aid]
-            for aid in gone:
+                        actually_gone.append(aid)
+            for aid in actually_gone:
                 self.store.remove(aid)
         for a in agents:
+            with self._lock:
+                if a.id not in self._records or self._records.get(a.id) != recs.get(a.id):
+                    continue
             try:
                 self.store.upsert(a)
             except Exception:

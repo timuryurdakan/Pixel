@@ -19,6 +19,8 @@ import json
 import re
 import secrets
 
+from .ids import ROOM_RE
+
 TICKET_VERSION = "v1"
 MAC_PREFIX = b"pixel-relay-ticket:v1:"
 TICKET_TTL = 120            # s, exp - iat
@@ -28,7 +30,6 @@ SUBPROTOCOL = "pixel-relay.v1"
 TICKET_PROTOCOL_PREFIX = "tk."
 
 ROLES = ("browser", "device")
-ROOM_RE = re.compile(r"^[a-z2-7]{26}\Z")
 PEER_ID_RE = re.compile(r"^[a-z2-7]{16}\Z")          # deviceId / bid (V3.md §3)
 NONCE_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}\Z")
 _B64URL_RE = re.compile(r"^[A-Za-z0-9_-]*\Z")

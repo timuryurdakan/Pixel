@@ -214,6 +214,14 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(f(dev)["relay_url"], "ws://127.0.0.1:8788")
         self.assertIsNone(f(dev, on_vercel=True)["relay_url"])      # plain ws:// never on Vercel
 
+    def test_relay_invalid_warning(self):
+        S._relay_warned = False
+        with self.assertLogs("pixel_cloud", level="WARNING") as cm:
+            S.relay_from_env({"RELAY_SECRET": "super-secret-key-too-short"})
+        self.assertTrue(any("relay disabled" in m for m in cm.output))
+        for m in cm.output:
+            self.assertNotIn("super-secret-key-too-short", m)
+
 
 class NoStorage:
     """Every storage access fails the test: the ticket endpoint must issue 0 storage commands."""

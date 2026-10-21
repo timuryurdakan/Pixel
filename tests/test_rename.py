@@ -174,6 +174,27 @@ class CloudRenameTests(unittest.TestCase):
         self.assertNotIn("n:" + "a%016x" % 3, fields)    # agent absent and name older than 6 h → purged
         self.assertLessEqual(sum(1 for k in fields if k.startswith(("n:", "no:"))), S.MAX_NAME_FIELDS)
 
+    def test_owner_name_purge_h19(self):
+        # Fill room names with owner renames for absent owners
+        for i in range(S.MAX_NAME_FIELDS):
+            self.clock.t += 6.1
+            r = self.rename({"scope": "owner", "ownerId": f"o_{i:04d}", "name": f"Owner{i}"}, ip=f"3.0.{i // 256}.{i % 256}")
+            self.assertEqual(r.status, 200)
+
+        # 97th rename exceeds limit before PURGE_AFTER
+        self.clock.t += 6.1
+        r = self.rename({"scope": "owner", "ownerId": "o_excess", "name": "Ex"})
+        self.assertEqual((r.status, r.json()["error"]), (429, "room_full"))
+
+        # After PURGE_AFTER, absent owner names become stale and are purged, making room
+        self.clock.t += S.PURGE_AFTER + 1
+        r = self.rename({"scope": "owner", "ownerId": "o_excess", "name": "Fits"})
+        self.assertEqual(r.status, 200)
+        fields = self.app.storage.read_room(self.rid)
+        self.assertIn("no:o_excess", fields)
+        self.assertLessEqual(sum(1 for k in fields if k.startswith(("n:", "no:"))), S.MAX_NAME_FIELDS)
+
+
 
 # -- local ------------------------------------------------------------------------------------------
 

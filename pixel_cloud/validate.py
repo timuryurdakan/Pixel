@@ -24,6 +24,7 @@ CTL_RE = re.compile(r"^[a-z2-7]{16}\.[A-Za-z0-9_-]{1,24}\Z")   # v3: deviceId ".
 # Bidi overrides/isolates and zero-width / invisible format characters.
 _STRIP = {cp for cp in range(0x202A, 0x202F)} | {cp for cp in range(0x2066, 0x206A)} | {
     0x200B, 0x200C, 0x200D, 0x200E, 0x200F, 0x2060, 0x2061, 0x2062, 0x2063, 0x2064, 0xFEFF, 0x180E, 0x061C}
+_EXTRA_INVISIBLE = {0x115F, 0x1160, 0x3164, 0xFFA0}  # Hangul fillers (H22)
 _WS_CONTROLS = "\t\n\r\x0b\x0c\x85"
 _WS_RE = re.compile(r"\s+")
 
@@ -40,9 +41,13 @@ def sanitize(value: str, limit: int) -> str:
         cp = ord(ch)
         if ch in _WS_CONTROLS:
             out.append(" ")
-        elif cp < 0x20 or 0x7F <= cp <= 0x9F or cp in _STRIP:
+        elif cp < 0x20 or 0x7F <= cp <= 0x9F or cp in _STRIP or cp in _EXTRA_INVISIBLE:
             continue
         elif 0xD800 <= cp <= 0xDFFF:     # lone surrogates (only possible from surrogateescape'd input)
+            continue
+        elif 0xE0000 <= cp <= 0xE007F:   # tags block (H22)
+            continue
+        elif unicodedata.category(ch) == "Cf":  # format characters (H22)
             continue
         else:
             out.append(ch)

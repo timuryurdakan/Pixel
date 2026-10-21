@@ -9,6 +9,7 @@ from __future__ import annotations
 import http.client
 import json
 import os
+import socket
 import ssl
 import threading
 import time
@@ -36,7 +37,6 @@ class Storage(Protocol):
     name: str
 
     def put_agents(self, room: str, items: dict[str, str], refresh_ttl: bool) -> dict[str, bool]: ...
-    def count(self, room: str) -> int: ...
     def keys(self, room: str) -> list[str]: ...
     def delete(self, room: str, fields: list[str]) -> None: ...
     def read_room(self, room: str) -> dict[str, str]: ...
@@ -83,11 +83,6 @@ class MemoryStorage:
                 self._expire(key, S.ROOM_TTL)
                 self.commands += 1
             return created
-
-    def count(self, room: str) -> int:
-        with self._lock:
-            self.commands += 1
-            return len(self._live(room_key(room)) or {})
 
     def keys(self, room: str) -> list[str]:
         with self._lock:
@@ -142,7 +137,8 @@ class UpstashStorage:
     """Upstash Redis REST: POST / with a JSON command array, POST /pipeline with a 2-D array."""
     name = "upstash"
 
-    def __init__(self, url: str, token: str, timeout: float = S.UPSTASH_TIMEOUT) -> None:
+    def __init__(self, url: str, token: str, timeout: float = S.UPSTASH_TIMEOUT,
+                 total_timeout: float = S.UPSTASH_TOTAL_TIMEOUT) -> None:
         parts = urlsplit(url.strip())
         if parts.scheme not in ("https", "http") or not parts.hostname:
             raise StorageError("invalid Upstash REST URL")
@@ -152,6 +148,7 @@ class UpstashStorage:
         self._base = parts.path.rstrip("/")
         self._token = token.strip()
         self._timeout = timeout
+        self._total_timeout = total_timeout
         self._conn: http.client.HTTPConnection | None = None
         self._lock = threading.Lock()   # one keep-alive connection per warm instance; serialise use
 
@@ -164,19 +161,27 @@ class UpstashStorage:
     def __repr__(self) -> str:          # never show the token
         return f"UpstashStorage(host={self._host!r})"
 
-    def _connect(self) -> http.client.HTTPConnection:
+    def _connect(self, timeout: float | None = None) -> http.client.HTTPConnection:
+        to = self._timeout if timeout is None else timeout
         if self._https:
-            return http.client.HTTPSConnection(self._host, self._port, timeout=self._timeout,
+            return http.client.HTTPSConnection(self._host, self._port, timeout=to,
                                                context=ssl.create_default_context())
-        return http.client.HTTPConnection(self._host, self._port, timeout=self._timeout)
+        return http.client.HTTPConnection(self._host, self._port, timeout=to)
 
     def _post(self, path: str, payload: list) -> object:
         body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         headers = {"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"}
+        t0 = time.monotonic()
         with self._lock:
             for attempt in (1, 2):           # reconnect once on a dead keep-alive connection
+                elapsed = time.monotonic() - t0
+                if elapsed >= self._total_timeout:
+                    raise StorageError(f"storage request timed out ({elapsed:.1f}s)")
+                rem = max(0.1, min(self._timeout, self._total_timeout - elapsed))
                 if self._conn is None:
-                    self._conn = self._connect()
+                    self._conn = self._connect(timeout=rem)
+                else:
+                    self._conn.timeout = rem
                 try:
                     self._conn.request("POST", self._base + path, body=body, headers=headers)
                     resp = self._conn.getresponse()
@@ -192,7 +197,8 @@ class UpstashStorage:
                     except Exception:  # pragma: no cover
                         pass
                     self._conn = None
-                    if attempt == 2:
+                    is_timeout = isinstance(e, (socket.timeout, TimeoutError)) or "timed out" in str(e).lower()
+                    if attempt == 2 or is_timeout or (time.monotonic() - t0) >= self._total_timeout:
                         raise StorageError(f"storage request failed: {type(e).__name__}") from None
         try:
             data = json.loads(raw.decode("utf-8"))
@@ -231,10 +237,6 @@ class UpstashStorage:
         res = self.pipeline(cmds) if len(cmds) > 1 else [self.command(*cmds[0])]
         return {f: res[i] == 1 for i, f in enumerate(fields)}
 
-    def count(self, room: str) -> int:
-        r = self.command("HLEN", room_key(room))
-        return int(r) if isinstance(r, int) else 0
-
     def keys(self, room: str) -> list[str]:
         r = self.command("HKEYS", room_key(room))
         return [x for x in r if isinstance(x, str)] if isinstance(r, list) else []
@@ -269,7 +271,7 @@ class UnconfiguredStorage:
     def _fail(self, *a, **k):
         raise StorageNotConfigured("storage is not configured")
 
-    put_agents = count = keys = delete = read_room = create_room = _fail
+    put_agents = keys = delete = read_room = create_room = _fail
 
     def ping(self) -> bool:
         return False
@@ -318,9 +320,3 @@ def get_storage():
         if _cached is None:
             _cached = storage_from_env()
         return _cached
-
-
-def reset_storage() -> None:
-    global _cached
-    with _cached_lock:
-        _cached = None

@@ -71,7 +71,7 @@ class ConfigHealthTests(Base):
     def test_config(self):
         r = self.call("GET", "/api/config")
         self.assertEqual(r.status, 200)
-        self.assertEqual(r.json(), {"mode": "cloud", "version": "2.0.0", "createRequiresToken": False,
+        self.assertEqual(r.json(), {"mode": "cloud", "version": "3.1.0", "createRequiresToken": False,
                                     "storage": "memory", "poll": {"activeMs": 10000, "calmMs": 30000, "emptyMs": 60000},
                                     "limits": {"maxAgentsPerRoom": 48, "maxBatch": 10},
                                     "relay": None, "features": []})
@@ -84,7 +84,7 @@ class ConfigHealthTests(Base):
 
     def test_health(self):
         r = self.call("GET", "/api/health")
-        self.assertEqual(r.json(), {"ok": True, "version": "2.0.0", "storage": "memory", "storageOk": True})
+        self.assertEqual(r.json(), {"ok": True, "version": "3.1.0", "storage": "memory", "storageOk": True})
         self.assertEqual(r.header("Cache-Control"), "no-store")
         r = self.call("HEAD", "/api/health")
         self.assertEqual(r.status, 200)
@@ -302,6 +302,19 @@ class StateStatusTests(Base):
         r = self.status(self.rid, self.key, {"session": "one-more", "owner": "T", "state": "idle"})
         self.assert_error(r, 429, "room_full")
         self.assertEqual(len(self.state(self.rid).json()["agents"]), S.MAX_AGENTS_PER_ROOM)
+
+        # Batch with multiple new agents over limit: entire batch of new agents must be rolled back (H17)
+        r_batch = self.status(self.rid, self.key, {"agents": [
+            {"session": "extra-1", "owner": "T", "state": "idle"},
+            {"session": "extra-2", "owner": "T", "state": "idle"},
+        ]})
+        self.assert_error(r_batch, 429, "room_full")
+        state_agents = self.state(self.rid).json()["agents"]
+        self.assertEqual(len(state_agents), S.MAX_AGENTS_PER_ROOM)
+        agent_names = {a.get("name") for a in state_agents}
+        self.assertNotIn("extra-1", agent_names)
+        self.assertNotIn("extra-2", agent_names)
+
         # existing agents can still update, and offline frees a slot
         self.assertEqual(self.status(self.rid, self.key, {"session": "s0-0", "owner": "T", "state": "working"}).status, 200)
         self.status(self.rid, self.key, {"session": "s0-0", "owner": "T", "state": "offline"})
