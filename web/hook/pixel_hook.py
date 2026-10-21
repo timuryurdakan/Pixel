@@ -44,10 +44,14 @@ import urllib.parse
 import urllib.request
 from contextlib import contextmanager
 
-try:                        # POSIX only; Windows relies on atomic replace + the seq check (§7.3)
+try:                        # POSIX: flock on state/.lock
     import fcntl            # type: ignore
 except Exception:           # pragma: no cover
     fcntl = None            # type: ignore
+try:                        # Windows: msvcrt.locking on the same file (v2.md H31)
+    import msvcrt           # type: ignore
+except Exception:
+    msvcrt = None           # type: ignore
 
 VERSION = "2.0.0"
 SOURCE = "claude-code"
@@ -63,6 +67,8 @@ WATCHDOG = 30               # s; a hook process never lives longer than this
 LOG_MAX = 64 * 1024
 STDIN_MAX = 64 * 1024 * 1024
 STATE_PRUNE_AGE = 7 * 86400
+WIN_LOCK_WAIT = 2.0         # s; on Windows a hook waits at most this long for the state lock, then goes on without it
+WIN_LOCK_POLL = 0.05        # s between attempts (msvcrt has no blocking lock with a short timeout)
 
 PROJECT_MAX = 32
 LABEL_MAX = 40
@@ -458,6 +464,54 @@ def ignored_cwd(cwd: object) -> bool:
     return False
 
 
+def _win_lock_acquire(state_dir: str, wait: object = None, clock=time.monotonic, sleep=time.sleep) -> object:
+    """Open state/.lock and lock its first byte with msvcrt (non-blocking, retried until `wait`). → the fd while
+    locked; None when there is no msvcrt, the file can't be opened or the lock stays busy (the caller then proceeds
+    without it: a hook must never hang Claude Code, and the atomic writes + seq check still hold, §7.3)."""
+    if msvcrt is None:
+        return None
+    try:
+        os.makedirs(state_dir, exist_ok=True)
+        fd = os.open(os.path.join(state_dir, ".lock"), os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError:
+        return None
+    deadline = clock() + (WIN_LOCK_WAIT if wait is None else wait)
+    while True:
+        try:
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            return fd
+        except OSError:
+            if clock() >= deadline:
+                os.close(fd)
+                return None
+            sleep(WIN_LOCK_POLL)
+
+
+def _win_lock_release(fd: int) -> None:
+    try:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+    except OSError:
+        pass                # closing the fd below releases the lock as well
+    finally:
+        os.close(fd)
+
+
+@contextmanager
+def win_state_lock(state_dir: str, home: object = None):
+    """Cross-process lock for the hook state on Windows (v2.md H31); the PowerShell client uses a named mutex.
+    Fails open: without the lock the hook still runs (and logs it), it never raises or waits more than ~2 s."""
+    fd = _win_lock_acquire(state_dir)
+    if fd is None and msvcrt is not None and home:
+        log_line(str(home), "state lock unavailable; continuing without it")
+    try:
+        yield
+    finally:
+        if fd is not None:
+            _win_lock_release(fd)
+
+
 def _key(st: object, tool: object, lbl: object, proj: object) -> list:
     return [st, tool, lbl, proj]
 
@@ -482,7 +536,8 @@ class HookRunner:
     @contextmanager
     def locked(self):
         if fcntl is None:
-            yield
+            with win_state_lock(self.state_dir, self.home):
+                yield
             return
         os.makedirs(self.state_dir, exist_ok=True)
         fd = os.open(os.path.join(self.state_dir, ".lock"), os.O_RDWR | os.O_CREAT, 0o600)

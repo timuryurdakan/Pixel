@@ -316,7 +316,7 @@ içine kurar, `~/.pixel-office/bin/pixel-connector` kısayolunu ve ayar dosyası
 Ekrana yazdığı özeti bu sürümün özetiyle karşılaştırın:
 
 ```
-pixel-connector.pyz SHA-256: 6e0f83b597e11a9c48ada6168cd9df38821d30424e00bf48b071e0bd2fca83f1
+pixel-connector.pyz SHA-256: 07373a96705ee340f2eb41c2386d02ce09298e60ecfcc31ddaefc5f76125b1a6
 ```
 
 Windows (PowerShell): komut kutusundaki **Windows** sekmesini kullanın (`irm …/install.ps1 -OutFile install.ps1`, sonra
@@ -491,7 +491,10 @@ sonra `pixel-connector runtimes start ollama`.
 - Yalnızca insanın başlattığı görevler var: zamanlanmış görev ya da otomasyon yok.
 - Oda üyeleri (katılma bağlantısı olanlar) röle odasına bağlanıp cihaz kimliğinizi taklit ederek **bağlantıyı kesintiye
   uğratabilir** (içerik göremez, görev veremez). Bağlantı sızarsa yeni oda açın.
-- macOS (launchd) ve Windows (Görev Zamanlayıcı) servisleri yalnızca belgelendi ve kuru çalıştırmayla test edildi.
+- macOS (launchd) ve Windows (Görev Zamanlayıcı) servisleri yalnızca belgelendi ve sahte komutlarla test edildi; gerçek bir
+  Mac ya da Windows bilgisayarda denenmedi. Windows'ta görev pildeyken de çalışır, süre sınırı yoktur, hata verirse
+  dakikada bir 3 kez yeniden başlar; görev iptalinde Claude'un tüm alt süreçleri `taskkill /T /F` ile kapatılır. macOS'ta
+  PATH ve (varsayılan değilse) `PIXEL_OFFICE_HOME` servise aktarılır. Ayrıntılar: `docs/V3.md` §12.
 - Cloudflare ücretsiz planı: günde 100.000 Durable Objects isteği. Kullanımı ilk ay haftada bir kontrol edin.
 
 ### Röle adresini ayarlama

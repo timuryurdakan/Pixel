@@ -311,7 +311,7 @@ Neden bu değerler:
   </dict></plist>
   ```
   Kaldırmak: `launchctl bootout gui/$(id -u)/tr.pixeloffice.antigravity && rm ~/Library/LaunchAgents/tr.pixeloffice.antigravity.plist`.
-- **Windows:** Görev Zamanlayıcı'da oturum açılışında çalışan `PixelOffice\Antigravity` görevi oluşturulur (`schtasks /Create … /SC ONLOGON /RL LIMITED`, `pythonw.exe` ile, pencere açılmaz) ve hemen başlatılır. Kaldırmak: `--uninstall-service` ya da `schtasks /Delete /TN "PixelOffice\Antigravity" /F`. Görev Zamanlayıcı kullanılamıyorsa Başlangıç klasörüne kısayol da olur: `Win+R` → `shell:startup` → yeni kısayol, hedef `"C:\…\pythonw.exe" "%USERPROFILE%\.pixel-office\pixel_antigravity.py"`.
+- **Windows:** Görev Zamanlayıcı'da oturum açılışında çalışan `PixelOffice\Antigravity` görevi oluşturulur ve hemen başlatılır. Görev `~/.pixel-office/pixel-antigravity.task.xml` dosyasından kurulur (`schtasks /Create /XML … /F`, yönetici izni gerekmez): `pythonw.exe` ile çalışır (pencere açılmaz), pildeyken de başlar ve fiş çekilince durmaz, 72 saat sınırı yoktur, hata verirse dakikada bir, 3 kez yeniden başlatılır (bağlayıcıyla aynı ayarlar, `docs/V3.md` §12.3). `PIXEL_OFFICE_HOME` varsayılan değilse göreve aktarılır. Kaldırmak: `--uninstall-service` ya da `schtasks /Delete /TN "PixelOffice\Antigravity" /F`. Görev Zamanlayıcı kullanılamıyorsa Başlangıç klasörüne kısayol da olur: `Win+R` → `shell:startup` → yeni kısayol, hedef `"C:\…\pythonw.exe" "%USERPROFILE%\.pixel-office\pixel_antigravity.py"`.
 - macOS ve Windows yolları burada sahte komut çalıştırıcıyla test edildi; gerçek bir Mac ya da Windows bilgisayarda denenmedi.
 
 **Bilinen sınırlar:**

@@ -44,10 +44,12 @@ class ServiceTextTests(unittest.TestCase):
         self.assertTrue(p["RunAtLoad"])
         self.assertEqual(p["KeepAlive"], {"SuccessfulExit": False})
         self.assertTrue(p["StandardErrorPath"].endswith("connector.err.log"))
-        argv = S.schtasks_create_argv(r"C:\Py\pythonw.exe", r"C:\Users\u\.pixel-office\connector\pixel-connector.pyz")
-        self.assertEqual(argv[:9], ["schtasks", "/Create", "/TN", "PixelOffice\\Connector", "/SC", "ONLOGON", "/RL",
-                                    "LIMITED", "/F"])
-        self.assertEqual(argv[-1], '"C:\\Py\\pythonw.exe" "C:\\Users\\u\\.pixel-office\\connector\\pixel-connector.pyz" run')
+        argv = S.schtasks_create_argv(r"C:\Users\u\.pixel-office\connector\pixel-connector.task.xml")
+        self.assertEqual(argv, ["schtasks", "/Create", "/TN", "PixelOffice\\Connector", "/XML",
+                                r"C:\Users\u\.pixel-office\connector\pixel-connector.task.xml", "/F"])
+        cmd, args = S.windows_action(r"C:\Py\pythonw.exe", r"C:\Users\u\.pixel-office\connector\pixel-connector.pyz",
+                                     ["run"])
+        self.assertEqual(args, '"C:\\Users\\u\\.pixel-office\\connector\\pixel-connector.pyz" "run"')
 
     def test_install_dry_run_never_runs_anything(self):
         with tempfile.TemporaryDirectory() as h:

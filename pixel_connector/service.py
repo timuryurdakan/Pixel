@@ -10,12 +10,32 @@ import plistlib
 import shutil
 import subprocess
 import sys
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from xml.sax.saxutils import escape as _xml_escape
 
 UNIT_NAME = "pixel-connector.service"
 LAUNCHD_LABEL = "tr.pixeloffice.connector"
 SCHTASK_NAME = "PixelOffice\\Connector"
 SYSTEM_PATH = ("/usr/local/bin", "/usr/bin", "/bin", "/usr/local/sbin", "/usr/sbin", "/sbin")
+TASK_XML_FILE = "pixel-connector.task.xml"
+TASK_RESTART_COUNT = 3              # Task Scheduler: restart a failed task 3× …
+TASK_RESTART_INTERVAL = "PT1M"      # … one minute apart (ISO 8601 duration; 1 min is the minimum it accepts)
+TASK_NS = "http://schemas.microsoft.com/windows/2004/02/mit/task"
+
+
+def service_home(connector_dir: str, user_home: str) -> Tuple[Dict[str, str], List[str]]:
+    """How the service finds a connector directory that isn't the default `~/.pixel-office/connector` (v2.md H10).
+    → (environment, extra CLI arguments placed before `run`).
+
+    `<dir>/connector` → PIXEL_OFFICE_HOME=<dir> (config.connector_home() appends "connector"); any other name →
+    `--home <dir>`, because PIXEL_OFFICE_HOME=<parent> would point the service at <parent>/connector instead (the
+    `--home` parent-dir bug of v2.md H10)."""
+    default = os.path.join(user_home, ".pixel-office", "connector")
+    if os.path.realpath(connector_dir) == os.path.realpath(default):
+        return {}, []
+    if os.path.basename(os.path.normpath(connector_dir)) == "connector":
+        return {"PIXEL_OFFICE_HOME": os.path.dirname(os.path.normpath(connector_dir))}, []
+    return {}, ["--home", connector_dir]
 
 
 def _quote_systemd(arg: str) -> str:
@@ -66,13 +86,14 @@ def _is_node_script(path: str) -> bool:
     return head.startswith(b"#!") and b"node" in head.split(b"\n", 1)[0]
 
 
-def systemd_unit(python: str, pyz: str, home_override: Optional[str] = None, path_env: Optional[str] = None) -> str:
+def systemd_unit(python: str, pyz: str, home_override: Optional[str] = None, path_env: Optional[str] = None,
+                 extra_args: Sequence[str] = ()) -> str:
     """The unit text. `pyz` may be "%h/…" (kept as a specifier) or an absolute path.
 
     No `network-online.target` (v2.md H24): a *user* manager can't order against that system target, so the lines only
     looked useful. The connector's own reconnect loop handles a network that comes up late."""
     pyz_arg = pyz if pyz.startswith("%h/") else _quote_systemd(pyz)
-    exec_start = "%s %s run" % (_quote_systemd(python), pyz_arg)
+    exec_start = " ".join([_quote_systemd(python), pyz_arg] + [_quote_systemd(a) for a in extra_args] + ["run"])
     env = ["Environment=PYTHONUNBUFFERED=1"]
     if home_override:
         env.append("Environment=%s" % _quote_systemd("PIXEL_OFFICE_HOME=" + home_override))
@@ -98,11 +119,19 @@ def systemd_unit(python: str, pyz: str, home_override: Optional[str] = None, pat
     ])
 
 
-def launchd_plist(python: str, pyz: str, log_dir: str, path_env: Optional[str] = None) -> bytes:
-    extra = {"EnvironmentVariables": {"PATH": path_env}} if path_env else {}
+def launchd_plist(python: str, pyz: str, log_dir: str, path_env: Optional[str] = None,
+                  home_override: Optional[str] = None, extra_args: Sequence[str] = ()) -> bytes:
+    """launchd agent. launchd starts agents with a minimal PATH and none of the login shell's variables, so PATH
+    (service_path()) and a non-default PIXEL_OFFICE_HOME go into EnvironmentVariables (v2.md H9/H10)."""
+    env = {}
+    if path_env:
+        env["PATH"] = path_env
+    if home_override:
+        env["PIXEL_OFFICE_HOME"] = home_override
+    extra = {"EnvironmentVariables": env} if env else {}
     return plistlib.dumps(dict({
         "Label": LAUNCHD_LABEL,
-        "ProgramArguments": [python, pyz, "run"],
+        "ProgramArguments": [python, pyz] + list(extra_args) + ["run"],
         "RunAtLoad": True,
         "KeepAlive": {"SuccessfulExit": False},
         "StandardOutPath": os.path.join(log_dir, "connector.out.log"),
@@ -111,9 +140,131 @@ def launchd_plist(python: str, pyz: str, log_dir: str, path_env: Optional[str] =
     }, **extra))
 
 
-def schtasks_create_argv(pythonw: str, pyz: str) -> List[str]:
-    tr = '"%s" "%s" run' % (pythonw, pyz)
-    return ["schtasks", "/Create", "/TN", SCHTASK_NAME, "/SC", "ONLOGON", "/RL", "LIMITED", "/F", "/TR", tr]
+def windows_quote(arg: str) -> str:
+    """One argument for a Windows command line (CommandLineToArgvW / the MSVC runtime rules, as
+    subprocess.list2cmdline): always in double quotes, backslashes before a quote and at the end doubled."""
+    out, slashes = [], 0
+    for ch in arg:
+        if ch == "\\":
+            slashes += 1
+            continue
+        if ch == '"':
+            out.append("\\" * (slashes * 2 + 1) + '"')
+        else:
+            out.append("\\" * slashes + ch)
+        slashes = 0
+    return '"' + "".join(out) + "\\" * (slashes * 2) + '"'
+
+
+# Sets environment variables inside the started Python and then runs the target like `python <target> …` would.
+# Used instead of a .cmd wrapper / `cmd /c set …`: cmd.exe would open a console window next to pythonw, and its
+# quoting and code-page rules are easy to get wrong with paths such as C:\Users\Ömer Şahin. No double quotes inside,
+# so it survives windows_quote() unchanged. argv: -c CODE <n> NAME1 VALUE1 … <target> <args…>
+_WIN_ENV_LAUNCHER = ("import os,runpy,sys;a=sys.argv;n=int(a[1]);"
+                     "os.environ.update(zip(a[2:2+2*n:2],a[3:3+2*n:2]));"
+                     "sys.argv=a[2+2*n:];runpy.run_path(sys.argv[0],run_name='__main__')")
+
+
+def windows_action(pythonw: str, target: str, args: Sequence[str], env: Optional[Dict[str, str]] = None
+                   ) -> Tuple[str, str]:
+    """→ (Command, Arguments) of the task's Exec action: `pythonw <target> <args…>`, or with `env` the in-process
+    launcher above (Task Scheduler has no per-task environment variables)."""
+    argv: List[str] = []
+    if env:
+        argv = ["-c", _WIN_ENV_LAUNCHER, str(len(env))]
+        for k in sorted(env):
+            argv += [k, env[k]]
+    argv += [target] + list(args)
+    return pythonw, " ".join(windows_quote(a) for a in argv)
+
+
+def windows_user_id(environ: Optional[Dict[str, str]] = None) -> str:
+    """DOMAIN\\user of the installing user (logon trigger + principal of the task)."""
+    env = os.environ if environ is None else environ
+    user = env.get("USERNAME") or ""
+    if not user:
+        import getpass
+        user = getpass.getuser()
+    dom = env.get("USERDOMAIN") or ""
+    return dom + "\\" + user if dom else user
+
+
+def task_scheduler_xml(command: str, arguments: str, user_id: str, description: str,
+                       working_dir: Optional[str] = None) -> str:
+    """Task Scheduler 1.2 definition (v2.md H10): at logon of this user only, with the user's normal (limited)
+    rights and an interactive token, so registering it needs no administrator and stores no password. Unlike the
+    `schtasks /Create /SC ONLOGON` defaults it runs on battery and keeps running when the laptop unplugs, has no
+    72-hour execution limit, ignores a second start while running and is restarted 3× one minute apart if it fails.
+    The element order follows what Windows itself exports."""
+    e = _xml_escape
+    wd = "      <WorkingDirectory>%s</WorkingDirectory>\n" % e(working_dir) if working_dir else ""
+    return (
+        '<?xml version="1.0" encoding="UTF-16"?>\n'
+        '<Task version="1.2" xmlns="%s">\n'
+        "  <RegistrationInfo>\n"
+        "    <Description>%s</Description>\n"
+        "  </RegistrationInfo>\n"
+        "  <Triggers>\n"
+        "    <LogonTrigger>\n"
+        "      <Enabled>true</Enabled>\n"
+        "      <UserId>%s</UserId>\n"
+        "    </LogonTrigger>\n"
+        "  </Triggers>\n"
+        "  <Principals>\n"
+        '    <Principal id="Author">\n'
+        "      <UserId>%s</UserId>\n"
+        "      <LogonType>InteractiveToken</LogonType>\n"
+        "      <RunLevel>LeastPrivilege</RunLevel>\n"
+        "    </Principal>\n"
+        "  </Principals>\n"
+        "  <Settings>\n"
+        "    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\n"
+        "    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>\n"
+        "    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>\n"
+        "    <AllowHardTerminate>true</AllowHardTerminate>\n"
+        "    <StartWhenAvailable>true</StartWhenAvailable>\n"
+        "    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>\n"
+        "    <IdleSettings>\n"
+        "      <StopOnIdleEnd>false</StopOnIdleEnd>\n"
+        "      <RestartOnIdle>false</RestartOnIdle>\n"
+        "    </IdleSettings>\n"
+        "    <AllowStartOnDemand>true</AllowStartOnDemand>\n"
+        "    <Enabled>true</Enabled>\n"
+        "    <Hidden>false</Hidden>\n"
+        "    <RunOnlyIfIdle>false</RunOnlyIfIdle>\n"
+        "    <WakeToRun>false</WakeToRun>\n"
+        "    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>\n"
+        "    <Priority>7</Priority>\n"
+        "    <RestartOnFailure>\n"
+        "      <Interval>%s</Interval>\n"
+        "      <Count>%d</Count>\n"
+        "    </RestartOnFailure>\n"
+        "  </Settings>\n"
+        '  <Actions Context="Author">\n'
+        "    <Exec>\n"
+        "      <Command>%s</Command>\n"
+        "      <Arguments>%s</Arguments>\n"
+        "%s"
+        "    </Exec>\n"
+        "  </Actions>\n"
+        "</Task>\n"
+    ) % (TASK_NS, e(description), e(user_id), e(user_id), TASK_RESTART_INTERVAL, TASK_RESTART_COUNT, e(command),
+         e(arguments), wd)
+
+
+def task_xml_bytes(xml: str) -> bytes:
+    """schtasks /XML reads UTF-16 with a byte order mark (the encoding Windows itself exports)."""
+    return xml.encode("utf-16")
+
+
+def schtasks_create_argv(xml_path: str, task_name: str = SCHTASK_NAME) -> List[str]:
+    return ["schtasks", "/Create", "/TN", task_name, "/XML", xml_path, "/F"]
+
+
+def pythonw_for(python: str) -> str:
+    """pythonw.exe next to python.exe (no console window). Unchanged when the name isn't python.exe."""
+    cut = max(python.rfind("\\"), python.rfind("/")) + 1
+    return python[:cut] + "pythonw.exe" if python[cut:].lower() == "python.exe" else python
 
 
 def default_pyz(connector_dir: str) -> str:
@@ -133,20 +284,22 @@ def _run(argv: List[str], dry_run: bool, log: Callable[[str], None], runner=subp
 
 def install(connector_dir: str, pyz: Optional[str] = None, python: Optional[str] = None, dry_run: bool = False,
             log: Callable[[str], None] = print, platform: Optional[str] = None, user_home: Optional[str] = None,
-            runner=subprocess.run, path_env: Optional[str] = None) -> Tuple[int, Optional[str]]:
+            runner=subprocess.run, path_env: Optional[str] = None,
+            environ: Optional[Dict[str, str]] = None) -> Tuple[int, Optional[str]]:
     """Write the service definition and enable it. → (exit code, path of the written file). `path_env`: the PATH for
-    the service (service_path()); Windows tasks inherit the user's environment and ignore it."""
+    the service (service_path()); Windows tasks inherit the user's environment and ignore it. `environ`: where the
+    Windows user name comes from (tests)."""
     platform = platform or sys.platform
     python = python or sys.executable
     home = user_home or os.path.expanduser("~")
     pyz = pyz or default_pyz(connector_dir)
+    env, extra_args = service_home(connector_dir, home)
+    office = env.get("PIXEL_OFFICE_HOME")
     if platform.startswith("linux"):
         unit_dir = os.path.join(home, ".config", "systemd", "user")
         path = os.path.join(unit_dir, UNIT_NAME)
         rel = os.path.relpath(pyz, home) if pyz.startswith(home + os.sep) else None
-        office = os.path.dirname(connector_dir)
-        override = None if os.path.realpath(office) == os.path.realpath(os.path.join(home, ".pixel-office")) else office
-        text = systemd_unit(python, "%h/" + rel if rel else pyz, override, path_env)
+        text = systemd_unit(python, "%h/" + rel if rel else pyz, office, path_env, extra_args)
         log("systemd kullanıcı birimi: %s" % path)
         if dry_run:
             log(text)
@@ -164,7 +317,7 @@ def install(connector_dir: str, pyz: Optional[str] = None, python: Optional[str]
         return rc, path
     if platform == "darwin":
         path = os.path.join(home, "Library", "LaunchAgents", LAUNCHD_LABEL + ".plist")
-        data = launchd_plist(python, pyz, connector_dir, path_env)
+        data = launchd_plist(python, pyz, connector_dir, path_env, office, extra_args)
         log("launchd ajanı: %s" % path)
         if dry_run:
             log(data.decode())
@@ -178,12 +331,22 @@ def install(connector_dir: str, pyz: Optional[str] = None, python: Optional[str]
         rc = _run(["launchctl", "bootstrap", "gui/%d" % uid, path], dry_run, log, runner)
         return rc, path
     if platform == "win32":
-        pythonw = python.replace("python.exe", "pythonw.exe")
-        rc = _run(schtasks_create_argv(pythonw, pyz), dry_run, log, runner)
+        command, arguments = windows_action(pythonw_for(python), pyz, extra_args + ["run"], env)
+        xml = task_scheduler_xml(command, arguments, windows_user_id(environ), "Pixel Office bağlayıcı",
+                                 connector_dir)
+        path = os.path.join(connector_dir, TASK_XML_FILE)
+        log("Görev Zamanlayıcı tanımı: %s" % path)
+        if dry_run:
+            log(xml)
+        else:
+            os.makedirs(connector_dir, exist_ok=True)
+            with open(path, "wb") as f:
+                f.write(task_xml_bytes(xml))
+        rc = _run(schtasks_create_argv(path), dry_run, log, runner)
         if rc == 0:
             _run(["schtasks", "/End", "/TN", SCHTASK_NAME], dry_run, log, runner)   # stop an old instance (ignored)
             rc = _run(["schtasks", "/Run", "/TN", SCHTASK_NAME], dry_run, log, runner)
-        return rc, None
+        return rc, path
     log("Bu işletim sistemi için servis kurulumu yok: %s" % platform)
     return 2, None
 

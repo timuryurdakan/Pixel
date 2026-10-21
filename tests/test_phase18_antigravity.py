@@ -670,11 +670,13 @@ class ServiceTests(unittest.TestCase):
         rc = self.install(platform="win32", python="C:\\Py\\python.exe")
         self.assertEqual(rc, 0)
         create = self.calls[0]
-        self.assertEqual(create[:4], ["schtasks", "/Create", "/TN", "PixelOffice\\Antigravity"])
-        self.assertIn("/SC", create)
-        self.assertIn("ONLOGON", create)
-        self.assertIn('"C:\\Py\\pythonw.exe"', create[-1])
-        self.assertIn("pixel_antigravity.py", create[-1])
+        xml_path = os.path.join(self.office, "pixel-antigravity.task.xml")
+        # Task Scheduler XML since Phase 20 / Package 7 (battery, no time limit, restart): tests/test_phase20_platform.py
+        self.assertEqual(create, ["schtasks", "/Create", "/TN", "PixelOffice\\Antigravity", "/XML", xml_path, "/F"])
+        xml = Path(xml_path).read_bytes().decode("utf-16")
+        self.assertIn("<LogonTrigger>", xml)
+        self.assertIn("<Command>C:\\Py\\pythonw.exe</Command>", xml)
+        self.assertIn("pixel_antigravity.py", xml)
         self.assertEqual(self.calls[-1], ["schtasks", "/Run", "/TN", "PixelOffice\\Antigravity"])
         self.calls.clear()
         self.assertEqual(self.install(uninstall=True, platform="win32"), 0)

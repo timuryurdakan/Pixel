@@ -91,6 +91,10 @@ AG_SERVICE_NAME = "pixel-antigravity.service"
 AG_LAUNCHD_LABEL = "tr.pixeloffice.antigravity"
 AG_SCHTASK_NAME = "PixelOffice\\Antigravity"
 AG_SCRIPT = "pixel_antigravity.py"
+AG_TASK_XML_FILE = "pixel-antigravity.task.xml"
+TASK_RESTART_COUNT = 3
+TASK_RESTART_INTERVAL = "PT1M"
+TASK_NS = "http://schemas.microsoft.com/windows/2004/02/mit/task"
 AG_ACTIVE = ("working", "thinking")
 AG_KNOWN_SOURCES = ("MODEL", "USER_EXPLICIT", "SYSTEM")
 # Antigravity tool names → the office's (Claude Code style) names, so the right bubble icon shows.
@@ -551,9 +555,134 @@ def antigravity_launchd_plist(python: str, script: str, extra: list, log_dir: st
     return plistlib.dumps(d)
 
 
-def antigravity_schtasks_argv(pythonw: str, script: str, extra: list) -> list:
-    tr = " ".join('"%s"' % x for x in [pythonw, script] + list(extra))
-    return ["schtasks", "/Create", "/TN", AG_SCHTASK_NAME, "/SC", "ONLOGON", "/RL", "LIMITED", "/F", "/TR", tr]
+# Windows: a Task Scheduler XML instead of `schtasks /SC ONLOGON` defaults (v2.md H10). Deliberate copies of
+# pixel_connector/service.py (this file can't import pixel_connector); tests/test_phase20_platform.py checks that both
+# give the same result.
+
+def windows_quote(arg: str) -> str:
+    """One argument for a Windows command line (CommandLineToArgvW / the MSVC runtime rules, as
+    subprocess.list2cmdline): always in double quotes, backslashes before a quote and at the end doubled."""
+    out, slashes = [], 0
+    for ch in arg:
+        if ch == "\\":
+            slashes += 1
+            continue
+        if ch == '"':
+            out.append("\\" * (slashes * 2 + 1) + '"')
+        else:
+            out.append("\\" * slashes + ch)
+        slashes = 0
+    return '"' + "".join(out) + "\\" * (slashes * 2) + '"'
+
+
+# Sets environment variables inside the started Python and then runs the target like `python <target> …` would.
+# Used instead of a .cmd wrapper / `cmd /c set …`: cmd.exe would open a console window next to pythonw, and its
+# quoting and code-page rules are easy to get wrong with paths such as C:\Users\Ömer Şahin. No double quotes inside,
+# so it survives windows_quote() unchanged. argv: -c CODE <n> NAME1 VALUE1 … <target> <args…>
+_WIN_ENV_LAUNCHER = ("import os,runpy,sys;a=sys.argv;n=int(a[1]);"
+                     "os.environ.update(zip(a[2:2+2*n:2],a[3:3+2*n:2]));"
+                     "sys.argv=a[2+2*n:];runpy.run_path(sys.argv[0],run_name='__main__')")
+
+
+def windows_action(pythonw: str, target: str, args: list, env: object = None) -> tuple:
+    """→ (Command, Arguments) of the task's Exec action: `pythonw <target> <args…>`, or with `env` the in-process
+    launcher above (Task Scheduler has no per-task environment variables)."""
+    argv = []
+    if env:
+        argv = ["-c", _WIN_ENV_LAUNCHER, str(len(env))]
+        for k in sorted(env):
+            argv += [k, env[k]]
+    argv += [target] + list(args)
+    return pythonw, " ".join(windows_quote(a) for a in argv)
+
+
+def windows_user_id(environ: object = None) -> str:
+    """DOMAIN\\user of the installing user (logon trigger + principal of the task)."""
+    env = os.environ if environ is None else environ
+    user = env.get("USERNAME") or ""
+    if not user:
+        import getpass
+        user = getpass.getuser()
+    dom = env.get("USERDOMAIN") or ""
+    return dom + "\\" + user if dom else user
+
+
+def task_scheduler_xml(command: str, arguments: str, user_id: str, description: str,
+                       working_dir: object = None) -> str:
+    """Task Scheduler 1.2 definition (v2.md H10): at logon of this user only, with the user's normal (limited)
+    rights and an interactive token, so registering it needs no administrator and stores no password. Unlike the
+    `schtasks /Create /SC ONLOGON` defaults it runs on battery and keeps running when the laptop unplugs, has no
+    72-hour execution limit, ignores a second start while running and is restarted 3× one minute apart if it fails.
+    The element order follows what Windows itself exports."""
+    from xml.sax.saxutils import escape as e
+    wd = "      <WorkingDirectory>%s</WorkingDirectory>\n" % e(working_dir) if working_dir else ""
+    return (
+        '<?xml version="1.0" encoding="UTF-16"?>\n'
+        '<Task version="1.2" xmlns="%s">\n'
+        "  <RegistrationInfo>\n"
+        "    <Description>%s</Description>\n"
+        "  </RegistrationInfo>\n"
+        "  <Triggers>\n"
+        "    <LogonTrigger>\n"
+        "      <Enabled>true</Enabled>\n"
+        "      <UserId>%s</UserId>\n"
+        "    </LogonTrigger>\n"
+        "  </Triggers>\n"
+        "  <Principals>\n"
+        '    <Principal id="Author">\n'
+        "      <UserId>%s</UserId>\n"
+        "      <LogonType>InteractiveToken</LogonType>\n"
+        "      <RunLevel>LeastPrivilege</RunLevel>\n"
+        "    </Principal>\n"
+        "  </Principals>\n"
+        "  <Settings>\n"
+        "    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\n"
+        "    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>\n"
+        "    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>\n"
+        "    <AllowHardTerminate>true</AllowHardTerminate>\n"
+        "    <StartWhenAvailable>true</StartWhenAvailable>\n"
+        "    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>\n"
+        "    <IdleSettings>\n"
+        "      <StopOnIdleEnd>false</StopOnIdleEnd>\n"
+        "      <RestartOnIdle>false</RestartOnIdle>\n"
+        "    </IdleSettings>\n"
+        "    <AllowStartOnDemand>true</AllowStartOnDemand>\n"
+        "    <Enabled>true</Enabled>\n"
+        "    <Hidden>false</Hidden>\n"
+        "    <RunOnlyIfIdle>false</RunOnlyIfIdle>\n"
+        "    <WakeToRun>false</WakeToRun>\n"
+        "    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>\n"
+        "    <Priority>7</Priority>\n"
+        "    <RestartOnFailure>\n"
+        "      <Interval>%s</Interval>\n"
+        "      <Count>%d</Count>\n"
+        "    </RestartOnFailure>\n"
+        "  </Settings>\n"
+        '  <Actions Context="Author">\n'
+        "    <Exec>\n"
+        "      <Command>%s</Command>\n"
+        "      <Arguments>%s</Arguments>\n"
+        "%s"
+        "    </Exec>\n"
+        "  </Actions>\n"
+        "</Task>\n"
+    ) % (TASK_NS, e(description), e(user_id), e(user_id), TASK_RESTART_INTERVAL, TASK_RESTART_COUNT, e(command),
+         e(arguments), wd)
+
+
+def task_xml_bytes(xml: str) -> bytes:
+    """schtasks /XML reads UTF-16 with a byte order mark (the encoding Windows itself exports)."""
+    return xml.encode("utf-16")
+
+
+def pythonw_for(python: str) -> str:
+    """pythonw.exe next to python.exe (no console window). Unchanged when the name isn't python.exe."""
+    cut = max(python.rfind("\\"), python.rfind("/")) + 1
+    return python[:cut] + "pythonw.exe" if python[cut:].lower() == "python.exe" else python
+
+
+def antigravity_schtasks_argv(xml_path: str) -> list:
+    return ["schtasks", "/Create", "/TN", AG_SCHTASK_NAME, "/XML", xml_path, "/F"]
 
 
 def install_files() -> str:
@@ -571,7 +700,7 @@ def install_files() -> str:
 
 def install_antigravity_service(extra: list, dry_run: bool = False, uninstall: bool = False, log=print,
                                 platform: object = None, user_home: object = None, python: object = None,
-                                runner=subprocess.run, uid: object = None) -> int:
+                                runner=subprocess.run, uid: object = None, environ: object = None) -> int:
     """Start the watcher at login, or remove that. Linux: systemd user unit; macOS: launchd agent; Windows: a Task
     Scheduler task at logon (pythonw, no window). The same commands as pixel_connector/service.py."""
     platform = platform or sys.platform
@@ -640,10 +769,14 @@ def install_antigravity_service(extra: list, dry_run: bool = False, uninstall: b
         if uninstall:
             run(["schtasks", "/End", "/TN", AG_SCHTASK_NAME])
             return run(["schtasks", "/Delete", "/TN", AG_SCHTASK_NAME, "/F"])
-        if not dry_run:
-            install_files()
-        pythonw = python.replace("python.exe", "pythonw.exe")
-        rc = run(antigravity_schtasks_argv(pythonw, script, extra))
+        env = {"PIXEL_OFFICE_HOME": override} if override else None
+        command, arguments = windows_action(pythonw_for(python), script, extra, env)
+        xml = task_scheduler_xml(command, arguments, windows_user_id(environ), "Pixel Office Antigravity izleyicisi",
+                                 office_home())
+        path = os.path.join(office_home(), AG_TASK_XML_FILE)
+        log("Görev Zamanlayıcı tanımı: %s" % path)
+        write(path, task_xml_bytes(xml), xml)
+        rc = run(antigravity_schtasks_argv(path))
         if rc == 0:
             run(["schtasks", "/End", "/TN", AG_SCHTASK_NAME])                     # stop an old instance (ignored)
             rc = run(["schtasks", "/Run", "/TN", AG_SCHTASK_NAME])

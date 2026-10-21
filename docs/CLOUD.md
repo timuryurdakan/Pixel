@@ -540,7 +540,7 @@ Main-session state while a subagent runs: last main event was `PreToolUse(Agent)
 
 Per record, `~/.pixel-office/state/<sha256(salt+session[+sub])[:16]>.json` holds
 `{"seq", "last": {"st","tool","lbl","proj","t"}, "pending": update|null, "since", "started", "tc"}`.
-Written atomically (temp file + `os.replace`). On Windows no `fcntl`, so it is best effort, but the seq check makes races harmless.
+Written atomically (temp file + `os.replace`). On Windows (no `fcntl`) the Python client locks the same file with `msvcrt.locking` (waits at most 2 s, then goes on without the lock; Phase 20 / Package 7, H31); the seq check keeps any remaining race harmless.
 
 1. Map the event (§7.2). No update → maybe bump `tc` (PreToolUse) → exit 0.
 2. Increment `seq`, store `pending`.

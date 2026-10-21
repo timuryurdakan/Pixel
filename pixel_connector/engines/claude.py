@@ -9,7 +9,9 @@ The prompt goes to stdin (never argv). No shell. `bypassPermissions` / `--danger
 path here: `build_argv` asserts their absence and tests grep this file. cwd = the resolved workspace; the child env is
 built from an allow-list (`child_env`, Phase 20) plus PIXEL_OFFICE_DISABLE=1 (no duplicate office character from a v2
 hook) and pinned git settings (GIT_CONFIG_COUNT/KEY/VALUE).
-Cancel: SIGINT to the process group → SIGTERM after 5 s → SIGKILL after 10 s more.
+Cancel: SIGINT to the process group → SIGTERM after 5 s → SIGKILL after 10 s more. Windows (v2.md H10): CTRL_BREAK
+to the process group only when the connector has a console to share → after the grace period `taskkill /T /F` on the
+whole process tree → TerminateProcess as a last resort.
 """
 
 from __future__ import annotations
@@ -205,28 +207,72 @@ def tool_summary(name: str, inp, cwd: Optional[str]) -> str:
     return short(v, 200)
 
 
+def win_has_console() -> bool:
+    """True when this process has a console. Under pythonw.exe (the Task Scheduler service) it has none, so a
+    CTRL_BREAK can't reach the child and console children need CREATE_NO_WINDOW (else each opens a window)."""
+    try:
+        import ctypes
+        return bool(ctypes.windll.kernel32.GetConsoleWindow())     # type: ignore[attr-defined]
+    except (ImportError, AttributeError, OSError):
+        return False
+
+
+def win_creationflags(has_console: bool) -> int:
+    """Own process group (CTRL_BREAK goes to the child's group, never to the connector); no console window when the
+    connector itself runs without one."""
+    flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200)
+    if not has_console:
+        flags |= getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+    return flags
+
+
+def taskkill_argv(pid: int, environ: Optional[Dict[str, str]] = None) -> List[str]:
+    """`taskkill /T /F /PID <pid>` by absolute path (System32), so a taskkill.exe in the current directory or on a
+    user PATH entry is never the one that runs."""
+    env = os.environ if environ is None else environ
+    root = env.get("SystemRoot") or env.get("SYSTEMROOT") or "C:\\Windows"
+    return [root.rstrip("\\") + "\\System32\\taskkill.exe", "/T", "/F", "/PID", str(int(pid))]
+
+
+def win_kill_tree(pid: int, run=subprocess.run) -> bool:
+    """Kill a Windows process and all of its descendants (claude.cmd → node → git/shell children). Must run while the
+    root is still alive: /T walks the tree from it. → True when taskkill reported success."""
+    try:
+        r = run(taskkill_argv(pid), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=15, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000))
+        return r.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 class Canceller:
     """SIGINT → (grace) → SIGTERM → (term) → SIGKILL on the child's process group. `wait(timeout)` → True when the
-    process has exited. Injectable for tests (fake clock / fake signals)."""
+    process has exited. Windows: CTRL_BREAK (only with a shared console) → (grace) → taskkill /T /F on the tree →
+    (term) → TerminateProcess. Injectable for tests (fake clock / fake signals / fake platform)."""
 
     def __init__(self, proc, grace: float = 5.0, term: float = 10.0,
                  signal_fn: Optional[Callable[[int], None]] = None,
-                 wait_fn: Optional[Callable[[float], bool]] = None) -> None:
+                 wait_fn: Optional[Callable[[float], bool]] = None, platform: Optional[str] = None,
+                 tree_kill_fn: Optional[Callable[[int], bool]] = None,
+                 has_console: Optional[Callable[[], bool]] = None) -> None:
         self.proc = proc
         self.grace, self.term = grace, term
         self.signal_fn = signal_fn or self._signal
         self.wait_fn = wait_fn or self._wait
+        self.platform = platform or sys.platform
+        self.tree_kill_fn = tree_kill_fn or win_kill_tree
+        self.has_console = has_console or win_has_console
         self.sent: List[str] = []
         self._started = False
         self._lock = threading.Lock()
 
     def _signal(self, sig: int) -> None:
         try:
-            if sys.platform == "win32":
+            if self.platform == "win32":
                 if sig == getattr(signal, "CTRL_BREAK_EVENT", None):
                     self.proc.send_signal(sig)
                 else:
-                    self.proc.terminate()
+                    self.proc.kill()
             else:
                 os.killpg(self.proc.pid, sig)
         except (ProcessLookupError, PermissionError, OSError):
@@ -239,20 +285,27 @@ class Canceller:
         except subprocess.TimeoutExpired:
             return False
 
+    def _steps(self) -> List[Tuple[str, Callable[[], None], Optional[float]]]:
+        if self.platform != "win32":
+            return [("INT", lambda: self.signal_fn(signal.SIGINT), self.grace),
+                    ("TERM", lambda: self.signal_fn(signal.SIGTERM), self.term),
+                    ("KILL", lambda: self.signal_fn(signal.SIGKILL), None)]
+        steps: List[Tuple[str, Callable[[], None], Optional[float]]] = []
+        brk = getattr(signal, "CTRL_BREAK_EVENT", None)
+        if brk is not None and self.has_console():
+            steps.append(("CTRL_BREAK", lambda: self.signal_fn(brk), self.grace))
+        steps.append(("TREE_KILL", lambda: self.tree_kill_fn(self.proc.pid), self.term))
+        steps.append(("KILL", lambda: self.signal_fn(signal.SIGTERM), None))      # TerminateProcess on the root
+        return steps
+
     def run(self) -> None:
         with self._lock:
             if self._started:
                 return
             self._started = True
-        if sys.platform == "win32":
-            steps = [("CTRL_BREAK", getattr(signal, "CTRL_BREAK_EVENT", signal.SIGTERM), self.grace),
-                     ("TERM", signal.SIGTERM, self.term)]
-        else:
-            steps = [("INT", signal.SIGINT, self.grace), ("TERM", signal.SIGTERM, self.term),
-                     ("KILL", signal.SIGKILL, None)]
-        for name, sig, wait in steps:
+        for name, action, wait in self._steps():
             self.sent.append(name)
-            self.signal_fn(sig)
+            action()
             if wait is None or self.wait_fn(wait):
                 return
 
@@ -349,13 +402,16 @@ class ClaudeRun(Running):
 
     def kill(self) -> None:
         """Last resort when the connector shuts down and a cancelled run hasn't ended in time (app.stop, v2.md H11):
-        SIGKILL to the process group, so no Claude process outlives the connector."""
+        SIGKILL to the process group (Windows: taskkill /T /F on the tree), so no Claude process outlives the
+        connector."""
         proc = self.proc
         if proc is None or proc.poll() is not None:
             return
         try:
             if sys.platform == "win32":
-                proc.kill()
+                win_kill_tree(proc.pid)                 # the whole tree, not only claude.cmd / the root node.exe
+                if proc.poll() is None:
+                    proc.kill()
             else:
                 os.killpg(proc.pid, signal.SIGKILL)
         except ProcessLookupError:
@@ -402,7 +458,7 @@ class ClaudeRun(Running):
         self.argv_used.append(argv)
         kwargs = {}
         if sys.platform == "win32":
-            kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            kwargs["creationflags"] = win_creationflags(win_has_console())
         else:
             kwargs["start_new_session"] = True
         with self._lock:
