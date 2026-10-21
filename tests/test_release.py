@@ -63,7 +63,7 @@ def load_api(path: Path):
 class VercelFunctionDetectionTests(unittest.TestCase):
     def test_every_api_file_is_detected_as_a_function(self):
         self.assertEqual({p.stem for p in API_FILES},
-                         {"config", "health", "rooms", "state", "status", "cc_hook", "rename", "residents",
+                         {"config", "health", "rooms", "state", "status", "cc_hook", "rename",
                           "relay_ticket"})
         for p in API_FILES:
             with self.subTest(file=p.name):

@@ -11,7 +11,6 @@ import zlib
 from dataclasses import dataclass
 
 from . import settings as S
-from . import residents as R
 from .ids import AGENT_ID_RE
 from .validate import ACTIVE_STATES, CTL_RE, Update
 
@@ -254,20 +253,15 @@ def snapshot(room_id: str, fields: dict[str, str], now_ms: int, st: S.Settings |
         elif d.visible:
             visible[aid] = (rec, d)
 
-    resident = R.resident_records(room_id, fields.get(R.FIELD), now_ms)
-    resident_ids = {aid for aid, _, _ in resident}
-
     # rename fields of agents that are gone (no record at all) for longer than PURGE_AFTER
     for aid, (_, ts) in custom.items():
-        if aid not in records and aid not in resident_ids and now_ms - ts > S.PURGE_AFTER * 1000:
+        if aid not in records and now_ms - ts > S.PURGE_AFTER * 1000:
             purge.append("n:" + aid)
 
     prefs: dict[str, int] = {}
     for rec, _ in visible.values():
         oid = _str(rec.get("oid")) or "?"
         prefs.setdefault(oid, _num(rec.get("col")))
-    for aid, _, _ in resident:
-        prefs.setdefault("r" + aid[1:], crc32(aid) % 16)
     colors = assign_owner_colors(prefs)
 
     agents = []
@@ -302,24 +296,8 @@ def snapshot(room_id: str, fields: dict[str, str], now_ms: int, st: S.Settings |
             "nameSource": src, "defaultName": default,
             "control": control_of(rec),
         })
-    for aid, r, (state, since, tool, label, tc) in resident:
-        oid = "r" + aid[1:]
-        name, src, default = resolve_name(custom=custom.get(aid, (None, 0))[0], owner_default=owner_names.get(oid),
-                                          reported=None, auto=r.name, is_sub=False)
-        agents.append({
-            "id": aid, "name": name, "project": r.project,
-            "projectPath": None, "title": None, "lastMessage": None, "lastPrompt": None, "model": None,
-            "state": state, "tool": tool, "detail": detail_for(tool, label),
-            "isSubagent": False, "parentId": None, "agentType": None,
-            "colorSeed": crc32(aid), "toolCount": tc,
-            "startedAt": since, "stateSince": since, "updatedAt": now_ms,
-            "owner": r.name, "ownerId": oid, "ownerColor": colors.get(oid, OWNER_COLORS[0]),
-            "source": "claude-code", "nameSource": src, "defaultName": default,
-            "control": None,
-        })
     agents.sort(key=lambda a: (a["startedAt"], a["id"]))
-    # Residents never drive the poll rate: a room with only residents polls like an empty one (§12 budget).
-    act = activity([a["state"] for a in agents if a["id"] not in resident_ids])
+    act = activity([a["state"] for a in agents])
     payload = {
         "mode": "cloud",
         "serverTime": now_ms,

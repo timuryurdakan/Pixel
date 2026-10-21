@@ -55,7 +55,7 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | A8 | v4-A: ofis duvarında Görev Tahtası (C3 ✅ sonrası) | Antigravity | ⬜ |
 | A9 | v4-B: masadan masaya devir (A8 sonrası) | Antigravity | ⬜ |
 | A10 | v4-C: iş akışı motoru ve ilk şablon (A9 sonrası) | Antigravity | ⬜ |
-| A11 | Aşama 20 / Paket 6: bulut temizliği (**şimdi**, C3'ten bağımsız; push yok, Claude birleştirir) | Antigravity | ⬜ |
+| A11 | Aşama 20 / Paket 6: bulut temizliği (**şimdi**, C3'ten bağımsız; push yok, Claude birleştirir) | Antigravity | ✅ Teslim edildi |
 
 **A6–A10'un ayrıntıları, başlama koşulları ve push yöntemi:** [`docs/V4_ANTIGRAVITY.md`](V4_ANTIGRAVITY.md).
 
@@ -187,3 +187,16 @@ görüntüleri, bilinen sorunlar.
 - **2026-10-21, Claude:** A6 kontrol edildi ve ana dala alındı (`4e3fc71`), düzeltmelerin hepsi yerinde. Yeni görev
   **A11** (Paket 6, bulut temizliği) Antigravity'ye verildi; ayrıntı `docs/V4_ANTIGRAVITY.md` §3 A11. Claude bu sırada
   Paket 5, 7 ve 8'i yapıyor; A11'in dosyaları bunlarla çakışmıyor.
+- **2026-10-21, Antigravity (A11, Aşama 20 / Paket 6: Bulut Temizliği):** Paket 6 kapsamındaki tüm bulut temizlik ve sağlamlaştırma maddeleri tamamlandı:
+  - **F1 (Sabit ajan temizliği):** `api/residents.py`, `pixel_cloud/residents.py` ve `tests/test_residents.py` silindi (kuraldaki 'test silinmez' yasağının tek istisnası olarak teslim notunda belirtildi; resident özelliği ve endpoint'i kaldırıldığı için 7 test silindi). `derive.py` ve `app.py` içindeki resident kodları/rotaları temizlendi; Redis'te kalmış eski `_res` anahtarları okuma yolunda sessizce yok sayılıyor. H18 ve H23 de F1 ile birlikte kapandı.
+  - **H12 (Hayalet ajan yarış durumu):** `pixel_office/reported.py` ticker güncellemesi düzeltildi; `offline` mesajıyla eşzamanlı silinen ajanların tekrar eklenmesi önlendi, `tests/test_local_status.py`'ye `test_ghost_agent_offline_race` testi eklendi.
+  - **H17 (`room_full` 429 rollback):** `pixel_cloud/app.py` batch yazımında oda dolduğunda kısmi yeni ajanların Redis'te kalması engellendi; 429 öncesi batch'teki tüm yeni ajanlar depodan temizleniyor (`tests/test_cloud_app.py`'ye rollback testi eklendi).
+  - **H19 (`no:` sahip isimleri purge):** `pixel_cloud/app.py` `_enforce_name_limit`, odada aktif ajanı kalmayan sahip isimlerini `PURGE_AFTER` (6 saat) sonrasında temizleyerek 96 alan kotasının kilitlenmesini önledi (`tests/test_rename.py`'ye test eklendi).
+  - **H20 (Upstash timeout bütçesi):** `pixel_cloud/settings.py`'ye `UPSTASH_TOTAL_TIMEOUT = 6.0` saniye sınırı eklendi; `pixel_cloud/storage.py`'de `UpstashStorage` geçen süreyi takip ederek Vercel 10 saniye sınırını aşmadan hata döndürüyor ve zaman aşımı durumunda gereksiz yeniden denemeleri engelliyor.
+  - **H21 (Röle ayarı uyarısı):** `pixel_cloud/settings.py` (`relay_from_env`), röle yarım veya geçersiz yapılandırıldığında sır değerini ifşa etmeden tek seferlik uyarı logu (`pixel_cloud` logger) atıyor (`tests/test_relay_ticket.py`'ye test eklendi).
+  - **H22 (Görünmez karakter süzmesi):** `pixel_cloud/validate.py` (`sanitize`), Unicode `Cf` kategorisi, Hangul dolguları (U+3164, U+115F, U+1160, U+FFA0) ve etiket bloklarını (U+E0000–E007F) temizliyor (`tests/test_cloud_validate.py`'ye test eklendi).
+  - **D5 (Sürüm etiketleri):** `pixel_cloud/__init__.py` ve `pixel_office/__init__.py` sürümleri `3.1.0` yapıldı; `tests/test_cloud_app.py` sürüm beklentileri güncellendi (`web/hook/pixel_hook.py`'ye dokunulmadı).
+  - **D9 (`ids` gölgelemesi):** `app.py:565` `ids` gölgelemesi resident kodunun silinmesiyle tamamen kalktı.
+  - **F3 (Kullanılmayan kodlar):** `Storage.count` ve `reset_storage` kaldırıldı (`tests/test_cloud_storage.py` güncellendi); `Settings.extra` silindi; `_update_to_dict` sadeleştirildi; `derive_room_name` kaldırılarak doğrudan `clean_room_name` çağrıldı; `relay.py` içindeki mükerrer `ROOM_RE` yerine `.ids`'ten içe aktarıldı.
+  - **Belgeler:** `docs/CLOUD.md` §12.2 HKEYS düzeltmesi yapıldı, resident anmaları kaldırıldı; `docs/V3.md` resident anmaları temizlendi; `v2.md` işaretlendi.
+  - **Doğrulama & Testler:** `python3 -m unittest discover -s tests` → 627 test, 1 atlandı (pwsh yok), hepsi başarılı. `python3 tools/build_connector.py --check` güncel. Kendi dalında commit'lendi, push yapılmadı.

@@ -19,11 +19,12 @@ from typing import BinaryIO, Callable, Mapping
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from . import __version__
-from . import derive, ids, relay, residents
+from . import derive, ids, relay
 from . import settings as S
 from .ratelimit import RateLimiter, retry_after_seconds
 from .storage import StorageError, StorageNotConfigured, storage_from_env
-from .validate import Update, ValidationError, parse_cloud_rename, parse_json, parse_status_body, parse_update, sanitize
+from .validate import (Update, ValidationError, clean_room_name, parse_cloud_rename, parse_json, parse_status_body,
+                       parse_update, sanitize)
 
 log = logging.getLogger("pixel_cloud")
 
@@ -216,17 +217,10 @@ def load_hook_mapper(path: Path = HOOK_CLIENT):
 def _update_to_dict(u: object) -> dict | None:
     if isinstance(u, dict):
         return dict(u)
-    for attr in ("as_payload", "to_dict", "_asdict"):
-        f = getattr(u, attr, None)
-        if callable(f):
-            d = f()
-            return dict(d) if isinstance(d, dict) else None
-    try:
-        import dataclasses
-        if dataclasses.is_dataclass(u):
-            return dataclasses.asdict(u)
-    except Exception:  # pragma: no cover
-        pass
+    f = getattr(u, "as_payload", None)
+    if callable(f):
+        d = f()
+        return dict(d) if isinstance(d, dict) else None
     return None
 
 
@@ -259,7 +253,6 @@ class App:
             "/api/status": {"POST": self.h_status},
             "/api/cc_hook": {"POST": self.h_cc_hook},
             "/api/rename": {"POST": self.h_rename},
-            "/api/residents": {"POST": self.h_residents},
             "/api/relay_ticket": {"POST": self.h_relay_ticket},
         }
 
@@ -429,7 +422,7 @@ class App:
             if not isinstance(given, str) or not ids.constant_time_eq(given, token):
                 raise HttpError(403, "forbidden", "A valid create token is required")
         try:
-            name = derive_room_name(data.get("name"))
+            name = clean_room_name(data.get("name"))
         except ValidationError as e:
             self.limit_ip_create.refund(req.client_ip or "?")
             raise HttpError(400, "bad_request", str(e)) from None
@@ -504,9 +497,8 @@ class App:
                 n_agents = sum(1 for f in self.storage.keys(room) if ids.AGENT_ID_RE.match(f))
                 excess = n_agents - S.MAX_AGENTS_PER_ROOM
                 if excess > 0:
-                    drop = new[-excess:]
-                    self.storage.delete(room, drop)
-                    for f in drop:
+                    self.storage.delete(room, new)
+                    for f in new:
                         prev_new.pop(f, None)
                     self._invalidate(room)
                     raise HttpError(429, "room_full",
@@ -545,26 +537,6 @@ class App:
         self._invalidate(room)
         return _json_response(200, {"ok": True, "name": rr.name, "scope": rr.scope, "serverTime": now})
 
-    # -- POST /api/residents ----------------------------------------------------------------------
-    def h_residents(self, req: Request, q: dict) -> Response:
-        """Replace the room's always-present resident agents (pixel_cloud/residents.py); [] clears."""
-        room = self._room(q)
-        self._auth(req, room)
-        body = self._body(req, S.MAX_RENAME_BODY)
-        self._rate((self.limit_ip_write, req.client_ip or "?"), (self.limit_room_rename, room))
-        try:
-            items = residents.parse_residents(body)
-        except ValidationError as e:
-            raise HttpError(400, "bad_request", str(e)) from None
-        if items:
-            self.storage.put_agents(room, {residents.FIELD: residents.dump_residents(items)}, self._refresh_ttl(room))
-        else:
-            self.storage.delete(room, [residents.FIELD])
-        self._invalidate(room)
-        now = self.now_ms()
-        ids = [residents.resident_id(room, i, r.name) for i, r in enumerate(items)]
-        return _json_response(200, {"ok": True, "ids": ids, "serverTime": now})
-
     # -- POST /api/relay_ticket (v3, V3.md §6.2, §13.4) ----------------------------------------------
     def h_relay_ticket(self, req: Request, q: dict) -> Response:
         """Short-lived relay ticket for the room's write-key holder. 0 storage commands; nothing is logged."""
@@ -592,14 +564,30 @@ class App:
         if len(names) <= S.MAX_NAME_FIELDS:
             return
         fields = self.storage.read_room(room)
+        active_oids = set()
+        for f, raw in fields.items():
+            if ids.AGENT_ID_RE.match(f):
+                rec = derive.load_json_obj(raw)
+                if rec and rec.get("oid"):
+                    active_oids.add(str(rec["oid"]))
+
         stale = []
         for k in names:
-            if k == new_field or not k.startswith("n:") or k[2:] in fields:
+            if k == new_field:
+                continue
+            if k.startswith("n:"):
+                if k[2:] in fields:
+                    continue
+            elif k.startswith("no:"):
+                if k[3:] in active_oids:
+                    continue
+            else:
                 continue
             obj = derive.load_json_obj(fields.get(k)) or {}
             ts = obj.get("ts") if isinstance(obj.get("ts"), int) else 0
             if now - ts > S.PURGE_AFTER * 1000:
                 stale.append(k)
+
         if len(names) - len(stale) > S.MAX_NAME_FIELDS:
             self.storage.delete(room, [new_field])
             raise HttpError(429, "room_full", f"Room already has {S.MAX_NAME_FIELDS} names",
@@ -662,11 +650,6 @@ class App:
         if updates:
             self.write_updates(room, updates)
         return _json_response(200, {})
-
-
-def derive_room_name(value: object) -> str:
-    from .validate import clean_room_name
-    return clean_room_name(value)
 
 
 _default: App | None = None

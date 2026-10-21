@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import secrets
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Mapping
+
+log = logging.getLogger("pixel_cloud")
+_relay_warned = False
 
 # -- read-time state machine (§6.2) -------------------------------------------------------------
 ROOM_TTL = 30 * 86400          # s, refreshed on writes (EXPIRE at most once per hour per warm instance)
@@ -60,6 +64,7 @@ MICRO_CACHE_S = 2
 CONFIG_CACHE_CONTROL = "public, max-age=60, s-maxage=300"
 
 UPSTASH_TIMEOUT = 3.0          # s
+UPSTASH_TOTAL_TIMEOUT = 6.0    # s total budget per storage call (stays under Vercel 10 s limit)
 MIN_SECRET_LEN = 32
 
 
@@ -84,7 +89,6 @@ class Settings:
     poll_empty_ms: int = POLL_EMPTY_MS
     relay_secret: bytes | None = None     # RELAY_SECRET (≥ 32 chars); v3 is on only if both relay fields are set
     relay_url: str | None = None          # PIXEL_RELAY_URL, e.g. wss://pixel-relay.<sub>.workers.dev
-    extra: dict = field(default_factory=dict)
 
     @property
     def relay_enabled(self) -> bool:
@@ -120,6 +124,12 @@ def relay_from_env(env: Mapping[str, str], on_vercel: bool = False) -> dict:
     `ws://127.0.0.1[:port]` is accepted for local development only, never on Vercel."""
     raw = (env.get("RELAY_SECRET") or "").strip()
     url = (env.get("PIXEL_RELAY_URL") or "").strip().rstrip("/")
+    if not raw and not url:
+        return {"relay_secret": None, "relay_url": None}
     if len(raw) < MIN_SECRET_LEN or not _RELAY_URL_RE.match(url) or (on_vercel and not url.startswith("wss://")):
+        global _relay_warned
+        if not _relay_warned:
+            _relay_warned = True
+            log.warning("relay disabled: configuration incomplete or invalid")
         return {"relay_secret": None, "relay_url": None}
     return {"relay_secret": raw.encode("utf-8"), "relay_url": url}

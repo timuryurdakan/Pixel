@@ -358,6 +358,23 @@ class TickerTests(unittest.TestCase):
         rep.join(1)
         self.assertFalse(rep.is_alive())
 
+    def test_ghost_agent_offline_race(self):
+        aid = self.apply(state="working")
+        self.assertIsNotNone(self.store.get(aid))
+
+        orig_agent = self.rep._agent
+
+        def race_agent(*args, **kwargs):
+            self.apply(state="offline")
+            return orig_agent(*args, **kwargs)
+
+        with mock.patch.object(self.rep, "_agent", side_effect=race_agent):
+            self.rep.tick()
+
+        self.assertIsNone(self.store.get(aid))
+        self.assertNotIn(aid, self.rep.ids())
+
 
 if __name__ == "__main__":
     unittest.main()
+

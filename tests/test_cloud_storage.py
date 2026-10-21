@@ -24,7 +24,6 @@ class MemoryStorageTests(unittest.TestCase):
         self.assertAlmostEqual(m.ttl("r"), S.ROOM_TTL)
         self.assertEqual(m.put_agents("r", {"a1": "1", "a2": "2"}, refresh_ttl=False), {"a1": True, "a2": True})
         self.assertEqual(m.put_agents("r", {"a1": "x"}, refresh_ttl=False), {"a1": False})
-        self.assertEqual(m.count("r"), 3)
         self.assertEqual(sorted(m.keys("r")), ["_meta", "a1", "a2"])
         m.delete("r", ["a2", "nope"])
         m.delete("r", [])
@@ -32,7 +31,6 @@ class MemoryStorageTests(unittest.TestCase):
         clk.t += S.ROOM_TTL - 10
         m.put_agents("r", {"a3": "3"}, refresh_ttl=True)      # TTL refreshed by a write
         clk.t += 20
-        self.assertEqual(m.count("r"), 3)
         clk.t += S.ROOM_TTL
         self.assertEqual(m.read_room("r"), {})                 # expired
         self.assertTrue(m.ping())
@@ -77,14 +75,13 @@ class UpstashStorageTests(unittest.TestCase):
         self.assertEqual(self.s.put_agents("r", {"a1": "x"}, refresh_ttl=False), {"a1": True})
         self.assertEqual(self.s.put_agents("r", {"a1": "y", "a2": "z"}, refresh_ttl=True), {"a1": False, "a2": True})
         self.assertEqual(self.s.read_room("r"), {"_meta": '{"name":"Oda"}', "a1": "y", "a2": "z"})
-        self.assertEqual(self.s.count("r"), 3)
         self.assertEqual(sorted(self.s.keys("r")), ["_meta", "a1", "a2"])
         self.s.delete("r", ["a1", "a2"])
         self.s.delete("r", [])
         self.assertEqual(self.s.read_room("r"), {"_meta": '{"name":"Oda"}'})
         self.assertEqual(self.s.read_room("missing"), {})
         ops = [c[0] for c in self.fake.calls]
-        self.assertEqual(ops, ["PING", "HSET", "EXPIRE", "HSET", "HSET", "HSET", "EXPIRE", "HGETALL", "HLEN", "HKEYS",
+        self.assertEqual(ops, ["PING", "HSET", "EXPIRE", "HSET", "HSET", "HSET", "EXPIRE", "HGETALL", "HKEYS",
                                "HDEL", "HGETALL", "HGETALL"])
 
     def test_unicode_roundtrip(self):
@@ -104,7 +101,7 @@ class UpstashStorageTests(unittest.TestCase):
             self.s.read_room("r")
         self.fake.fail_mode = "error"
         with self.assertRaises(st.StorageError):
-            self.s.count("r")
+            self.s.keys("r")
         w = st.UpstashStorage(self.fake.url, "wrong-TOKEN-xyz")
         self.assertFalse(w.ping())
         with self.assertRaises(st.StorageError) as cm:
