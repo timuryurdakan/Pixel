@@ -168,7 +168,9 @@ class WebSocket:
         self.last_rx = time.monotonic()     # any bytes received (pongs included); the connector's dead-link check
 
     # -- low level --
-    def _send_frame(self, opcode: int, payload: bytes, fin: bool = True) -> None:
+    def _send_frame(self, opcode: int, payload: bytes, fin: bool = True, timeout: Optional[float] = None) -> None:
+        """`timeout`: a deadline for the whole frame (the relay client's writer, v2.md H5). Without it the socket's
+        current timeout applies. A frame cut by a timeout leaves the stream unusable, so the socket is dropped."""
         head = bytearray([(0x80 if fin else 0) | opcode])
         mask_bit = 0x80 if self.client else 0
         n = len(payload)
@@ -184,8 +186,22 @@ class WebSocket:
             mask = os.urandom(4)
             head += mask
             payload = _mask(payload, mask)
+        data = bytes(head) + payload
         with self._send_lock:
-            self.sock.sendall(bytes(head) + payload)
+            if timeout is None:
+                self.sock.sendall(data)
+                return
+            self.sock.settimeout(timeout)
+            try:
+                self.sock.sendall(data)
+            except socket.timeout:
+                self._gone()
+                raise
+            finally:
+                try:
+                    self.sock.settimeout(None)
+                except OSError:
+                    pass
 
     def _fill(self) -> None:
         chunk = self.sock.recv(65536)
@@ -235,11 +251,32 @@ class WebSocket:
                     return fin, opcode, payload
             self._fill()
 
+    def pending(self) -> bool:
+        """True when recv() can make progress without new bytes on the socket: a whole frame is already buffered, or
+        the TLS layer holds decrypted bytes that select() can't see. Used by a single-thread reader/writer loop."""
+        buf = self._buf
+        if len(buf) >= 2:
+            n, pos = buf[1] & 0x7F, 2
+            if n == 126 and len(buf) >= 4:
+                n, pos = struct.unpack("!H", bytes(buf[2:4]))[0], 4
+            elif n == 127 and len(buf) >= 10:
+                n, pos = struct.unpack("!Q", bytes(buf[2:10]))[0], 10
+            if (n < 126 or pos > 2) and len(buf) >= pos + (4 if buf[1] & 0x80 else 0) + n:
+                return True
+        fn = getattr(self.sock, "pending", None)
+        try:
+            return bool(fn is not None and fn() > 0)
+        except (OSError, ValueError):
+            return False
+
+    def fileno(self) -> int:
+        return self.sock.fileno()
+
     # -- public API --
-    def send_text(self, text: str) -> None:
+    def send_text(self, text: str, timeout: Optional[float] = None) -> None:
         if self.closed:
             raise ConnectionClosed(self.close_code or CLOSE_ABNORMAL, "already closed")
-        self._send_frame(OP_TEXT, text.encode("utf-8"))
+        self._send_frame(OP_TEXT, text.encode("utf-8"), timeout=timeout)
 
     def send_bytes(self, data: bytes) -> None:
         if self.closed:
@@ -251,8 +288,8 @@ class WebSocket:
         for i, p in enumerate(parts):
             self._send_frame(OP_TEXT if i == 0 else OP_CONT, p, fin=i == len(parts) - 1)
 
-    def ping(self, data: bytes = b"") -> None:
-        self._send_frame(OP_PING, data[:125])
+    def ping(self, data: bytes = b"", timeout: Optional[float] = None) -> None:
+        self._send_frame(OP_PING, data[:125], timeout=timeout)
 
     def recv(self, timeout: Optional[float] = None) -> Union[str, bytes]:
         """Next data message. Answers pings, skips pongs. Raises ConnectionClosed (with the peer's code) at the end,

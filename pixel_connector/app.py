@@ -7,6 +7,8 @@ Every inner message (§3.4) is handled here. Requests carry `id`; replies carry 
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import os
 import platform
 import queue
@@ -16,7 +18,7 @@ import threading
 import time
 from typing import Callable, Dict, List, Optional
 
-from . import __version__
+from . import __build__, __version__
 from . import crypto as C
 from .agents import LABELS, AgentError, AgentStore, OfficeReporter
 from .approvals import Approvals, ControlServer
@@ -37,6 +39,7 @@ from .workspaces import WorkspaceDenied, Workspaces
 REQ_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}\Z")
 TASK_RE = re.compile(r"^t_[A-Za-z0-9_-]{10}\Z")
 PROFILE_LABELS = {"readonly": "Sadece okuma", "edit": "Düzenleyebilir", "dev": "Geliştirici", "auto": "Otomatik"}
+STOP_WAIT_S = 10.0          # stop(): how long all cancelled runs together may take to end (v2.md H11)
 SLOW_TYPES = {"peer.hello", "runtime.list", "runtime.start", "runtime.stop", "model.load", "model.unload",
               "workspace.list", "agent.create", "peer.revoke"}
 
@@ -52,10 +55,32 @@ def os_name() -> str:
                                                                           "linux" if sys.platform.startswith("linux") else sys.platform)
 
 
+def _ms(t: Optional[float]) -> Optional[int]:
+    return int(t * 1000) if isinstance(t, (int, float)) else None
+
+
+def running_pyz_sha256() -> Optional[str]:
+    """SHA-256 of the zipapp this process runs from (None from a source checkout). Read once at start-up: the installer
+    replaces the file before restarting the service, and the running code is what matters."""
+    import pixel_connector
+    archive = getattr(getattr(pixel_connector, "__loader__", None), "archive", None)
+    if not archive or not os.path.isfile(archive):
+        return None
+    h = hashlib.sha256()
+    try:
+        with open(archive, "rb") as f:
+            for block in iter(lambda: f.read(1 << 16), b""):
+                h.update(block)
+    except OSError:
+        return None
+    return h.hexdigest()
+
+
 class Connector:
     def __init__(self, home: str, cfg: Config, clock: Callable[[], float] = time.time, relay_factory=None,
                  office_sender=None, engines: Optional[dict] = None, start_ctl: bool = True,
-                 user_home: Optional[str] = None, log: Callable[[str], None] = lambda s: None) -> None:
+                 user_home: Optional[str] = None, log: Callable[[str], None] = lambda s: None,
+                 stop_wait_s: float = STOP_WAIT_S) -> None:
         if not cfg.ok:
             raise ValueError("invalid configuration: " + "; ".join(cfg.errors))
         self.home = ensure_dir(home)
@@ -63,11 +88,14 @@ class Connector:
         self.cfg = cfg.data
         self.clock = clock
         self.log = log
+        self.stop_wait_s = stop_wait_s
         self.key = DeviceKey.load_or_create(home)
         self.peers = PeerStore(home, clock)
         self.audit = AuditLog(os.path.join(home, AUDIT_FILE), self.cfg["audit"]["storePrompts"], clock=clock)
         self.agents = AgentStore(home, clock)
         self.ledger = Ledger(os.path.join(home, LEDGER_FILE), clock)
+        self._ledger_lock = threading.Lock()
+        self._ledger_closed = False
         self.budgets = Budgets(home, self.cfg["budgets"], self.ledger, self.agents.budgets)
         self.workspaces = Workspaces(self.cfg["workspaces"], user_home)
         self.runtimes = Runtimes(self.cfg["runtimes"], home=user_home)
@@ -92,7 +120,7 @@ class Connector:
         factory = relay_factory or (lambda **kw: RelayClient(**kw))
         self.relay = factory(server=self.cfg["server"], room=self.cfg["room"], key=self.cfg["key"],
                              device_id=self.key.device_id, on_frame=self._on_frame, on_status=self._on_status,
-                             on_connect=self._on_connect)
+                             on_connect=self._on_connect, log=log)
         self._inbox: "queue.Queue" = queue.Queue()
         self._stop = threading.Event()
         self.ctl: Optional[ControlServer] = None
@@ -100,27 +128,31 @@ class Connector:
         self._threads: List[threading.Thread] = []
         self._last_purge = 0.0
         self._agent_state: Dict[str, str] = {}
+        self.pyz_sha256 = running_pyz_sha256()
 
     # -- lifecycle -------------------------------------------------------------------------------
     def start(self) -> None:
         self.audit.write("config.load", hash=self.cfgobj.hash[:16], deviceId=self.key.device_id)
-        self.audit.write("service.start", version=__version__)
         for target, name in ((self._worker, "inbox"), (self._ticker, "ticker")):
             th = threading.Thread(target=target, name=name, daemon=True)
             th.start()
             self._threads.append(th)
         if self._start_ctl:
-            self.ctl = ControlServer(self.cfg["approvalPort"], self.ctl_routes(), self.approvals)
+            self.ctl = ControlServer(self.cfg["approvalPort"], self.ctl_routes(), self.approvals)   # raises if busy
             self.ctl.write_control_file(self.home)
             self.ctl.start()
+        # Logged once the control port is bound (v2.md H27): a start that dies on a busy port is not a service start.
+        self.audit.write("service.start", version=__version__, build=__build__)
         for a in self.agents.list():
             self.office(a, "idle", None, None, None)
         self.relay.start()
 
     def stop(self) -> None:
         self._stop.set()
-        for run in list(self.scheduler.runs.values()):
+        runs = list(self.scheduler.runs.values())
+        for run in runs:
             self.scheduler.cancel(run.id)
+        self._wait_runs(runs)
         for a in self.agents.list():
             self.reporter.offline(a, self._ws_name(a))
         self.reporter.flush(3.0)
@@ -138,7 +170,27 @@ class Connector:
                 pass
         self.scheduler.stop()
         self.audit.write("service.stop")
-        self.ledger.close()
+        with self._ledger_lock:
+            self._ledger_closed = True
+            self.ledger.close()
+
+    def _wait_runs(self, runs: List[TaskRun]) -> None:
+        """Give cancelled runs up to `stop_wait_s` in total to end, so their engines stop writing (ledger, agents.json)
+        before the files close and no Claude process outlives the connector on macOS/Windows (v2.md H11)."""
+        deadline = time.monotonic() + self.stop_wait_s
+        late = []
+        for run in runs:
+            if not run.ended.wait(max(0.0, deadline - time.monotonic())):
+                late.append(run)
+        for run in late:
+            kill = getattr(run.running, "kill", None)
+            if kill is not None:
+                try:
+                    kill()
+                except Exception as e:
+                    self.log("kapanış: %s durdurulamadı (%s)" % (run.id, type(e).__name__))
+        if late:
+            self.log("kapanış: %d görev %.0f sn içinde bitmedi, zorla sonlandırıldı" % (len(late), self.stop_wait_s))
 
     def _ticker(self) -> None:
         while not self._stop.wait(1.0):
@@ -297,12 +349,17 @@ class Connector:
 
     def task_created(self, run: TaskRun) -> None:
         a = run.agent
-        ws = a.get("workspace") or {}
         self.ledger.start_task(run.id, a["key"], a["engine"], a.get("model"), prompt_sha(run.prompt), run.prompt,
                                run.bid)
-        self.audit.write("task.start", bid=run.bid, peer=run.peer_label, agent=a["key"], engine=a["engine"],
+
+    def task_audit(self, run: TaskRun, ev: str, result: str) -> None:
+        """`task.start` (result "ok": the task may run) or `task.denied` (result "denied" | "timeout": the local
+        confirmation said no). A task waiting for confirmation is logged once it is decided (v2.md H27)."""
+        a = run.agent
+        ws = a.get("workspace") or {}
+        self.audit.write(ev, bid=run.bid, peer=run.peer_label, agent=a["key"], engine=a["engine"],
                          ws=ws.get("id"), sub=ws.get("sub"), profile=a.get("profile"), prompt=run.prompt,
-                         result="ok", task=run.id)
+                         result=result, task=run.id)
 
     def start_engine(self, run: TaskRun):
         a = self.agents.get(run.agent_key)
@@ -322,14 +379,24 @@ class Connector:
         hist = os.path.join(self.home, "history", a["key"] + ".jsonl")
         if run.fresh and a["engine"] != "claude":
             clear_history(hist)
-        ctx = TaskContext(run.id, a, run.prompt, cwd, a.get("model"), a.get("profile") or "edit", run.fresh,
-                          max_budget, save_agent=self.agents.put, history_path=hist)
+        # H32: the engine thread gets its own copy and writes back only the Claude session fields through the store
+        # (under its lock, copy-on-write). An agent.reset or rename during the run bumps/keeps the stored record and
+        # the run's late write is dropped or merged instead of overwriting it.
+        epoch = self.agents.session_epoch(a["key"])
+        key = a["key"]
+        ctx = TaskContext(run.id, copy.deepcopy(a), run.prompt, cwd, a.get("model"), a.get("profile") or "edit",
+                          run.fresh, max_budget, history_path=hist,
+                          save_agent=lambda rec: self.agents.save_session(key, rec, epoch))
         self.office(a, "thinking", None, None, run.id)
         return eng.start(ctx, run)
 
     def task_finished(self, run: TaskRun, msg: dict) -> None:
         u = msg["usage"] or {}
-        self.ledger.end_task(run.id, msg["status"], u, msg["costUsd"], msg["costBasis"], msg["result"])
+        with self._ledger_lock:
+            if self._ledger_closed:
+                self.log("kapanış sonrası görev sonu kaydedilmedi: %s" % run.id)
+            else:
+                self.ledger.end_task(run.id, msg["status"], u, msg["costUsd"], msg["costBasis"], msg["result"])
         tokens = sum(int(u.get(k) or 0) for k in ("inTok", "outTok", "cacheRead", "cacheWrite"))
         self.audit.write("task.end", task=run.id, agent=run.agent_key, status=msg["status"], tokens=tokens,
                          costUsd=msg["costUsd"], code=(msg.get("error") or {}).get("code"))
@@ -365,7 +432,7 @@ class Connector:
             oa.append({"id": eid, "name": e.cfg.get("name", eid), "available": av.get("available"),
                        "models": av.get("models", [])})
         return {"type": "device.info", "name": self.cfg["deviceName"], "deviceId": self.key.device_id, "os": os_name(),
-                "connector": __version__,
+                "connector": __version__, "build": __build__, "pyz": self.pyz_sha256,
                 "engines": {"claude": {"available": bool(c.get("available")), "version": c.get("version"),
                                        "auth": c.get("auth", "unknown")},
                             "ollama": {"available": bool(o.get("available")), "version": o.get("version"),
@@ -464,11 +531,7 @@ class Connector:
         return {"type": "agent.deleted", "agent": a["key"]}
 
     def h_agent_reset(self, peer, msg) -> dict:
-        a = self.agents.get(msg.get("agent"))
-        a["claudeSession"] = None
-        a["claudeSessionStarted"] = False
-        a["claudeTotals"] = None
-        self.agents.put(a)
+        a = self.agents.reset_session(msg.get("agent"))
         clear_history(os.path.join(self.home, "history", a["key"] + ".jsonl"))
         self.audit.write("agent.reset", bid=peer.bid, agent=a["key"])
         return {"type": "agent.updated", "agent": self.agent_public(a)}
@@ -496,7 +559,9 @@ class Connector:
             raise Reply("too_large", "prompt too large")
         fresh = msg.get("fresh") is True
         mode = self.cfg["confirm"]["task"]
-        need = mode == "always" or (mode == "new_session" and (fresh or not a.get("claudeSessionStarted")))
+        # "new_session" is about Claude Code sessions; other engines have none, so it never asks for them (H25).
+        need = mode == "always" or (mode == "new_session" and a["engine"] == "claude"
+                                    and (fresh or not a.get("claudeSessionStarted")))
         try:
             ack = self.scheduler.submit(a, prompt, fresh, peer, peer.label, need)
         except TaskError as e:
@@ -658,6 +723,9 @@ class Connector:
     def ctl_routes(self) -> dict:
         def status(b, q):
             return 200, {"deviceId": self.key.device_id, "relay": self.relay.status, "version": __version__,
+                         "build": __build__, "pyz": self.pyz_sha256,
+                         "relayError": getattr(self.relay, "last_error", None),
+                         "relayErrorAt": _ms(getattr(self.relay, "last_error_at", None)),
                          "channels": len(self.router.all_peers()), "agents": len(self.agents.list()),
                          "running": len(self.scheduler.runs)}
 
@@ -711,6 +779,7 @@ class Connector:
                 if r.agent_key == a["key"]:
                     self.scheduler.cancel(r.id)
             self.agents.delete(a["key"])
+            clear_history(os.path.join(self.home, "history", a["key"] + ".jsonl"))       # same as the remote handler
             self.reporter.offline(a, self._ws_name(a))
             self.audit.write("agent.delete", agent=a["key"], by="local")
             return 200, {"deleted": a["key"]}

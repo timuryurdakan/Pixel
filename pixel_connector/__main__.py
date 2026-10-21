@@ -18,7 +18,6 @@ import argparse
 import json
 import os
 import re
-import shutil
 import signal
 import stat
 import sys
@@ -26,7 +25,7 @@ import threading
 import time
 from typing import Callable, Optional
 
-from . import __version__
+from . import version_string
 from . import config as CFG
 from . import localhttp
 from .approvals import ctl_request
@@ -53,15 +52,16 @@ def cmd_setup(args) -> int:
         return _err("--room 26 karakterlik oda kimliği olmalı.")
     path = os.path.join(home, CFG.CONFIG_FILE)
     cur = CFG.read_json(path)
-    claude = shutil.which("claude")
+    claude = CFG.find_claude()
+    claude_note = None
     if isinstance(cur, dict):
         cur.update({"server": args.server.rstrip("/"), "room": args.room, "key": args.key, "owner": args.name})
         if args.device_name:
             cur["deviceName"] = args.device_name
+        claude, claude_note = refresh_claude_path(cur, claude)
         data = cur
     else:
-        data = CFG.initial_config(args.server, args.room, args.key, args.name, args.device_name,
-                                  os.path.abspath(claude) if claude else None)
+        data = CFG.initial_config(args.server, args.room, args.key, args.name, args.device_name, claude)
     _, errors, _ = CFG.validate(data)
     errors = [e for e in errors if not e.startswith("workspaces")]
     if errors:
@@ -74,10 +74,32 @@ def cmd_setup(args) -> int:
     key = DeviceKey.load_or_create(home)
     OUT("Ayarlar yazıldı: %s" % path)
     OUT("Cihaz kimliği: %s" % key.device_id)
+    if claude_note:
+        OUT(claude_note)
     if not claude:
         OUT("Not: `claude` bulunamadı. Claude Code kullanacaksanız connector.json → engines.claude.path ayarlayın.")
     OUT(ws_note)
     return 0
+
+
+def refresh_claude_path(data: dict, found: Optional[str]):
+    """Re-running setup (the installer) fills a missing or broken engines.claude.path (v2.md H9). A path that still
+    works is the user's choice and is never replaced. → (path in effect or None, line for the user or None)."""
+    eng = data.get("engines")
+    if not isinstance(eng, dict):
+        eng = data["engines"] = {}
+    c = eng.get("claude")
+    if not isinstance(c, dict):
+        c = eng["claude"] = {}
+    cur = c.get("path")
+    if CFG.claude_path_ok(cur):
+        return cur, None
+    if not found:
+        return None, None
+    c["path"] = found
+    if cur:
+        return found, "Claude Code yolu güncellendi (eski yol çalışmıyordu: %s): %s" % (term_safe(cur), found)
+    return found, "Claude Code bulundu: %s" % found
 
 
 def _default_workspace(data: dict, opt_out: bool) -> str:
@@ -166,6 +188,31 @@ class InstanceLock:
             self.f = None
 
 
+LOCK_WAIT_S = 150.0          # `run` waits this long for run.lock (a `pair` session holding it) before giving up
+LOCK_RETRY_S = (0.5, 1, 2, 4, 8, 10)
+
+
+def wait_for_lock(lock: InstanceLock, total: float = LOCK_WAIT_S, sleep: Callable[[float], None] = time.sleep,
+                  now: Callable[[], float] = time.monotonic, log: Callable[[str], None] = lambda s: None) -> bool:
+    """Retry the run lock with backoff for up to `total` seconds (v2.md H4). Exiting at once made systemd restart the
+    service every 5 s while `pixel-connector pair` held the lock. Logs once, not on every attempt."""
+    if lock.acquire():
+        return True
+    log("run.lock başka bir pixel-connector süreci tarafından tutuluyor (ör. `pixel-connector pair`); "
+        "en fazla %.0f sn bekleniyor…" % total)
+    deadline = now() + total
+    attempt = 0
+    while True:
+        left = deadline - now()
+        if left <= 0:
+            return False
+        sleep(min(LOCK_RETRY_S[min(attempt, len(LOCK_RETRY_S) - 1)], left))
+        attempt += 1
+        if lock.acquire():
+            log("run.lock alındı, başlatılıyor.")
+            return True
+
+
 def cmd_run(args) -> int:
     home = _home(args)
     cfg = CFG.load_config(home)
@@ -174,8 +221,8 @@ def cmd_run(args) -> int:
             print("Hata: " + e, file=sys.stderr)
         return 2
     lock = InstanceLock(os.path.join(home, CFG.LOCK_FILE))
-    if not lock.acquire():
-        return _err("bağlayıcı zaten çalışıyor (run.lock).")
+    if not wait_for_lock(lock, total=LOCK_WAIT_S, log=lambda m: print(m, file=sys.stderr, flush=True)):
+        return _err("bağlayıcı zaten çalışıyor (run.lock %.0f sn içinde boşalmadı)." % LOCK_WAIT_S)
     from .app import Connector
     stop = threading.Event()
 
@@ -187,15 +234,17 @@ def cmd_run(args) -> int:
         except (ValueError, OSError):
             pass
     conn = Connector(home, cfg, log=lambda m: print(m, file=sys.stderr, flush=True))
-    conn.start()
-    OUT("Pixel Office bağlayıcı %s çalışıyor. Cihaz: %s (%s)" % (__version__, cfg.data["deviceName"],
-                                                                conn.key.device_id), flush=True)
-    last = None
     try:
-        while not stop.wait(1.0):
-            if conn.relay.status != last:
-                last = conn.relay.status
-                OUT("Röle: %s" % last, flush=True)
+        conn.start()
+    except OSError as e:                # no stop(): it would report this device's agents offline to the office
+        lock.release()
+        return _err("bağlayıcı başlatılamadı: %s (denetim portu %s meşgul olabilir)." % (term_safe(e),
+                                                                                       cfg.data["approvalPort"]))
+    OUT("Pixel Office bağlayıcı %s çalışıyor. Cihaz: %s (%s)" % (version_string(), cfg.data["deviceName"],
+                                                                conn.key.device_id), flush=True)
+    try:
+        while not stop.wait(1.0):          # relay status changes are logged by the relay client itself (E5)
+            pass
     finally:
         OUT("Kapatılıyor…", flush=True)
         conn.stop()
@@ -251,37 +300,73 @@ def _pair_result(info: dict) -> int:
     return 1
 
 
+# The service may be (re)starting, e.g. right after the installer or after a crash: systemd waits RestartSec=5 s, then
+# start-up takes a moment. Retry the control API for longer than that before falling back to an in-process session,
+# which takes the run lock (v2.md H4).
+PAIR_CTL_ATTEMPTS = 12
+PAIR_CTL_SLEEP_S = 0.75
+SERVICE_BUSY_STATES = ("active", "activating", "reloading", "deactivating")
+_LOST_CTL = ("bağlayıcıyla bağlantı koptu (servis yeniden başlamış olabilir). Yeniden deneyin: pixel-connector pair")
+
+
 def cmd_pair(args, ask: Callable[[str], bool] = ask_yes_no) -> int:
     home = _home(args)
-    # The service may be (re)starting, e.g. right after the installer: retry briefly before falling back to an
-    # in-process session, which would take the run lock and keep the service from starting.
-    for attempt in range(5):
+    for attempt in range(PAIR_CTL_ATTEMPTS):
         try:
             st, info = ctl_request(home, "POST", "/ctl/pair/start")
             break
         except OSError:
-            if attempt == 4:
+            if attempt == PAIR_CTL_ATTEMPTS - 1:
                 return _pair_inprocess(home, ask)
-            time.sleep(0.4)
+            time.sleep(PAIR_CTL_SLEEP_S)
     if st == 503:
         return _err("bağlayıcı röleye bağlı değil. Ağ bağlantısını ve `pixel-connector doctor` çıktısını kontrol edin.")
-    if st != 200:
+    if st == 401:
+        return _err("denetim jetonu geçersiz (control.json eski). Servisi yeniden başlatın: " + _restart_cmd())
+    if st != 200 or not isinstance(info, dict):
         return _err("eşleştirme başlatılamadı (%s)." % st)
     _print_code(info)
     while True:
-        st, info = ctl_request(home, "GET", "/ctl/pair/status?wait=25&until=confirm,done,failed,expired", timeout=35)
-        if st != 200:
+        try:
+            st, info = ctl_request(home, "GET", "/ctl/pair/status?wait=25&until=confirm,done,failed,expired",
+                                   timeout=35)
+        except OSError:
+            return _err(_LOST_CTL)
+        if st != 200 or not isinstance(info, dict):
             return _err("bağlayıcı yanıt vermedi.")
-        if info["state"] == "confirm":
+        if info.get("state") == "confirm":
             ok = ask(_confirm_text(info))
-            st, info = ctl_request(home, "POST", "/ctl/pair/confirm", {"ok": ok})
-            return _pair_result(info if st == 200 else {"state": "failed", "reason": "timeout"})
-        if info["state"] in ("done", "failed", "expired"):
+            try:
+                st, info = ctl_request(home, "POST", "/ctl/pair/confirm", {"ok": ok})
+            except OSError:
+                return _err(_LOST_CTL)
+            return _pair_result(info if st == 200 and isinstance(info, dict) else {"state": "failed", "reason": "timeout"})
+        if info.get("state") in ("done", "failed", "expired"):
             return _pair_result(info)
 
 
-def _pair_inprocess(home: str, ask: Callable[[str], bool]) -> int:
-    """No service running: a temporary in-process session that only pairs."""
+def _restart_cmd(platform: Optional[str] = None) -> str:
+    from . import service
+    platform = platform or sys.platform
+    if platform.startswith("linux"):
+        return "systemctl --user restart pixel-connector"
+    if platform == "darwin":
+        return "launchctl kickstart -k gui/$(id -u)/" + service.LAUNCHD_LABEL
+    if platform == "win32":
+        return 'schtasks /End /TN "%s", ardından schtasks /Run /TN "%s"' % (service.SCHTASK_NAME, service.SCHTASK_NAME)
+    return "pixel-connector run (yeniden başlatın)"
+
+
+def _pair_inprocess(home: str, ask: Callable[[str], bool], service_status: Optional[Callable[[], str]] = None) -> int:
+    """No service answering: a temporary in-process session that only pairs. Refused while the service is running or
+    (re)starting (Linux/macOS), because taking the run lock then keeps the service from starting (v2.md H4)."""
+    if sys.platform != "win32":                     # Windows: status() only says whether the task exists
+        from . import service
+        st = (service_status or service.status)()
+        if st in SERVICE_BUSY_STATES:
+            return _err("bağlayıcı servisi çalışıyor ya da başlıyor (%s) ama denetim arayüzü yanıt vermedi. "
+                        "Birkaç saniye sonra tekrar deneyin: pixel-connector pair · Günlük: "
+                        "journalctl --user -u pixel-connector" % st)
     cfg = CFG.load_config(home)
     if not cfg.ok:
         for e in cfg.errors:
@@ -451,16 +536,7 @@ def _deny_tr(reason: str) -> str:
 
 
 def restart_hint(platform: Optional[str] = None) -> str:
-    from . import service
-    platform = platform or sys.platform
-    if platform.startswith("linux"):
-        cmd = "systemctl --user restart pixel-connector"
-    elif platform == "darwin":
-        cmd = "launchctl kickstart -k gui/$(id -u)/" + service.LAUNCHD_LABEL
-    elif platform == "win32":
-        cmd = 'schtasks /End /TN "%s", ardından schtasks /Run /TN "%s"' % (service.SCHTASK_NAME, service.SCHTASK_NAME)
-    else:
-        cmd = "pixel-connector run (yeniden başlatın)"
+    cmd = _restart_cmd(platform)
     return ("Değişiklik bağlayıcı yeniden başlayınca geçerli olur: %s\n"
             "(Servis kullanmıyorsanız `pixel-connector run` sürecini durdurup yeniden başlatın.) "
             "Ardından tarayıcıda Cihazlar sayfasını yenileyin." % cmd)
@@ -626,7 +702,7 @@ def cmd_doctor(args) -> int:
     home = _home(args)
     bad = 0
     OUT("Python: %s %s" % (sys.version.split()[0], "✓" if sys.version_info >= (3, 8) else "✗ (≥ 3.8 gerekli)"))
-    OUT("Bağlayıcı: %s · klasör %s" % (__version__, home))
+    OUT("Bağlayıcı: %s · klasör %s" % (version_string(), home))
     mode = stat.S_IMODE(os.stat(home).st_mode)
     OUT("Klasör izinleri: %o %s" % (mode, "✓" if mode & 0o077 == 0 else "✗ (0700 olmalı)"))
     for name in (CFG.CONFIG_FILE, CFG.KEYS_FILE, CFG.PEERS_FILE, CFG.AGENTS_FILE, CFG.CONTROL_FILE):
@@ -666,14 +742,64 @@ def cmd_doctor(args) -> int:
     except Exception as e:
         bad += 1
         OUT("Sunucu: ✗ (%s)" % type(e).__name__)
+    OUT(update_line(cfg.data["server"], running_pyz_sha256()))
     from . import service
     OUT("Servis: %s" % service.status())
-    try:
-        st, d = ctl_request(home, "GET", "/ctl/status", timeout=3)
-        OUT("Çalışan bağlayıcı: röle %s, %d kanal, %d ajan" % (d["relay"], d["channels"], d["agents"]))
-    except OSError:
-        OUT("Çalışan bağlayıcı: yok")
+    OUT(running_status_line(home))
     return 1 if bad else 0
+
+
+def running_pyz_sha256() -> Optional[str]:
+    from .app import running_pyz_sha256 as fn
+    return fn()
+
+
+def published_pyz_sha256(server: str, opener=None, timeout: float = 10.0) -> str:
+    """The server's SHA-256 of pixel-connector.pyz from /connector/SHA256SUMS (read-only GET, normal proxy rules).
+    Raises OSError/ValueError when it can't be read."""
+    opener = opener or localhttp.urlopen
+    with opener(server.rstrip("/") + "/connector/SHA256SUMS", timeout=timeout) as r:
+        text = r.read(65536).decode("ascii", "replace")
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[1] == "pixel-connector.pyz" and re.match(r"^[0-9a-f]{64}\Z", parts[0]):
+            return parts[0]
+    raise ValueError("SHA256SUMS has no pixel-connector.pyz line")
+
+
+def update_line(server: str, own_sha: Optional[str], opener=None) -> str:
+    """doctor: is the published connector a different build than this one? Never fatal (v2.md E1)."""
+    if not own_sha:
+        return "Güncelleme: kaynak koddan çalışıyor, karşılaştırılmadı"
+    try:
+        pub = published_pyz_sha256(server, opener)
+    except Exception as e:
+        return "Güncelleme: kontrol edilemedi (%s)" % type(e).__name__
+    if pub == own_sha:
+        return "Güncelleme: ✓ sunucudaki sürümle aynı (%s…)" % own_sha[:12]
+    return ("Güncelleme var: kurulum komutunu yeniden çalıştırın (Cihazlar → Cihaz ekle). "
+            "Bu bilgisayar %s…, sunucu %s…" % (own_sha[:12], pub[:12]))
+
+
+def running_status_line(home: str, request=None) -> str:
+    """doctor: what the running service says on /ctl/status, with a hint for each failure (v2.md H29)."""
+    request = request or ctl_request
+    try:
+        st, d = request(home, "GET", "/ctl/status", timeout=3)
+    except OSError:
+        return "Çalışan bağlayıcı: yok"
+    if st == 401:
+        return ("Çalışan bağlayıcı: yanıt verdi ama denetim jetonu geçersiz (control.json eski ya da başka bir süreç "
+                "portu kullanıyor). Servisi yeniden başlatın: " + _restart_cmd())
+    if st != 200 or not isinstance(d, dict):
+        return "Çalışan bağlayıcı: beklenmeyen yanıt (HTTP %s)" % st
+    line = "Çalışan bağlayıcı: %s (build %s) · röle %s, %s kanal, %s ajan" % (
+        term_safe(d.get("version"), 16), term_safe(d.get("build"), 16), term_safe(d.get("relay"), 40),
+        d.get("channels", "?"), d.get("agents", "?"))
+    if d.get("relayError"):
+        when = _fmt_ms(d["relayErrorAt"]) if isinstance(d.get("relayErrorAt"), int) else "?"
+        line += "\n  Son röle hatası: %s (%s)" % (term_safe(d["relayError"], 160), when)
+    return line
 
 
 def cmd_install_service(args) -> int:
@@ -682,7 +808,10 @@ def cmd_install_service(args) -> int:
     pyz = args.pyz or service.default_pyz(home)
     if not args.dry_run and not os.path.exists(pyz):
         return _err("%s bulunamadı (kurulum betiği onu buraya kopyalar)." % pyz)
-    rc, path = service.install(home, pyz, dry_run=args.dry_run)
+    cfg = CFG.load_config(home)
+    claude = cfg.data["engines"]["claude"]["path"] if cfg.ok else None
+    rc, path = service.install(home, pyz, dry_run=args.dry_run,
+                               path_env=service.service_path(os.environ.get("PATH"), claude))
     if rc == 0 and sys.platform.startswith("linux"):
         OUT("Servis kuruldu. Günlük: journalctl --user -u pixel-connector")
         OUT("İsteğe bağlı (oturum açmadan da çalışsın): loginctl enable-linger $USER")
@@ -713,7 +842,7 @@ def cmd_reset_keys(args) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="pixel-connector", description="Pixel Office bağlayıcı (v3)")
     p.add_argument("--home", help="bağlayıcı klasörü (varsayılan ~/.pixel-office/connector)")
-    p.add_argument("--version", action="version", version="pixel-connector " + __version__)
+    p.add_argument("--version", action="version", version="pixel-connector " + version_string())
     sub = p.add_subparsers(dest="cmd")
     s = sub.add_parser("setup")
     s.add_argument("--server", required=True)

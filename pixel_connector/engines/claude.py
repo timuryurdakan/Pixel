@@ -347,6 +347,20 @@ class ClaudeRun(Running):
             self.canceller = Canceller(proc, cfg.get("cancelGraceS", 5.0), cfg.get("cancelTermS", 10.0))
         self.canceller.start()
 
+    def kill(self) -> None:
+        """Last resort when the connector shuts down and a cancelled run hasn't ended in time (app.stop, v2.md H11):
+        SIGKILL to the process group, so no Claude process outlives the connector."""
+        proc = self.proc
+        if proc is None or proc.poll() is not None:
+            return
+        try:
+            if sys.platform == "win32":
+                proc.kill()
+            else:
+                os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
     def _end(self, *a, **kw) -> None:
         if self._ended:
             return

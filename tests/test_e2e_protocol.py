@@ -355,7 +355,9 @@ class FullStackTests(unittest.TestCase):
         self.assertRegex(sas, r"^\d{3} \d{3}$")
         chan, info = br.connect_device(dev)
         self.assertEqual(info["name"], "Test Cihazı")
-        self.assertEqual(info["connector"], "3.0.0")
+        self.assertEqual(info["connector"], "3.1.0")
+        self.assertEqual(info["build"], "dev")              # source checkout; the .pyz carries its build id
+        self.assertIsNone(info["pyz"])
         self.assertEqual([p["id"] for p in info["profiles"]], ["readonly", "edit", "dev", "auto"])
         peers = br.request(dev, {"type": "peer.list"})["peers"]
         self.assertEqual([(p["bid"], p["self"]) for p in peers], [(br.bid, True)])

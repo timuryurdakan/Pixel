@@ -20,6 +20,7 @@ import os
 import re
 import secrets
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -172,6 +173,14 @@ class ControlServer(ThreadingHTTPServer):
         self.port = self.server_address[1]
         self.csrf = hmac.new(self.token.encode(), b"pixel-onay-csrf", hashlib.sha256).hexdigest()[:32]
         self.page_token = hmac.new(self.token.encode(), b"pixel-onay-page", hashlib.sha256).hexdigest()[:32]
+
+    def handle_error(self, request, client_address) -> None:
+        """A client that hangs up mid-answer (CLI timeout, closed browser tab, shutdown) is normal: no traceback in the
+        journal for it (v2.md H28). Anything else gets one short line, never the request (it may carry previews)."""
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, socket.timeout)):
+            return
+        sys.stderr.write("ctl: istek işlenemedi (%s)\n" % type(exc).__name__)
 
     def page_link(self) -> str:
         return "http://127.0.0.1:%d/onay?t=%s" % (self.port, self.page_token)

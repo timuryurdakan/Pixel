@@ -24,11 +24,13 @@ class ServiceTextTests(unittest.TestCase):
     def test_systemd_unit(self):
         t = S.systemd_unit("/usr/bin/python3", "%h/.pixel-office/connector/pixel-connector.pyz")
         self.assertIn("ExecStart=/usr/bin/python3 %h/.pixel-office/connector/pixel-connector.pyz run\n", t)
-        for line in ("[Unit]", "Description=Pixel Office bağlayıcı", "After=network-online.target",
-                     "Wants=network-online.target", "Type=simple", "Restart=on-failure", "RestartSec=5", "UMask=0077",
-                     "NoNewPrivileges=yes", "Environment=PYTHONUNBUFFERED=1", "WantedBy=default.target"):
+        for line in ("[Unit]", "Description=Pixel Office bağlayıcı", "Type=simple", "Restart=on-failure",
+                     "RestartSec=5", "UMask=0077", "NoNewPrivileges=yes", "Environment=PYTHONUNBUFFERED=1",
+                     "WantedBy=default.target"):
             self.assertIn(line + "\n", t)
+        self.assertNotIn("network-online.target", t)          # v2.md H24: meaningless in a user unit
         self.assertNotIn("PIXEL_OFFICE_HOME", t)
+        self.assertNotIn("Environment=PATH", t)
         q = S.systemd_unit("/opt/my python/bin/python3", "/srv/a b/x.pyz", "/srv/pixel home")
         self.assertIn('ExecStart="/opt/my python/bin/python3" "/srv/a b/x.pyz" run', q)
         self.assertIn('Environment="PIXEL_OFFICE_HOME=/srv/pixel home"', q)

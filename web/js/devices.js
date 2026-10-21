@@ -57,6 +57,61 @@ export const NO_WORKSPACE_CMD = 'pixel-connector workspace add ~/projem';
 export const NO_WORKSPACE_HINT = `Bu cihazda izinli klasör yok. Bilgisayarda şunu çalıştırın: ${NO_WORKSPACE_CMD} `
   + '(ya da varsayılan ~/PixelOfficeIsler klasörünü kullanmak için bağlayıcıyı güncelleyin).';
 
+// v2.md E1: the connector version on the device card and an update hint. The device reports the SHA-256 of the .pyz it
+// runs (`device.info.pyz`, connector ≥ 3.1.0); the server publishes the current one in /connector/SHA256SUMS. Older
+// connectors don't report it, so a version below 3.1.0 counts as outdated too. Text only, never HTML.
+export const MIN_CONNECTOR = '3.1.0';
+export const UPDATE_HINT = 'Güncelleme var: bu bilgisayarda kurulum komutunu yeniden çalıştırın '
+  + '(Cihazlar → Cihaz ekle → kurulum komutu). Ayarlar ve eşleşmeler korunur.';
+const SHA_RE = /^[0-9a-f]{64}$/;
+const VERSION_RE = /^(\d{1,4})\.(\d{1,4})\.(\d{1,4})/;
+
+/** The pixel-connector.pyz SHA-256 from a SHA256SUMS text, or null. */
+export function parsePublishedSha(text) {
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const m = /^([0-9a-f]{64}) {2}pixel-connector\.pyz$/.exec(line);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+let publishedShaPromise = null;
+/** Fetched once per page; null when unavailable (offline, local file, error). */
+export function publishedConnectorSha(fetchFn = (u, o) => fetch(u, o)) {
+  if (!publishedShaPromise) {
+    publishedShaPromise = Promise.resolve()
+      .then(() => fetchFn('/connector/SHA256SUMS', { cache: 'no-store' }))
+      .then((r) => (r && r.ok ? r.text() : ''))
+      .then(parsePublishedSha)
+      .catch(() => null);
+  }
+  return publishedShaPromise;
+}
+
+function versionLess(a, b) {
+  const x = VERSION_RE.exec(String(a || ''));
+  const y = VERSION_RE.exec(String(b || ''));
+  if (!x || !y) return false;
+  for (let i = 1; i <= 3; i += 1) {
+    if (Number(x[i]) !== Number(y[i])) return Number(x[i]) < Number(y[i]);
+  }
+  return false;
+}
+
+/** "Bağlayıcı 3.1.0" or '' when the device didn't say. */
+export function connectorLabel(info) {
+  const v = info && typeof info.connector === 'string' ? info.connector.slice(0, 16) : '';
+  return v ? `Bağlayıcı ${v}` : '';
+}
+
+/** True when the device runs an older connector than the one the server publishes. */
+export function connectorOutdated(info, publishedSha) {
+  if (!info || typeof info.connector !== 'string') return false;
+  if (versionLess(info.connector, MIN_CONNECTOR)) return true;
+  return typeof info.pyz === 'string' && SHA_RE.test(info.pyz) && typeof publishedSha === 'string'
+    && SHA_RE.test(publishedSha) && info.pyz !== publishedSha;
+}
+
 /** True when a device's `workspace.list` result is known and empty. */
 export function noWorkspaces(list) { return Array.isArray(list) && list.length === 0; }
 
@@ -232,11 +287,20 @@ export class DevicesPage {
     const meta = [];
     if (d.info) {
       if (OS_LABEL[d.info.os]) meta.push(OS_LABEL[d.info.os]);
-      if (d.info.connector) meta.push(`bağlayıcı ${String(d.info.connector).slice(0, 16)}`);
+      const label = connectorLabel(d.info);
+      if (label) meta.push(label);
     }
     meta.push(d.ready ? 'çevrimiçi' : d.status === 'connecting' ? 'bağlanıyor…' : d.status === 'error' ? 'güvenli bağlantı kurulamadı' : 'çevrimdışı');
     const m = el('span', 'dev-meta muted', meta.join(' · '));
     c.head.append(dot, name, m);
+    const headToken = (c.headToken = (c.headToken || 0) + 1);
+    if (d.ready && d.info) {
+      const info = d.info;
+      publishedConnectorSha().then((sha) => {
+        if (c.headToken !== headToken || !connectorOutdated(info, sha)) return;
+        c.head.appendChild(el('p', 'dev-hint dev-update small', UPDATE_HINT));
+      });
+    }
     if (d.status === 'error' || (!d.ready && d.online)) {
       c.head.appendChild(btn('Yeniden dene', 'btn small', () => this.hub.connect(id).catch((e) => this.toast(e instanceof ControlError ? e.text : 'Bağlanılamadı', { error: true }))));
     }

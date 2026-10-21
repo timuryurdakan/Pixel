@@ -8,6 +8,7 @@ the agent name and the owner reach Vercel, exactly as in v2 (no prompts, no outp
 
 from __future__ import annotations
 
+import copy
 import importlib.util
 import os
 import re
@@ -21,6 +22,7 @@ from .config import AGENTS_FILE, MODEL_RE, PROFILES, read_json, validate_budget,
 
 KEY_RE = re.compile(r"^[A-Za-z0-9_-]{1,24}\Z")
 KEEPALIVE_S = 20 * 60
+SESSION_FIELDS = ("claudeSession", "claudeSessionStarted", "claudeTotals")
 LABELS = {"success": "Görev bitti", "error": "Hata", "cancelled": "Durduruldu", "denied": "Reddedildi",
           "budget": "Bütçe doldu", "timeout": "Süre aşımı", "confirm": "Onay bekliyor"}
 
@@ -60,6 +62,7 @@ class AgentStore:
         self.path = os.path.join(home, AGENTS_FILE)
         self.clock = clock
         self._lock = threading.RLock()
+        self._epochs: Dict[str, int] = {}          # agent key → bumped by reset_session (in memory only)
         d = read_json(self.path, {"v": 1, "agents": []})
         self.agents: Dict[str, dict] = {}
         for a in (d or {}).get("agents") or []:
@@ -144,6 +147,37 @@ class AgentStore:
                     a["budget"] = b
             self.save()
             return a
+
+    # -- Claude session fields, written by engine threads (v2.md H32) -------------------------------------------------
+    def session_epoch(self, key: str) -> int:
+        with self._lock:
+            return self._epochs.get(key, 0)
+
+    def save_session(self, key: str, record: dict, epoch: int) -> bool:
+        """Copy-on-write merge of an engine's SESSION_FIELDS into the stored agent. Dropped (→ False) when the agent is
+        gone or was reset since `epoch` was read, so a run that ends after an agent.reset can't bring the old session
+        back. Other fields (a rename during the run) are kept as stored."""
+        with self._lock:
+            cur = self.agents.get(key)
+            if cur is None or self._epochs.get(key, 0) != epoch:
+                return False
+            new = dict(cur)
+            for f in SESSION_FIELDS:
+                if f in record:
+                    new[f] = copy.deepcopy(record[f])
+            self.agents[key] = new
+            self.save()
+            return True
+
+    def reset_session(self, key) -> dict:
+        """agent.reset: forget the Claude session and invalidate the session writes of runs still in flight."""
+        with self._lock:
+            new = dict(self.get(key))
+            new.update({"claudeSession": None, "claudeSessionStarted": False, "claudeTotals": None})
+            self.agents[key] = new
+            self._epochs[key] = self._epochs.get(key, 0) + 1
+            self.save()
+            return new
 
     def put(self, agent: dict) -> None:
         with self._lock:

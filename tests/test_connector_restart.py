@@ -30,12 +30,13 @@ class PairRetry(unittest.TestCase):
         inproc.assert_not_called()
         self.assertEqual(rc, 1)                      # 503 → "not connected to the relay"
 
-    def test_falls_back_after_five_failures(self):
+    def test_falls_back_after_all_attempts(self):
         with mock.patch.object(cli, "ctl_request", side_effect=ConnectionRefusedError) as ctl, \
                 mock.patch.object(cli, "_pair_inprocess", return_value=0) as inproc, \
-                mock.patch.object(cli.time, "sleep"):
+                mock.patch.object(cli.time, "sleep") as sleep:
             self.assertEqual(cli.cmd_pair(SimpleNamespace(home="/tmp/x")), 0)
-        self.assertEqual(ctl.call_count, 5)
+        self.assertEqual(ctl.call_count, cli.PAIR_CTL_ATTEMPTS)
+        self.assertEqual(sleep.call_count, cli.PAIR_CTL_ATTEMPTS - 1)
         inproc.assert_called_once()
 
 

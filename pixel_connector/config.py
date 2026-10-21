@@ -8,6 +8,7 @@ portable installs) and `--home` overrides the connector directory itself. Every 
 from __future__ import annotations
 
 import copy
+import glob
 import hashlib
 import ipaddress
 import json
@@ -495,6 +496,52 @@ def load_config(home: str, which=shutil.which, user_home: Optional[str] = None) 
         return Config({}, ["connector.json is not valid JSON: %s" % e], [], h, path)
     data, errors, warnings = validate(raw, user_home, which)
     return Config(data, errors, warnings, h, path)
+
+
+def _version_key(text: str) -> Tuple[int, ...]:
+    m = re.search(r"(\d+)\.(\d+)\.(\d+)", text)
+    return tuple(int(x) for x in m.groups()) if m else (-1,)
+
+
+def _is_exe(path: str) -> bool:
+    return os.path.isfile(path) and os.access(path, os.X_OK)
+
+
+def claude_candidates(user_home: str) -> List[str]:
+    """Usual install locations of `claude` that a minimal service PATH misses (v2.md H9), in preference order: the
+    native installer (~/.local/bin, ~/.claude/local), npm prefixes, the newest nvm Node, Homebrew and /usr/local, and
+    last the binary inside the newest Claude Code VS Code extension."""
+    h = user_home
+    out = [os.path.join(h, ".local", "bin", "claude"), os.path.join(h, ".claude", "local", "claude"),
+           os.path.join(h, ".npm-global", "bin", "claude")]
+    nvm = sorted(glob.glob(os.path.join(h, ".nvm", "versions", "node", "*", "bin", "claude")),
+                 key=lambda p: _version_key(os.path.basename(os.path.dirname(os.path.dirname(p)))), reverse=True)
+    out += nvm
+    out += ["/opt/homebrew/bin/claude", "/usr/local/bin/claude"]
+    ext = glob.glob(os.path.join(h, ".vscode", "extensions", "anthropic.claude-code-*", "resources", "native-binary",
+                                 "claude"))
+    out += sorted(ext, key=lambda p: _version_key(p.split(os.sep + "extensions" + os.sep, 1)[-1]), reverse=True)
+    return out
+
+
+def find_claude(user_home: Optional[str] = None, which=shutil.which) -> Optional[str]:
+    """Absolute path of an executable `claude`: PATH first, then claude_candidates(). None when there is none."""
+    found = which("claude")
+    if found:
+        return os.path.abspath(found)
+    for p in claude_candidates(user_home or os.path.expanduser("~")):
+        if _is_exe(p):
+            return p
+    return None
+
+
+def claude_path_ok(path, which=shutil.which) -> bool:
+    """A configured engines.claude.path that still works: an executable absolute path or a bare name on PATH."""
+    if not isinstance(path, str) or not path or "\x00" in path:
+        return False
+    if os.path.isabs(path):
+        return _is_exe(path)
+    return os.sep not in path and bool(which(path))
 
 
 def initial_config(server: str, room: str, key: str, owner: str, device_name: Optional[str] = None,

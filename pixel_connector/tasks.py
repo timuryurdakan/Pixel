@@ -208,6 +208,8 @@ class Scheduler:
             self.runs[run.id] = run
             self.by_agent.setdefault(key, []).append(run)
         self.app.task_created(run)
+        if not need_confirm:
+            self.app.task_audit(run, "task.start", "ok")
         if need_confirm:
             run.state = "confirm"
             self.app.office(agent, "waiting_for_user", None, "Onay bekliyor", run.id)
@@ -223,6 +225,7 @@ class Scheduler:
         self.app.send_to_task(run, {"type": "confirm.result", "task": run.id, "ok": result == "ok"})
         if run.state != "confirm":
             return
+        self.app.task_audit(run, "task.start" if result == "ok" else "task.denied", result)
         if result == "ok":
             self._enqueue(run)
         else:

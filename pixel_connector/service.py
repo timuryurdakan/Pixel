@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import plistlib
+import shutil
 import subprocess
 import sys
 from typing import Callable, List, Optional, Tuple
@@ -14,6 +15,7 @@ from typing import Callable, List, Optional, Tuple
 UNIT_NAME = "pixel-connector.service"
 LAUNCHD_LABEL = "tr.pixeloffice.connector"
 SCHTASK_NAME = "PixelOffice\\Connector"
+SYSTEM_PATH = ("/usr/local/bin", "/usr/bin", "/bin", "/usr/local/sbin", "/usr/sbin", "/sbin")
 
 
 def _quote_systemd(arg: str) -> str:
@@ -25,18 +27,60 @@ def _quote_systemd(arg: str) -> str:
     return '"' + a.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def systemd_unit(python: str, pyz: str, home_override: Optional[str] = None) -> str:
-    """The unit text. `pyz` may be "%h/…" (kept as a specifier) or an absolute path."""
+def service_path(user_path: Optional[str], claude_path: Optional[str] = None, which=shutil.which,
+                 isdir: Callable[[str], bool] = os.path.isdir) -> str:
+    """PATH recorded in the service definition (v2.md H9). A systemd user service or launchd agent starts with a
+    minimal PATH, so `claude` installed with npm/nvm (a Node script: `#!/usr/bin/env node`) and the tools it calls (git,
+    node) are not found. Kept from the installing user's PATH: absolute, existing directories without control
+    characters or `:`/`;` inside a name, in order, without duplicates. The directories of claude and of `node` (when
+    claude is a Node script) come first, the system directories last."""
+    sep = os.pathsep
+    out: List[str] = []
+
+    def add(d: Optional[str]) -> None:
+        if not d or not os.path.isabs(d) or any(not ch.isprintable() for ch in d) or sep in d:
+            return
+        d = os.path.normpath(d)
+        if d not in out and isdir(d):
+            out.append(d)
+
+    if claude_path and os.path.isabs(claude_path):
+        add(os.path.dirname(claude_path))
+        if _is_node_script(claude_path):
+            node = which("node", path=(user_path or "") + sep + os.path.dirname(claude_path))
+            if node:
+                add(os.path.dirname(os.path.abspath(node)))
+    for d in (user_path or "").split(sep):
+        add(d)
+    for d in SYSTEM_PATH:
+        add(d)
+    return sep.join(out)
+
+
+def _is_node_script(path: str) -> bool:
+    try:
+        with open(path, "rb") as f:
+            head = f.read(128)
+    except OSError:
+        return False
+    return head.startswith(b"#!") and b"node" in head.split(b"\n", 1)[0]
+
+
+def systemd_unit(python: str, pyz: str, home_override: Optional[str] = None, path_env: Optional[str] = None) -> str:
+    """The unit text. `pyz` may be "%h/…" (kept as a specifier) or an absolute path.
+
+    No `network-online.target` (v2.md H24): a *user* manager can't order against that system target, so the lines only
+    looked useful. The connector's own reconnect loop handles a network that comes up late."""
     pyz_arg = pyz if pyz.startswith("%h/") else _quote_systemd(pyz)
     exec_start = "%s %s run" % (_quote_systemd(python), pyz_arg)
     env = ["Environment=PYTHONUNBUFFERED=1"]
     if home_override:
         env.append("Environment=%s" % _quote_systemd("PIXEL_OFFICE_HOME=" + home_override))
+    if path_env:
+        env.append("Environment=%s" % _quote_systemd("PATH=" + path_env))
     return "\n".join([
         "[Unit]",
         "Description=Pixel Office bağlayıcı",
-        "After=network-online.target",
-        "Wants=network-online.target",
         "",
         "[Service]",
         "Type=simple",
@@ -46,7 +90,7 @@ def systemd_unit(python: str, pyz: str, home_override: Optional[str] = None) -> 
         "UMask=0077",
         "NoNewPrivileges=yes",
         *env,
-        "# PATH is minimal under systemd; engine paths are absolute in connector.json.",
+        "# PATH: the installing user's PATH at setup time (+ claude/node directories); re-run the installer to refresh.",
         "",
         "[Install]",
         "WantedBy=default.target",
@@ -54,8 +98,9 @@ def systemd_unit(python: str, pyz: str, home_override: Optional[str] = None) -> 
     ])
 
 
-def launchd_plist(python: str, pyz: str, log_dir: str) -> bytes:
-    return plistlib.dumps({
+def launchd_plist(python: str, pyz: str, log_dir: str, path_env: Optional[str] = None) -> bytes:
+    extra = {"EnvironmentVariables": {"PATH": path_env}} if path_env else {}
+    return plistlib.dumps(dict({
         "Label": LAUNCHD_LABEL,
         "ProgramArguments": [python, pyz, "run"],
         "RunAtLoad": True,
@@ -63,7 +108,7 @@ def launchd_plist(python: str, pyz: str, log_dir: str) -> bytes:
         "StandardOutPath": os.path.join(log_dir, "connector.out.log"),
         "StandardErrorPath": os.path.join(log_dir, "connector.err.log"),
         "ProcessType": "Background",
-    })
+    }, **extra))
 
 
 def schtasks_create_argv(pythonw: str, pyz: str) -> List[str]:
@@ -88,8 +133,9 @@ def _run(argv: List[str], dry_run: bool, log: Callable[[str], None], runner=subp
 
 def install(connector_dir: str, pyz: Optional[str] = None, python: Optional[str] = None, dry_run: bool = False,
             log: Callable[[str], None] = print, platform: Optional[str] = None, user_home: Optional[str] = None,
-            runner=subprocess.run) -> Tuple[int, Optional[str]]:
-    """Write the service definition and enable it. → (exit code, path of the written file)."""
+            runner=subprocess.run, path_env: Optional[str] = None) -> Tuple[int, Optional[str]]:
+    """Write the service definition and enable it. → (exit code, path of the written file). `path_env`: the PATH for
+    the service (service_path()); Windows tasks inherit the user's environment and ignore it."""
     platform = platform or sys.platform
     python = python or sys.executable
     home = user_home or os.path.expanduser("~")
@@ -100,7 +146,7 @@ def install(connector_dir: str, pyz: Optional[str] = None, python: Optional[str]
         rel = os.path.relpath(pyz, home) if pyz.startswith(home + os.sep) else None
         office = os.path.dirname(connector_dir)
         override = None if os.path.realpath(office) == os.path.realpath(os.path.join(home, ".pixel-office")) else office
-        text = systemd_unit(python, "%h/" + rel if rel else pyz, override)
+        text = systemd_unit(python, "%h/" + rel if rel else pyz, override, path_env)
         log("systemd kullanıcı birimi: %s" % path)
         if dry_run:
             log(text)
@@ -118,7 +164,7 @@ def install(connector_dir: str, pyz: Optional[str] = None, python: Optional[str]
         return rc, path
     if platform == "darwin":
         path = os.path.join(home, "Library", "LaunchAgents", LAUNCHD_LABEL + ".plist")
-        data = launchd_plist(python, pyz, connector_dir)
+        data = launchd_plist(python, pyz, connector_dir, path_env)
         log("launchd ajanı: %s" % path)
         if dry_run:
             log(data.decode())
