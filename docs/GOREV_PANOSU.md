@@ -50,7 +50,7 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | A4 | v4 Otomasyonlar ön araştırması | Antigravity | ✅ Teslim edildi |
 | A5 | Ofis efektleri: parçacık, ışık, tıklama tepkisi, ses (kullanıcı isteği) | Antigravity | 🔀 Birleştirildi |
 | C3 | Aşama 20: `v2.md` raporundaki paketler (5–8 kaldı) | Claude | 🔄 |
-| A6 | v4 mimari belgesini düzelt ve projeye al (şimdi yapılabilir) | Antigravity | ⬜ |
+| A6 | v4 mimari belgesini düzelt ve projeye al (şimdi yapılabilir) | Antigravity | ✅ Teslim edildi |
 | A7 | Claude'un kalan Aşama 20 paketlerini devral (yalnızca kullanıcı isterse) | Antigravity | ⬜ |
 | A8 | v4-A: ofis duvarında Görev Tahtası (C3 ✅ sonrası) | Antigravity | ⬜ |
 | A9 | v4-B: masadan masaya devir (A8 sonrası) | Antigravity | ⬜ |
@@ -172,3 +172,14 @@ görüntüleri, bilinen sorunlar.
   işleri Antigravity'ye devredildi: `docs/V4_ANTIGRAVITY.md` (A6–A10, push yöntemi dahil). Antigravity'nin
   `~/Desktop/Pixel-antigravity` içindeki commit'lenmemiş `docs/GENEL_PROJE_MIMARISI_V4.md` dosyası A6 ile düzeltilip alınacak.
   Not: Antigravity çalışmaya başlamadan önce `git merge main` yapmalı (dalı A5'ten beri çok geride).
+- **2026-10-21, Antigravity (A6):** `docs/GENEL_PROJE_MIMARISI_V4.md` v4 mimari taslak belgesi düzeltildi ve projeye alındı:
+  - Belge durumu "Taslak — kullanıcı onayı bekliyor" olarak güncellendi (kullanıcı yalnızca A8–A10 geliştirme sırasını onayladı); anayasa vb. kesin hüküm ifadeleri temizlendi.
+  - v1'in yalnızca Claude Code transkriptlerini (`~/.claude`) izlediği, Antigravity `~/.gemini` izleyicisinin ise Aşama 18'de (2026-10-21, `web/hook/pixel_antigravity.py`) eklendiği düzeltildi.
+  - Test güvencesi ifadesi "her değişiklik tam test takımından geçer ve sıfır regresyon hedeflenir" olarak güncellendi.
+  - Uzaktan kontrol ve onayların sayfa açıkken (Aşama 19 onay kartları) çalıştığı, işletim sistemi düzeyinde Web Push bildirimlerinin ileride planlanabileceği netleştirildi.
+  - Kullanıcının sürekli açık bilgisayarı / sunucusu olmadığı belirtilerek, Gece Nöbetçisi ve GitHub webhook tetikleyicileri "İleride Düşünülen Şablonlar" bölümüne alındı; A10 kapsamındaki ilk MVP şablonu bilgisayar açıkken elle başlatılıp biten akış (Mimar [Ollama] → Kodcu [Claude Code, edit] → İnceleme [Claude Code, readonly] → Kullanıcı Onayı) olarak tanımlandı.
+  - `gh pr create` gibi adımların GitHub token'ı istediği, Aşama 20 / Paket 1 güvenlik sertleştirmesi uyarınca ajan ortamına (`child_env`) token geçirilmediği vurgulandı; bu tür ihtiyaçların ancak adım bazında kısıtlı insan onayı yetkilendirmesiyle mümkün olabileceği not edildi.
+  - Riskler bölümü eklendi: `edge-tts`'in resmî olmayan Microsoft servisi olması, Claude aboneliğiyle kontrolsüz otomasyon ve ticari plan satışının Anthropic Kullanım Şartları (ToS) açısından riskleri ve YouTube API kota kısıtları belgelendi.
+  - v4 yol haritası A8 (Görev Tahtası) → A9 (Masadan masaya devir) → A10 (İş akışı motoru ve ilk şablon) sırasına göre hizalandı. Mermaid diyagramı korundu.
+  - Testler: `python3 -m unittest discover -s tests` → 629 test (1 atlandı), hepsi geçti; `python3 tools/build_connector.py --check` güncel. Kendi dalında commit'lendi, push yapılmadı.
+
