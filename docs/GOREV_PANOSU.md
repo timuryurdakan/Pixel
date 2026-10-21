@@ -28,9 +28,11 @@ ezmemenin tek yolu.
    `prefers-reduced-motion` desteklenmeli.
 6. **Teslim:**
    - Her görev ayrı commit olur. Mesaj formatı: `[A1] kısa açıklama`.
-   - Teslimden önce `python3 -m unittest discover -s tests` geçmeli (şu an 481 test, 1 atlanmış).
+   - Teslimden önce `python3 -m unittest discover -s tests` geçmeli (hepsi geçer, yalnızca `pwsh` testi atlanır).
    - Görev bitince bu dosyadaki durum güncellenir ve "Teslim notu" yazılır.
    - **Push yapılmaz.** Birleştirmeyi (merge) Claude yapar, kullanıcı push'lar.
+     **İstisna (2026-10-21, kullanıcı kararı):** C3 ✅ olduktan sonra ya da kullanıcı "devral" dediğinde Antigravity
+     v4 görevlerini (A7–A10) kendisi push'lar. Yöntem: [`docs/V4_ANTIGRAVITY.md`](V4_ANTIGRAVITY.md) §2.
 7. **Sırlar:** Hiçbir anahtar, token, oda bağlantısı (`#key=`) commit'e ya da dokümana yazılmaz.
    `~/.pixel-office`, `~/.claude`, `~/.pixel-test-room` okunmaz ve değiştirilmez.
 
@@ -46,7 +48,15 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | A2 | Tanıtım (landing) sayfası | Antigravity | ✅ Teslim edildi |
 | A3 | Rehber sayfası iyileştirmesi | Antigravity | ✅ Teslim edildi |
 | A4 | v4 Otomasyonlar ön araştırması | Antigravity | ✅ Teslim edildi |
-| A5 | Ofis efektleri: parçacık, ışık, tıklama tepkisi, ses (kullanıcı isteği) | Antigravity | ✅ Teslim edildi |
+| A5 | Ofis efektleri: parçacık, ışık, tıklama tepkisi, ses (kullanıcı isteği) | Antigravity | 🔀 Birleştirildi |
+| C3 | Aşama 20: `v2.md` raporundaki paketler (5–8 kaldı) | Claude | 🔄 |
+| A6 | v4 mimari belgesini düzelt ve projeye al (şimdi yapılabilir) | Antigravity | ⬜ |
+| A7 | Claude'un kalan Aşama 20 paketlerini devral (yalnızca kullanıcı isterse) | Antigravity | ⬜ |
+| A8 | v4-A: ofis duvarında Görev Tahtası (C3 ✅ sonrası) | Antigravity | ⬜ |
+| A9 | v4-B: masadan masaya devir (A8 sonrası) | Antigravity | ⬜ |
+| A10 | v4-C: iş akışı motoru ve ilk şablon (A9 sonrası) | Antigravity | ⬜ |
+
+**A6–A10'un ayrıntıları, başlama koşulları ve push yöntemi:** [`docs/V4_ANTIGRAVITY.md`](V4_ANTIGRAVITY.md).
 
 ---
 
@@ -157,3 +167,8 @@ görüntüleri, bilinen sorunlar.
   - **Efektler & Işık:** Sabit 48 partiküllük havuz ile bellek sızıntısız yürüme tozu ve kodlama ışıltısı. Saat bazlı yumuşak günbatımı ve gece atmosferi, pencerelerde yanıp sönen yıldızlar, aktif monitörlerde yeşil halo parıltısı. `prefers-reduced-motion` destekli.
   - **Karakter & Maskot:** Karakter tıklandığında hop zıplaması ve kalp/sevinç balonu. Halıda kıvrılan, tıklandığında miyavlayıp kalp balonu çıkaran sevimli ofis kedisi (`mascot-cat`).
   - **Test & Doğrulama:** `python3 -m unittest discover -s tests -p "test_v3_ui.py"` başarıyla geçti (2 test OK). `sprite-preview.html` `validateSprites()` hatasız (`[]`). Chrome CDP ile 1280 px ve 390 px ekranlarda test edildi (60 fps stabil, sıfır hata).
+- **2026-10-21, Claude:** A5 birleştirildi (`ba4632f`) ve yayında. Genel inceleme `v2.md`'de; Aşama 20 paketleri 1–4
+  bitti (güvenlik, bağlayıcı 3.1.0, arayüz, Aşama 18 Antigravity izleyicisi), 5–8 sürüyor. Kullanıcının kararıyla v4
+  işleri Antigravity'ye devredildi: `docs/V4_ANTIGRAVITY.md` (A6–A10, push yöntemi dahil). Antigravity'nin
+  `~/Desktop/Pixel-antigravity` içindeki commit'lenmemiş `docs/GENEL_PROJE_MIMARISI_V4.md` dosyası A6 ile düzeltilip alınacak.
+  Not: Antigravity çalışmaya başlamadan önce `git merge main` yapmalı (dalı A5'ten beri çok geride).
