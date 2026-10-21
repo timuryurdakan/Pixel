@@ -13,7 +13,9 @@ CLI:
     python3 pixel_agent.py report --name aider --state working [--tool T] [--label L] [--project P]
     python3 pixel_agent.py run   [--name N] [--idle-after 15] [--on-exit sleeping|offline] -- aider …   (pixel-run)
     python3 pixel_agent.py proxy --listen 127.0.0.1:11435 --upstream http://127.0.0.1:11434 --name ollama   (pixel-proxy)
-    python3 pixel_agent.py install-shims                     # ~/.pixel-office/bin/pixel-run, pixel-proxy
+    python3 pixel_agent.py antigravity [--name Antigravity] …   (pixel-antigravity; needs pixel_antigravity.py next to
+                                                             this file, see that file)
+    python3 pixel_agent.py install-shims                     # ~/.pixel-office/bin/pixel-run, pixel-proxy[, pixel-antigravity]
 
 Target (§17.1): explicit args → env PIXEL_OFFICE_URL / _ROOM / _KEY / _OWNER → ~/.pixel-office/config.json →
 http://127.0.0.1:8765 (local server, no room/key).
@@ -61,6 +63,7 @@ MAX_BATCH = 10
 L_ERROR = "Hata"
 L_DONE = "Bitti"
 L_LLM_ERROR = "LLM hatası"
+AG_MODULE = "pixel_antigravity"     # optional sibling file with the Antigravity watcher (Phase 18)
 
 
 def _debug(msg: str) -> None:
@@ -1289,14 +1292,21 @@ def cmd_install_shims(a) -> int:
     home = office_home()
     bindir = os.path.join(home, "bin")
     os.makedirs(bindir, exist_ok=True)
+    import shutil
     here = os.path.abspath(__file__)
     dst = os.path.join(home, "pixel_agent.py")
     if here != os.path.abspath(dst):
-        import shutil
         shutil.copyfile(here, dst)
+    shims = [("pixel-run", "run"), ("pixel-proxy", "proxy")]
+    ag_src = os.path.join(os.path.dirname(here), AG_MODULE + ".py")
+    if os.path.isfile(ag_src):                       # the Antigravity watcher is an optional sibling file
+        ag_dst = os.path.join(home, AG_MODULE + ".py")
+        if os.path.abspath(ag_src) != os.path.abspath(ag_dst):
+            shutil.copyfile(ag_src, ag_dst)
+        shims.append(("pixel-antigravity", "antigravity"))
     py = sys.executable or "python3"
     made = []
-    for shim, sub in (("pixel-run", "run"), ("pixel-proxy", "proxy")):
+    for shim, sub in shims:
         if os.name == "nt":
             p = os.path.join(bindir, shim + ".cmd")
             with open(p, "w", encoding="utf-8", newline="\r\n") as f:
@@ -1350,12 +1360,32 @@ def build_parser() -> argparse.ArgumentParser:
     px.add_argument("--send-model", action="store_true", help="send the model name as the label")
     px.add_argument("--allow-remote", action="store_true")
     _add_target_args(px)
-    sp.add_parser("install-shims", help="write ~/.pixel-office/bin/pixel-run and pixel-proxy")
+    sp.add_parser("antigravity", add_help=False,
+                  help="pixel-antigravity: Antigravity IDE watcher (pixel_antigravity.py; --help for its flags)")
+    sp.add_parser("install-shims", help="write ~/.pixel-office/bin/pixel-run, pixel-proxy (and pixel-antigravity)")
     return p
+
+
+def cmd_antigravity(argv: list) -> int:
+    """`antigravity …` → pixel_antigravity.py next to this file (kept separate so this library stays small and the
+    connector, which bundles this file, does not carry the watcher; v2.md D6)."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), AG_MODULE + ".py")
+    if not os.path.isfile(path):
+        sys.stderr.write("pixel-antigravity: %s.py bulunamadı. Bu dosyanın yanına indirin:\n"
+                         "  curl -fsSL <sunucu>/hook/%s.py -o %s\n" % (AG_MODULE, AG_MODULE, path))
+        return 2
+    sys.modules.setdefault("pixel_agent", sys.modules[__name__])    # share this module (one Sender per target)
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(AG_MODULE, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.main(argv, prog="pixel_agent.py antigravity")
 
 
 def main(argv: object = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["antigravity"]:
+        return cmd_antigravity(argv[1:])
     cmd = []
     if argv[:1] == ["run"] and "--" in argv:
         i = argv.index("--")

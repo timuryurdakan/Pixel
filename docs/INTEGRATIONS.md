@@ -12,6 +12,7 @@ Dosyalar `web/hook/` altındadır. Bulutta bunlar `https://<host>/hook/...` adre
 | `pixel_hook.ps1` | Aynı istemcinin Windows PowerShell 5.1 ikizi. Python gerekmez. |
 | `install.sh` / `install.ps1` | Tek satırlık kurulum betikleri |
 | `pixel_agent.py` | Yerel yapay zeka ajanları için kütüphane, `report` CLI'ı, `pixel-run` ve `pixel-proxy` |
+| `pixel_antigravity.py` | Antigravity IDE izleyicisi (`pixel-antigravity`). `pixel_agent.py` ile aynı klasörde durmalı. |
 
 ## Gizlilik (hepsi için geçerli)
 
@@ -152,7 +153,8 @@ Hedef adres şu sırayla belirlenir:
 
 Kısayolları kurmak için:
 ```sh
-python3 pixel_agent.py install-shims      # ~/.pixel-office/bin/pixel-run ve pixel-proxy (Windows'ta .cmd)
+python3 pixel_agent.py install-shims      # ~/.pixel-office/bin/pixel-run, pixel-proxy (Windows'ta .cmd);
+                                          # yanında pixel_antigravity.py varsa pixel-antigravity de
 ```
 
 ### 5.1 Kütüphane
@@ -220,7 +222,98 @@ Bilinen sınırlar:
 
 ---
 
-## 6. Sorun giderme
+## 6. Antigravity IDE (`pixel-antigravity`)
+
+Antigravity'nin kanca (hook) sistemi yok. Ama her konuşmanın adımlarını bilgisayara bir kayıt dosyasına yazıyor:
+```
+~/.gemini/antigravity-ide/brain/<konuşma>/.system_generated/logs/transcript.jsonl
+```
+`pixel_antigravity.py` bu dosyaları salt okunur izler ve her konuşmayı ofiste bir karakter olarak gösterir. Antigravity'ye hiçbir şey kurulmaz, dosyalarına yazılmaz.
+
+**Kurulum.** İzleyici ayrı bir dosyadır ve `pixel_agent.py` kütüphanesini kullanır; ikisi aynı klasörde durmalı. Kanca kurulumu (`install.sh` / `install.ps1`) ikisini de `~/.pixel-office/` içine indirir. Elle:
+```sh
+curl -fsSL https://<host>/hook/pixel_agent.py -o pixel_agent.py
+curl -fsSL https://<host>/hook/pixel_antigravity.py -o pixel_antigravity.py
+```
+
+```sh
+python3 pixel_antigravity.py                             # aynısı: python3 pixel_agent.py antigravity
+python3 pixel_antigravity.py --name "Gemini"             # karakter adı (varsayılan "Antigravity")
+python3 pixel_antigravity.py --install-service           # oturum açılınca başlasın (Linux, macOS, Windows)
+python3 pixel_antigravity.py --install-service --dry-run # yalnızca ne yapılacağını yazar, hiçbir şeyi değiştirmez
+python3 pixel_antigravity.py --uninstall-service
+python3 pixel_agent.py install-shims                     # sonra: pixel-antigravity
+```
+Hedef adres öbür araçlarla aynı sırayla bulunur (§5). Servis `--url/--room/--key` almaz, `~/.pixel-office/config.json` dosyasını okur; böylece anahtar servis dosyasına yazılmaz. `--install-service` iki dosyayı `~/.pixel-office/` içine kopyalar, servis oradan çalışır.
+
+**Neden ayrı dosya:** İzleyici yalnızca Antigravity'nin olduğu bilgisayarda gerekiyor. `pixel_agent.py` küçük bir kütüphane olarak kalıyor (v2.md D6) ve bağlayıcı paketi (`pixel-connector.pyz`, `pixel_agent.py`'yi içerir) izleyiciyi taşımıyor. İzleyici `pixel_connector` paketini içe aktarmaz, çünkü yalnızca kanca dosyalarını indiren bilgisayarlarda o paket yok. Bu yüzden servis tanımı için gereken küçük `_quote_systemd` yardımcısı bilerek kopyalandı; bir test iki kopyanın aynı sonucu verdiğini denetler.
+
+**Nasıl izler:**
+- İki kök klasöre bakar: `~/.gemini/antigravity-ide/brain` ve `~/.gemini/antigravity/brain`. Başka bir yer için `--root KLASÖR` (birden çok kez verilebilir) ya da `PIXEL_ANTIGRAVITY_DIR` ortam değişkeni (`:` ile ayrılmış; Windows'ta `;`).
+- Saniyede bir dosya boyutuna bakar, yalnızca sona eklenen tamamlanmış satırları okur. Yarım kalan son satır tamamlanınca okunur; bozuk JSON satırları ve 1 MB'tan uzun satırlar atlanır. Dosya kısalırsa ya da yenisiyle değiştirilirse baştan okunur. inotify gibi ek bir bağımlılık yok.
+- Yeni konuşmalar ve sonradan oluşan `brain` klasörleri 5 sn içinde fark edilir.
+- **Geçmiş yeniden oynatılmaz.** Bir konuşma fark edildiğinde (açılışta da, sonradan da) dosyanın yalnızca son 256 KB'ı okunur. Durum son adımdan, yaşı da son adımın `created_at` zamanından çıkarılır (yoksa dosyanın değişme zamanı). Bu yaş aşağıdaki eşiklerden geçer: 10 dakika önce biten bir konuşma "çalışıyor" değil "uyuyor" görünür, 45 dakikadan eski bir konuşma hiç görünmez. Sonrasında yalnızca yeni eklenen satırlar canlı sayılır.
+- `created_at` adımın başladığı an. Uzun süren bir adım bu yüzden olduğundan eski görünebilir; bu bilerek seçildi, eski bir konuşma asla yanlışlıkla "çalışıyor" gösterilmez.
+
+**Kayıt biçimi** (bu bilgisayardaki gerçek dosyalarla 2026-10-21'de doğrulandı, yalnızca yapı incelendi): her satır bir JSON nesnesi. Hep bulunan alanlar `step_index` (sayı), `source` (`MODEL`, `USER_EXPLICIT`, `SYSTEM`), `type`, `status` (`DONE`, `RUNNING`), `created_at` (saniye hassasiyetinde `YYYY-MM-DDTHH:MM:SSZ`). Ara sıra `content`, `thinking`, `tool_calls` (`name` + `args`; `args.Cwd` çoğunlukla JSON tırnaklı metin), `truncated_fields`, `exit_code`, `error`, `error_code`. Görülen türler: `USER_INPUT`, `PLANNER_RESPONSE`, `VIEW_FILE`, `RUN_COMMAND`, `CODE_ACTION`, `LIST_DIRECTORY`, `GREP_SEARCH`, `GENERIC`, `SEARCH_WEB`, `READ_URL_CONTENT`, `SYSTEM_MESSAGE`, `CONVERSATION_HISTORY`, `KNOWLEDGE_ARTIFACTS`, `CHECKPOINT`, `ERROR_MESSAGE`. Satır, adım bitince yazılıyor (dosyanın değişme zamanı son `created_at`'ten 8–30 sn sonra). Biçim belgelenmemiştir ve Antigravity güncellenince değişebilir. Bu yüzden ayrıştırıcı eksik alanlara ve bilinmeyen türlere dayanıklıdır: bilinmeyen bir model adımı "çalışıyor" sayılır, kaynağı ve türü olmayan satır yok sayılır.
+
+**Durum eşlemesi** (süreler ayarlanabilir):
+
+| Kayıttaki son adım | Ofiste |
+|---|---|
+| Kullanıcı mesajı (`USER_INPUT`) ya da sistem adımı | `thinking` (hata mesajında etiket "Hata") |
+| Model bir araç çağırdı ya da araç sonucu geldi | `working`, araç adıyla: `run_command` → Bash, `view_file` → Read, `replace_file_content` → Edit, `write_to_file` → Write, `grep_search` → Grep, `list_dir` → LS, `search_web` → WebSearch, `read_url_content` → WebFetch, `manage_task` → TodoWrite; bilinmeyen araçlar kendi adıyla (izin verilen karakterlere süzülerek) |
+| Model araç çağırmadan cevabını bitirdi | `idle` (kahve). Sıra insanda; Claude Code'un `Stop` olayıyla aynı davranış |
+| `--idle-after` sn (varsayılan 60) yeni adım yok, karakter çalışıyordu | `idle` |
+| `--sleep-after` sn (varsayılan 180) yeni adım yok | `sleeping` (uyur, ofisten çıkmaz) |
+| `--gone-after` sn (varsayılan 2700 = 45 dk) yeni adım yok, izleyici kapandı (Ctrl+C, SIGTERM) ya da konuşma silindi | `offline` (kapıdan çıkar) |
+
+Neden bu değerler:
+- **`waiting_for_user` kullanılmıyor.** Antigravity bir aracın sonucunu ve onu çağıran model adımını araç bittiğinde birlikte yazıyor. Bu yüzden bir komutun onay mı beklediği yoksa hâlâ mı çalıştığı kayıttan anlaşılamıyor. Yanlış "!" göstermek yerine bu sessizlik 60 sn sonra `idle` olur.
+- **60 sn:** Bu bilgisayardaki gerçek kayıtlarda (2026-10-21, 1135 adım arası) bir tur içindeki beklemelerin yaklaşık %9'u 20 sn'den, %2,5'i 60 sn'den uzun. 20 sn'lik eşik karakteri çalışırken sık sık kahveye gönderirdi.
+- **180 sn ve 45 dk:** Sunucu da 180 sn güncelleme almayan boştaki karakteri uyutur ve kanca ajanlarını 45 dk sonra kaldırır. Kütüphane 5 dakikada bir canlı tutma güncellemesi gönderdiği için daha uzun bir "boşta" süresi karakteri uyku ile kahve arasında gidip getirirdi.
+
+**Birden çok konuşma:** Her konuşma ayrı bir karakterdir. En son kullanılan konuşma `Antigravity`, diğerleri `Antigravity 2`, `Antigravity 3`… adını alır; ad konuşma ofisten çıkana kadar değişmez. Oturum kimliği `ag-` + konuşma kimliğinin SHA-256 özetinin ilk 10 hanesidir; ham konuşma kimliği gönderilmez.
+
+**Proje adı:** komutların çalıştığı klasörün (`Cwd`) yalnızca son klasör adı. Henüz komut çalışmadıysa proje boş kalır. Sabit bir ad için `--project AD`.
+
+**Gizlilik:** Ofise yalnızca durum, araç adı, sabit "Hata" etiketi, proje klasörünün adı, ajan adı ve sahip gider. Konuşma metni, düşünce, hata metni, komut satırı, dosya yolları, araç argümanları ve dosya içerikleri satır okunurken atılır; diske de yazılmaz. Testler (`tests/test_phase18_antigravity.py`) gönderilen her güncellemeyi bir kanarya metniyle denetler.
+
+**Oturum açılınca başlatma** (`--install-service`, önce `--dry-run` ile bakılabilir):
+- **Linux:** `~/.config/systemd/user/pixel-antigravity.service` yazılır, `systemctl --user daemon-reload`, `enable`, `restart` çalışır. Durum: `systemctl --user status pixel-antigravity`, günlük: `journalctl --user -u pixel-antigravity -f`. Bilgisayar açılır açılmaz (oturum açmadan) çalışsın isterseniz: `loginctl enable-linger $USER`.
+- **macOS:** `~/Library/LaunchAgents/tr.pixeloffice.antigravity.plist` yazılır, `launchctl bootout` (eski sürümü kapatır) ve `launchctl bootstrap gui/$(id -u) …` çalışır. Günlük: `~/.pixel-office/antigravity.err.log`. Elle yapmak isterseniz plist şöyledir:
+  ```xml
+  <?xml version="1.0" encoding="UTF-8"?>
+  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+  <plist version="1.0"><dict>
+    <key>Label</key><string>tr.pixeloffice.antigravity</string>
+    <key>ProgramArguments</key><array>
+      <string>/usr/bin/python3</string><string>/Users/ADINIZ/.pixel-office/pixel_antigravity.py</string>
+    </array>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  </dict></plist>
+  ```
+  Kaldırmak: `launchctl bootout gui/$(id -u)/tr.pixeloffice.antigravity && rm ~/Library/LaunchAgents/tr.pixeloffice.antigravity.plist`.
+- **Windows:** Görev Zamanlayıcı'da oturum açılışında çalışan `PixelOffice\Antigravity` görevi oluşturulur (`schtasks /Create … /SC ONLOGON /RL LIMITED`, `pythonw.exe` ile, pencere açılmaz) ve hemen başlatılır. Kaldırmak: `--uninstall-service` ya da `schtasks /Delete /TN "PixelOffice\Antigravity" /F`. Görev Zamanlayıcı kullanılamıyorsa Başlangıç klasörüne kısayol da olur: `Win+R` → `shell:startup` → yeni kısayol, hedef `"C:\…\pythonw.exe" "%USERPROFILE%\.pixel-office\pixel_antigravity.py"`.
+- macOS ve Windows yolları burada sahte komut çalıştırıcıyla test edildi; gerçek bir Mac ya da Windows bilgisayarda denenmedi.
+
+**Bilinen sınırlar:**
+- Kayıt yalnızca adım bitince yazıldığı için karakter, adım başladığında değil bittiğinde hareket eder (genelde birkaç saniye gecikme).
+- Antigravity'nin izin istemleri kayıtta görünmüyor; onay bekleyen bir konuşma 60 sn sonra kahve içer.
+
+**Dışarıdan kontrol (`agentapi`; Aşama 19 için araştırma, 2026-10-19, 2026-10-21'de yeniden doğrulandı):** `~/.gemini/antigravity-ide/bin/agentapi` iki satırlık bir kabuk betiği; Antigravity'nin dil sunucusunu (`/opt/antigravity-ide/resources/app/extensions/antigravity/bin/language_server_linux_x64 agentapi …`) çağırıyor. Yalnızca `--help` çalıştırıldı (her alt komut için de). Üç komut var:
+- `get-conversation-metadata <konuşma>`: konuşma bilgisi.
+- `new-conversation [--model=flash_lite|flash|pro] [--title=…] [--profile=…] <istem>`: yeni konuşma başlatır.
+- `send-message [--title=…] <alıcı> <içerik>`: bir konuşmaya (kendine de) mesaj gönderir.
+
+Bunlar dil sunucusunun `/_sidecar/get-conversation-metadata`, `/_sidecar/new-conversation`, `/_sidecar/send-message` uçlarına gidiyor; araç Antigravity içindeki arka plan "sidecar"ları ve zamanlanmış görevler için yapılmış (`ANTIGRAVITY_AGENTAPI_EXE`). **Araç onayı ya da reddi için bir komut yok.** Dil sunucusunun içinde `LanguageServerService/HandleCascadeUserInteraction` ve `CancelCascadeInvocation` gibi iç RPC adları var; onaylar büyük olasılıkla IDE arayüzü ile dil sunucusu arasındaki bu belgelenmemiş iç bağlantıdan geçiyor. Bu bağlantı dışarıya açık bir arayüz değil, kullanmak desteklenmez ve her güncellemede bozulabilir.
+
+Sonuç: Aşama 19'da Antigravity için telefondan "onayla/reddet" bugünkü haliyle yapılamaz. Yapılabilecek olan, `send-message` ile bir konuşmaya metin cevap ya da `new-conversation` ile yeni görev göndermek. Bu da yalnızca açık bir kullanıcı eylemiyle olmalı. Araştırmada hiçbir konuşmaya mesaj gönderilmedi.
+
+---
+
+## 7. Sorun giderme
 - **Karakter görünmüyor:**
   - `pixel_hook.py doctor` çalıştırın. Sunucuya ulaşılabildiğini ve kancalı olay sayısının 13/13 olduğunu kontrol edin.
   - Claude Code oturumunu yeniden başlattığınızdan emin olun.

@@ -70,6 +70,7 @@ if ($py) {
     $script = Join-Path $oh 'pixel_hook.py'
     Get-File "$Server/hook/pixel_hook.py" $script
     try { Get-File "$Server/hook/pixel_agent.py" (Join-Path $oh 'pixel_agent.py') } catch { }
+    try { Get-File "$Server/hook/pixel_antigravity.py" (Join-Path $oh 'pixel_antigravity.py') } catch { }
     $a = @($script, 'install', '--server', $Server, '--name', $Name)
     if ($Room) { $a += @('--room', $Room) }
     if ($Key) { $a += @('--key', $Key) }

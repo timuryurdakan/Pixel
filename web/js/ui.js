@@ -45,7 +45,7 @@ export function summaryText(agents) {
 }
 
 const SOURCE_LABELS = {
-  'claude-code': 'Claude Code', custom: 'Özel (kütüphane)', 'pixel-run': 'pixel-run', 'pixel-proxy': 'pixel-proxy', api: 'Genel API',
+  'claude-code': 'Claude Code', custom: 'Özel (kütüphane)', 'pixel-run': 'pixel-run', 'pixel-proxy': 'pixel-proxy', antigravity: 'Antigravity', api: 'Genel API',
 };
 const sourceLabel = (s) => (Object.hasOwn(SOURCE_LABELS, s) ? SOURCE_LABELS[s] : String(s));
 const RENAMED_SOURCES = new Set(['custom', 'project', 'owner']);

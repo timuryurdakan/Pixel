@@ -173,6 +173,8 @@ export function buildSetupCommands({ origin, room, key, name, ownerId }) {
     'agent-dl': `curl -fsSL ${o}/hook/pixel_agent.py -o pixel_agent.py`,
     'pixel-run': `python3 pixel_agent.py run ${target} --name aider -- aider --model ollama/qwen2.5-coder`,
     'pixel-proxy': `python3 pixel_agent.py proxy ${target} --listen 127.0.0.1:11435 --upstream http://127.0.0.1:11434 --name ollama`,
+    antigravity: `curl -fsSL ${o}/hook/pixel_antigravity.py -o pixel_antigravity.py\npython3 pixel_antigravity.py ${target}`,
+    'antigravity-service': 'python3 pixel_antigravity.py --install-service',
     'hook-status': 'python3 ~/.pixel-office/pixel_hook.py status --session cursor --state working --tool Edit --project web',
     'http-hook': JSON.stringify({ hooks }, null, 2),
   };
@@ -383,7 +385,7 @@ function renderCmd(box, text, ui) {
 
 // --- PWA (§10) ---------------------------------------------------------------------------------------
 /** Release of the files this page was loaded from; equal to sw.js VERSION (tests/test_release.py checks it). */
-export const APP_VERSION = 'po-v3.0.7';
+export const APP_VERSION = 'po-v3.0.8';
 const SW_VERSION_RE = /^po-v[0-9.]{1,20}$/;
 
 /** v2.md H16: a newer service worker took over while this (older) page was open → offer a reload. */

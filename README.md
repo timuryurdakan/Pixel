@@ -204,6 +204,7 @@ python3 ~/.pixel-office/pixel_hook.py uninstall   # yalnızca Pixel Office kanca
 
 - **Claude Code:** yukarıdaki tek satırlık kurulum yeterli.
 - **Yerel yapay zeka ajanları** (Ollama, LM Studio, llama.cpp, aider, Open Interpreter, kendi betikleriniz): `pixel_agent.py` bir kütüphane, bir komut sarmalayıcısı (`pixel-run`) ve akışı bozmayan bir OpenAI/Ollama ara sunucusu (`pixel-proxy`) içerir. Hazır komutlar "Ajan bağla → Genel API" sekmesinde, gerçek adres ve anahtarla doldurulmuş olarak gösterilir.
+- **Antigravity IDE:** kanca sistemi olmadığı için `pixel_antigravity.py` (`pixel_agent.py` ile aynı klasörde; `pixel_agent.py antigravity` ya da `pixel-antigravity` olarak da çalışır) Antigravity'nin kendi kayıt dosyalarını salt okunur izler ve her konuşmayı bir karakter olarak gösterir. `--install-service` ile oturum açılınca başlar (Linux systemd, macOS launchd, Windows Görev Zamanlayıcı). Ayrıntılar: `docs/INTEGRATIONS.md` §6.
 - **Her şey için:** `POST /api/status` genel API'si (curl, Python, PowerShell, JavaScript örnekleri).
 - Kurulum yapılamayan bilgisayarlar için "Gelişmiş" sekmesinde bir HTTP kancası var. **Bu yöntem gizlilik garantisini bozar** (ham kanca verisi sunucuya gider), yalnızca son çare olarak kullanın.
 
@@ -315,7 +316,7 @@ içine kurar, `~/.pixel-office/bin/pixel-connector` kısayolunu ve ayar dosyası
 Ekrana yazdığı özeti bu sürümün özetiyle karşılaştırın:
 
 ```
-pixel-connector.pyz SHA-256: 4c37a0825c2cf0401aefed79572b26feaaaa5e1c6a0df17df12009567460f5c9
+pixel-connector.pyz SHA-256: 395e5f513969bf6b6147880d3eec70beaa25e51d58b9bb96b02fe6e1c0270884
 ```
 
 Windows (PowerShell): komut kutusundaki **Windows** sekmesini kullanın (`irm …/install.ps1 -OutFile install.ps1`, sonra
@@ -617,7 +618,7 @@ python3 -m unittest discover -s tests
 - yerel mod: transcript ayrıştırma, durum eşikleri, dosya izleme, SSE
 - bulut: tüm uçlar ve hata kodları, CORS, önbellek başlıkları, hız limitleri, sahte bir Upstash sunucusuna karşı depolama
 - kanca istemcisi: 61 eşleme vektörü, gizlilik kanarya testi, `settings.json` yükleyicisi (gerçek `~/.claude`'a dokunmadan)
-- `pixel_agent.py`, `pixel-run`, `pixel-proxy`
+- `pixel_agent.py`, `pixel-run`, `pixel-proxy`, `pixel-antigravity` (Antigravity kayıt izleyicisi)
 - yeniden adlandırma, yerel durum API'si
 - dağıtım: Vercel'in fonksiyonları algılayacağı biçim, `vercel.json`, `.vercelignore`, `.gitignore`, lisans
 - v3: kripto test vektörleri (NIST, Wycheproof, RFC) ve Python ↔ tarayıcı çapraz testleri, röle protokolü (yerel röleye karşı; aynı paket dağıtılmış Worker'a karşı da çalışır), bağlayıcı (eşleştirme, görevler, iptal, bütçeler, klasör kaçışı, izin profilleri, sahte `claude` ve sahte Ollama), kurulum betiği, headless Chrome'da tüm v3 arayüz senaryosu ve gizlilik kanaryaları

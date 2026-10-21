@@ -4,7 +4,7 @@
 #   curl -fsSL https://<host>/hook/install.sh | sh -s -- --server https://<host> --room <roomId> --key <writeKey> --name "Timur"
 #
 # 1. finds python3 >= 3.8 (else pwsh, else prints manual instructions)
-# 2. downloads pixel_hook.py (and pixel_agent.py) from --server into ~/.pixel-office/
+# 2. downloads pixel_hook.py (and pixel_agent.py, pixel_antigravity.py) from --server into ~/.pixel-office/
 # 3. runs `pixel_hook.py install …` (writes config.json, merges hooks into ~/.claude/settings.json with a
 #    backup, sends a test character).
 # Env: PIXEL_OFFICE_HOME (default ~/.pixel-office), PIXEL_OFFICE_CLAUDE_SETTINGS (default ~/.claude/settings.json).
@@ -75,6 +75,7 @@ done
 if [ -n "$PY" ]; then
   fetch "$SERVER/hook/pixel_hook.py" "$HOME_DIR/pixel_hook.py"
   fetch "$SERVER/hook/pixel_agent.py" "$HOME_DIR/pixel_agent.py" || true
+  fetch "$SERVER/hook/pixel_antigravity.py" "$HOME_DIR/pixel_antigravity.py" || true
   exec "$PY" "$HOME_DIR/pixel_hook.py" install "$@"
 fi
 
