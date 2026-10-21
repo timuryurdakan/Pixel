@@ -200,6 +200,15 @@ python3 ~/.pixel-office/pixel_hook.py uninstall   # yalnızca Pixel Office kanca
 - Safari ve eski tarayıcılarda bunun yerine sağ alta yerleşen küçük bir açılır pencere açılır. Bu pencere her zaman üstte kalmaz.
 - Sekme gizliyse ve mini pencere de kapalıysa yoklama 30 sn sonra durur. Bu, ücretsiz kotayı korur.
 
+### Görsel efektler, ses ve maskot kedi
+
+- **Parçacık efektleri:** Ajanlar çalışırken masalarda küçük klavye kıvılcımları/parçacıkları, kahve molasında fincandan yükselen buhar/kahve parçacıkları ve dinlenme odasında uyurken Zzz parçacıkları canlandırılır.
+- **Ortam aydınlatması:** Günün saatine göre gün batımı, gece tonları, pencerelerden parlayan yıldızlar ve ofis içi yumuşak aydınlatma geçişleri uygulanır.
+- **Maskot kedi (`mascot-cat`):** Ofis zemininde serbestçe dolaşan, mola veren ajanların yanına giden veya dinlenme köşesinde kıvrılıp uyuyan pixel-art bir ofis kedisi bulunur.
+- **Web Audio API & Chiptune sesler:** 8-bit chiptune tarzı sentezleyici ile klavye tıkırtıları, kahve fokurtusu, uyku mırıltıları ve görev tamamlama zil sesi üretilir.
+- **🔊/🔇 Düğmesi:** Arayüzdeki hoparlör düğmesiyle tüm sesler açılıp kapatılabilir (varsayılan olarak **kapalıdır** / sessiz mod).
+- **Erişilebilirlik:** Sistem düzeyinde `prefers-reduced-motion: reduce` ayarı açıksa parçacık efektleri ve hızlı animasyonlar otomatik olarak kapatılır veya yumuşatılır.
+
 ### Claude Code ve yerel yapay zeka ajanlarını bağlama
 
 - **Claude Code:** yukarıdaki tek satırlık kurulum yeterli.
@@ -308,7 +317,7 @@ Gereken: Python 3.8 ya da daha yenisi (`python3 --version`). Ofiste **Cihazlar �
 odanız ve anahtarınızla doldurulmuş kurulum komutu çıkar. Linux/macOS için şuna benzer:
 
 ```sh
-curl -fsSL https://pixel-rouge-phi.vercel.app/connector/install.sh | sh -s -- --server https://pixel-rouge-phi.vercel.app --room <oda-kimliği> --key <yazma-anahtarı> --name 'Timur'
+curl -fsSL https://www.pixeloffice.com.tr/connector/install.sh | sh -s -- --server https://www.pixeloffice.com.tr --room <oda-kimliği> --key <yazma-anahtarı> --name 'Timur'
 ```
 
 Betik `pixel-connector.pyz` dosyasını indirir, **SHA-256 özetini doğrular** (tutmazsa durur), `~/.pixel-office/connector/`
@@ -467,6 +476,7 @@ sonra `pixel-connector runtimes start ollama`.
   ayarları (`RELAY_SECRET`, `PIXEL_RELAY_URL`) eksiktir.
 - **"Röle: güvenlik politikası (CSP) röle adresini engelliyor".** `vercel.json` içindeki CSP'de röle adresi yanlış:
   `python3 tools/set_relay_host.py <alt-alan>` çalıştırın, commit + push.
+- **Röleye bağlanılamıyorsa ve workers.dev engelliyse:** Kendi alan adınızı Workers'a bağlayın (ör. relay.pixeloffice.com.tr). Cloudflare panelinde Workers & Pages → pixel-relay → Settings → Domains & Routes → Add → Custom domain yolunu izleyin.
 - **"Röle şu an meşgul ya da günlük kota doldu".** Cloudflare ücretsiz Durable Objects kotası (günde 100.000 istek) dolmuş
   olabilir; 03:00'te (TSİ, 00:00 UTC) sıfırlanır. Cloudflare → Workers & Pages → pixel-relay → Metrics.
 - **"Cihaz çevrimdışı".** Bağlayıcı çalışmıyor ya da bilgisayar uykuda: `pixel-connector doctor`,
@@ -512,60 +522,8 @@ gerektiğini yazar. İkisi farklıysa Cihazlar sayfası "CSP" uyarısı gösteri
 
 ## Yayına alma kontrol listesi (v3)
 
-Sırayla yapın. Node.js kurmanız **gerekmez**. Ekrandaki düğme adları zamanla değişebilir; değerler değişmez.
-
-1. **Röle adresini sabitleyin** (Cloudflare'de seçtiğiniz `workers.dev` alt alan adıyla; hesabınız yoksa önce 3. adımın ilk
-   maddesini yapın): `python3 tools/set_relay_host.py <alt-alan>`. Çıktıdaki `wss://pixel-relay.<alt-alan>.workers.dev`
-   adresini not edin.
-2. **GitHub'a gönderin:** `git add -A && git commit -m "v3 yayına alma" && git push`. (Vercel bu push ile kendiliğinden
-   dağıtır; değişkenler henüz yok, sorun değil.)
-3. **Cloudflare Workers Builds:**
-   - Hesap yoksa `https://dash.cloudflare.com/sign-up` (ücretsiz, kart yok) → **Workers & Pages** → `workers.dev` alt alan
-     adını seçin.
-   - **Workers & Pages → Create → Import a repository → Connect GitHub** → yalnızca `timuryurdakan/Pixel` deposuna izin
-     (*Only select repositories*) → depoyu seçin ve tam olarak:
-
-     | Alan | Değer |
-     |---|---|
-     | Project name / Worker name | `pixel-relay` |
-     | Production branch | `main` |
-     | Root directory (Advanced settings) | `relay` |
-     | Build command | `npm install --no-audit --no-fund && npm test` |
-     | Deploy command | `npx wrangler deploy` |
-     | Build watch paths → Include | `relay/*` |
-
-   - **Save and Deploy**. Derleme günlüğünde `fail 0` görünmeli.
-4. **`RELAY_SECRET` üretin:** `python3 -c "import secrets;print(secrets.token_urlsafe(32))"` (43 karakter; kimseyle
-   paylaşmayın, depoya koymayın).
-5. **Cloudflare'e secret:** Worker **pixel-relay → Settings → Variables and Secrets → Add** → Type **Secret**, ad
-   `RELAY_SECRET`, değer 4. adımdaki → **Deploy**. (`ALLOWED_ORIGINS`'i panelden eklemeyin; `relay/wrangler.jsonc`'ta.)
-6. **Vercel'e iki değişken** (Project → Settings → Environment Variables, **Production**):
-   - `RELAY_SECRET` = 4. adımdaki **aynı** değer
-   - `PIXEL_RELAY_URL` = `wss://pixel-relay.<alt-alan>.workers.dev` (sonunda `/` yok; 1. adımdaki değerle **aynı** olmalı)
-7. **CSP kontrolü:** `python3 tools/set_relay_host.py --show` çıktısı 6. adımdaki adresi göstermeli. Göstermiyorsa 1. ve 2.
-   adımı tekrarlayın.
-8. **Vercel'de yeniden dağıtın:** Deployments → son dağıtım → **⋯ → Redeploy** (değişkenler ancak yeni dağıtımda etkinleşir).
-9. **Doğrulayın:**
-   - `curl https://pixel-relay.<alt-alan>.workers.dev/health` → `{"ok":true,"v":1}`
-   - `curl https://pixel-rouge-phi.vercel.app/api/config` → `"relay":{"url":"wss://pixel-relay.<alt-alan>.workers.dev","v":1}` ve `"features":["control"]`
-   - `curl -sI https://pixel-rouge-phi.vercel.app/ | grep -i content-security` → `connect-src 'self' wss://pixel-relay.<alt-alan>.workers.dev`
-   - `curl -sI https://pixel-rouge-phi.vercel.app/connector/pixel-connector.pyz | grep -i content-type` → `application/zip`
-     (`text/plain` ise de kurulum çalışır; yalnızca not edin)
-   - Uyumluluk testleri (depo klasöründe): `RELAY_SECRET='<değer>' python3 tests/relay_conformance.py --url wss://pixel-relay.<alt-alan>.workers.dev` → `OK`
-     (secret'ı bu makinede kullanmak istemezseniz: `python3 tests/relay_conformance.py --url wss://pixel-relay.<alt-alan>.workers.dev --server https://pixel-rouge-phi.vercel.app --room <oda-id> --key <yazma-anahtarı>`; iki süre testi atlanır, birkaç dakika sürer)
-10. **Bu bilgisayara bağlayıcıyı kurun:** ofisi katılma bağlantısıyla açın → **Cihazlar → Cihaz ekle** → Linux komutunu
-    kopyalayıp terminalde çalıştırın → ekrandaki SHA-256'yı README'deki özetle karşılaştırın → `connector.json`'a
-    `workspaces` ekleyin (yukarıda) → `pixel-connector config-check` → `systemctl --user restart pixel-connector` →
-    `pixel-connector doctor` (hepsi ✓).
-11. **Eşleştirin:** `pixel-connector pair` → kodu tarayıcıya → doğrulama kodları aynıysa `e`. Telefon için yeni kodla tekrar.
-12. **Claude Code ile ilk gerçek deneme:** **Yeni ajan** → klasör, motor **Claude Code**, profil **Düzenleyebilir** →
-    küçük bir görev ("README'deki yazım hatalarını listele") → çıktı akmalı, karakter masada çalışmalı, sonda maliyet
-    "tahmini" etiketiyle görünmeli. Bir görevi **Durdur** ile kesin. Sonra `pixel-connector usage` ve
-    `tail -3 ~/.pixel-office/connector/audit.log` ile kontrol edin.
-13. **İsteğe bağlı: Ollama.** `curl -fsSL https://ollama.com/install.sh | sh` → `ollama pull qwen2.5-coder:7b` → polkit kuralı ve
-    `runtimes` kaydı (yukarıda) → `pixel-connector config-check` → servisi yeniden başlatın → telefondan **Cihazlar →
-    Çalışma ortamları**'nda Durdur/Başlat ve model Yükle/Boşalt → Ollama motorlu bir ajana görev.
-14. **İlk ay haftada bir** kullanım: Cloudflare (Workers & Pages → pixel-relay → Metrics, Durable Objects), Vercel Usage, Upstash Usage.
+Ayrıntılı, adım adım yayına alma yönergeleri ve ortam değişkeni kontrolleri için tek kaynak:
+👉 **[`docs/YAYIN.md`](docs/YAYIN.md)** (Cloudflare Workers builds, `RELAY_SECRET`, Vercel değişkenleri, CSP kontrolleri ve ilk canlı çalıştırma).
 
 ## Ajanları yeniden adlandırma
 
@@ -635,7 +593,7 @@ Geliştirme sunucusu verileri bellekte tutar ve her başlatmada rastgele bir `PI
 python3 -m unittest discover -s tests
 ```
 
-467 test, ağ bağlantısı gerektirmeden çalışır (`pwsh` yoksa 1 test atlanır; Chrome yoksa tarayıcı testleri atlanır). Kapsam:
+Tüm testler ağ bağlantısı gerektirmeden çalışır (`pwsh` yoksa 1 test atlanır; Chrome yoksa tarayıcı testleri atlanır). Kapsam:
 - yerel mod: transcript ayrıştırma, durum eşikleri, dosya izleme, SSE
 - bulut: tüm uçlar ve hata kodları, CORS, önbellek başlıkları, hız limitleri, sahte bir Upstash sunucusuna karşı depolama
 - kanca istemcisi: 61 eşleme vektörü, gizlilik kanarya testi, `settings.json` yükleyicisi (gerçek `~/.claude`'a dokunmadan)

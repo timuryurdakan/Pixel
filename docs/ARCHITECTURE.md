@@ -798,6 +798,13 @@ if __name__ == "__main__": raise SystemExit(main())
 - **watcher.py:** the `_removed` memo (path → mtime) drops entries for files that no longer exist on each discovery pass, so it stays bounded.
 - **Minimum Python version** is 3.11, because of `enum.StrEnum` and `datetime.fromisoformat` with a `Z` suffix. It was developed and tested on 3.14.
 
+### 7.10 Phase 18–20 and v3 extensions (FX & Audio, Remote Approvals, Antigravity, View-Only)
+
+- **FX & Audio (A5):** Procedural particle system for actions (typing sparks, steaming coffee mug, floating Zzz sleep motes). Atmospheric daylight / sunset / night cycle with glowing window stars and warm office indoor lighting. Mascot cat (`mascot-cat` sprite in `sprites.js`) wandering the office and resting. Chiptune sound synthesizer via Web Audio API (`audio.js`) with an explicit mute/unmute toggle in the header (default off). Full compliance with `prefers-reduced-motion: reduce` disabling animations and particle emission.
+- **View-Only Mode Badge:** Rooms accessed without a write key in URL hash (`#key=`) activate the "Yalnızca izleme" (View-only) header badge. In this mode, mutations such as pairing new devices, dispatching remote tasks, and responding to approval cards are disabled on the frontend.
+- **Antigravity Tracker (Phase 18):** `web/hook/pixel_antigravity.py` provides read-only monitoring of Google Antigravity IDE transcript logs (`transcript.jsonl`). It parses steps incrementally into office agent states (`thinking`, `working`, `idle`, `sleeping`). A built-in privacy canary guarantees prompt text, thoughts, and local paths are discarded before network transmission. `--install-service` installs headless background daemons on Linux (systemd user unit), macOS (launchd agent), and Windows (Task Scheduler).
+- **Remote Approvals (Phase 19):** End-to-end encrypted approval of Claude Code CLI interactions (`PermissionRequest` tool permission requests and `AskUserQuestion` interactive prompts) directly from paired mobile devices. Implemented via waiting hook mode (`pixel_hook.py hook --decide`), 240s expiration timeout, race-free single-decision resolution across paired devices, and audit logging.
+
 ---
 
 ## 8. Integration checklist

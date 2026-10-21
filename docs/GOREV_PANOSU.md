@@ -18,6 +18,7 @@ ezmemenin tek yolu.
    - `web/js/{e2e,idb,relay,control,devices,prompt,usage,transport,cloud,main}.js`
    - `vercel.json`, `web/sw.js`, `tests/` (yeni test dosyası eklemek serbest)
    - `PROJECT.md` (yalnızca §6 İlerleme Günlüğü'nün **en altına** kayıt eklenebilir)
+   *(Not: Bir görevin tanımında açıkça izin verilen dosya listesi, bu genel kural 3'ün önüne geçer).*
 4. **Güvenlik kuralları (tüm web işleri):**
    - **İçerik Güvenlik Politikası (CSP):** `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'`.
      Dış kaynak kullanılamaz (CDN, Google Fonts, uzak görsel, analytics). Satır içi `<script>` yasak; JS ayrı dosyada olur.
@@ -56,6 +57,7 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | A9 | v4-B: masadan masaya devir (A8 sonrası) | Antigravity | ⬜ |
 | A10 | v4-C: iş akışı motoru ve ilk şablon (A9 sonrası) | Antigravity | ⬜ |
 | A11 | Aşama 20 / Paket 6: bulut temizliği (**şimdi**, C3'ten bağımsız; push yok, Claude birleştirir) | Antigravity | ✅ Teslim edildi |
+| A12 | Aşama 20 / Paket 8b: belgeler (D1–D4, F5–F6, E7) | Antigravity | ✅ Teslim edildi |
 
 **A6–A10'un ayrıntıları, başlama koşulları ve push yöntemi:** [`docs/V4_ANTIGRAVITY.md`](V4_ANTIGRAVITY.md).
 
@@ -143,7 +145,7 @@ görüntüleri, bilinen sorunlar.
 - **2026-10-19, Claude (C1, Aşama 17):** Kurulumda varsayılan `~/PixelOfficeIsler` çalışma klasörü,
   `pixel-connector workspace list|add|remove`, arayüzde "izinli klasör yok" ipucu, `doctor` saat farkı düzeltmesi.
   Değişen web dosyası yalnızca `web/js/devices.js` (CSS yok; `sw.js` sürümü birleştirmede artırılacak). Bağlayıcı
-  yeniden derlendi (`.pyz` SHA-256 `5d060022…`). 504 test geçiyor (1 atlandı). A3 için doğru metin:
+  yeniden derlendi (`.pyz` SHA-256 `5d060022…` (geçmiş)). 504 test geçiyor (1 atlandı). A3 için doğru metin:
   `pixel-connector workspace add ~/projem`, varsayılan klasör `~/PixelOfficeIsler`, kurulumu yeniden çalıştırmak listesi
   boş cihaza varsayılan klasörü ekler.
 - **2026-10-19, Antigravity:** A1, A2, A3 ve A4 tamamlandı:
@@ -202,3 +204,13 @@ görüntüleri, bilinen sorunlar.
   - **Doğrulama & Testler:** `python3 -m unittest discover -s tests` → 627 test, 1 atlandı (pwsh yok), hepsi başarılı. `python3 tools/build_connector.py --check` güncel. Kendi dalında commit'lendi, push yapılmadı.
 - **2026-10-21, Claude:** A11 birleştirildi (694 test geçiyor). Yeni görev **A12** (Paket 8b, belgeler): ayrıntı
   `docs/V4_ANTIGRAVITY.md` §3 A12. Claude'un 8a işi (testler/kod) kenarda bekliyor; A12 yalnızca belgelere dokunur.
+- **2026-10-21, Antigravity (A12, Aşama 20 / Paket 8b: Belgeler):** D1–D4, F5–F6 ve E7 maddeleri tamamlandı:
+  - **D1 (`PROJECT.md` & `docs/gunluk/2026-10.md`):** İlerleme günlüğü `docs/gunluk/2026-10.md` dosyasına taşındı (Aşama 1–17, A1–A5, Paket 1–3); eski `.pyz` özetleri `(geçmiş)` olarak işaretlendi; gerçekleştirilmemiş A5 özellikleri dipnotla belirtildi. `PROJECT.md`'de yalnızca son 5 kayıt tutuldu, üst durum satırı güncellendi.
+  - **D2 (`README.md` test sayısı):** Sabit `467 test` sayısı kaldırılarak dinamik ve tutarlı `Tüm testler ağ bağlantısı gerektirmeden çalışır...` ifadesine dönüştürüldü.
+  - **D3 (`docs/YAYIN.md` & `README.md`):** 14 maddelik yayına alma kontrol listesi `docs/YAYIN.md` altında tek kaynak haline getirildi; `README.md`'den bağlantı verildi. Sorun gidermeye `relay.pixeloffice.com.tr` özel alan adı notu eklendi.
+  - **D4 (`docs/GOREV_PANOSU.md`):** Kural 3'ün altına görev tanımlarındaki açık dosya izinlerinin genel yasak listesinin önüne geçtiği kuralı not düşüldü.
+  - **F5 (Alan adı temizliği):** `README.md` ve `docs/V3.md` içindeki eski `pixel-rouge-phi.vercel.app` anmaları `www.pixeloffice.com.tr` olarak güncellendi.
+  - **F6 (Eski SHA işaretlemeleri):** `docs/SECURITY_AUDIT.md`, `docs/GOREV_PANOSU.md`, `PROJECT.md` ve `docs/gunluk/2026-10.md` içindeki eski `.pyz` SHA-256 özetlerine `(geçmiş)` notu düşüldü. `README.md`'deki geçerli SHA korundu.
+  - **E7 (v3 özellikleri):** A5 görsel efektleri (parçacıklar, ortam ışığı), maskot kedi (`mascot-cat`), chiptune Web Audio sesleri ve 🔊/🔇 düğmesi, `prefers-reduced-motion` desteği, `#key=` olmadan açılan odalarda "Yalnızca izleme" rozeti, Aşama 18 Antigravity izleyicisi ve Aşama 19 mobil uzaktan onaylar `README.md` ve `docs/ARCHITECTURE.md` (§7.10) belgelerine eklendi.
+  - **`v2.md`:** D1, D2, D3, D4, F5, F6 ve E7 maddeleri `✅ (Paket 8b, Antigravity)` olarak işaretlendi.
+  - **Doğrulama & Testler:** `python3 -m unittest discover -s tests` → 694 test geçti, 1 atlandı. `python3 tools/build_connector.py --check` başarılı ("web/connector is up to date"). Hiçbir kod, test ya da `web/` dosyasına dokunulmadı; yalnızca belgelere dokunuldu.
