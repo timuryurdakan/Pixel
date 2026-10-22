@@ -24,7 +24,8 @@ from .agents import LABELS, AgentError, AgentStore, OfficeReporter
 from .approvals import (TOOL_ID_RE, Approvals, ControlServer, ToolApproval, ToolLimit, summary_hash,
                         validate_tool_request)
 from .audit import AuditLog
-from .config import AUDIT_FILE, LEDGER_FILE, Config, ensure_dir, remote_approvals_state
+from .config import (AUDIT_FILE, LEDGER_FILE, Config, claude_path_label, claude_path_refreshed, ensure_dir, find_claude,
+                     remote_approvals_state)
 from .engines.base import TaskContext, clear_history
 from .engines.claude import ClaudeEngine
 from .engines.ollama import OllamaEngine
@@ -108,8 +109,13 @@ class Connector:
         eng = engines or {}
         # The OpenAI-compatible servers' API keys are this process's business only, never the Claude child's (H7).
         api_key_envs = [e["apiKeyEnv"] for e in self.cfg["engines"]["openai"] if e.get("apiKeyEnv")]
-        self.claude = eng.get("claude") or ClaudeEngine(self.cfg["engines"]["claude"], self.cfg["profiles"],
-                                                        ledger_note=self._rate_limit_event, drop_env=api_key_envs)
+        # H38: a stale engines.claude.path (VS Code extension updated) is replaced at run time with the setup discovery;
+        # workspaces are excluded because an agent can write there.
+        self.claude = eng.get("claude") or ClaudeEngine(
+            self.cfg["engines"]["claude"], self.cfg["profiles"], ledger_note=self._rate_limit_event,
+            drop_env=api_key_envs,
+            discover=lambda: find_claude(user_home, exclude=[w["real"] for w in self.cfg["workspaces"]]),
+            on_path_refresh=self._claude_path_refreshed)
         if getattr(self.claude, "on_rate_limit", None) is not None and engines:
             self.claude.on_rate_limit = self._rate_limit_event
         self.ollama = eng.get("ollama") or OllamaEngine(self.cfg["engines"]["ollama"])
@@ -377,6 +383,7 @@ class Connector:
             ok, max_budget = self.budgets.check_task(a["key"], "claude", self.cfg["engines"]["claude"]["maxBudgetUsdPerTask"])
             if not ok:
                 raise TaskError("budget_exceeded", "budget exceeded")
+            self._ensure_claude_path()
             if not self.cfg["engines"]["claude"]["enabled"] or not self.cfg["engines"]["claude"]["path"]:
                 raise TaskError("engine_unavailable", "Claude Code not configured")
         elif a["engine"] == "ollama" and not self.cfg["engines"]["ollama"]["enabled"]:
@@ -426,6 +433,16 @@ class Connector:
                 self.router.send(p, msg)
             except ValueError:
                 pass
+
+    # -- Claude Code path (H38) -------------------------------------------------------------------
+    def _ensure_claude_path(self) -> Optional[str]:
+        ensure = getattr(self.claude, "ensure_path", None)
+        return ensure() if ensure else self.cfg["engines"]["claude"]["path"]
+
+    def _claude_path_refreshed(self, old: Optional[str], new: str, version: Optional[str]) -> None:
+        err = claude_path_refreshed(self.home, self.audit, old, new, version)
+        self.log("Claude Code yolu yenilendi: %s → %s%s" % (claude_path_label(old) or "-", claude_path_label(new),
+                                                            "" if err is None else " (connector.json yazılamadı: %s)" % err))
 
     # -- handlers: device / agents ---------------------------------------------------------------
     def device_info(self) -> dict:
@@ -553,7 +570,7 @@ class Connector:
             engine_id = msg.get("engineId") or (next(iter(self.openai)) if self.openai else None)
             if engine_id not in self.openai:
                 raise Reply("engine_unavailable", "no OpenAI-compatible server configured")
-        elif engine == "claude" and not (self.cfg["engines"]["claude"]["enabled"] and self.cfg["engines"]["claude"]["path"]):
+        elif engine == "claude" and not (self.cfg["engines"]["claude"]["enabled"] and self._ensure_claude_path()):
             raise Reply("engine_unavailable", "Claude Code not found")
         elif engine == "ollama" and not self.cfg["engines"]["ollama"]["enabled"]:
             raise Reply("engine_unavailable", "Ollama disabled")

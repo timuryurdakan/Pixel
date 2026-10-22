@@ -325,7 +325,7 @@ içine kurar, `~/.pixel-office/bin/pixel-connector` kısayolunu ve ayar dosyası
 Ekrana yazdığı özeti bu sürümün özetiyle karşılaştırın:
 
 ```
-pixel-connector.pyz SHA-256: cab2fdec4391fd897930ac637d58b53764d2f4a6737f6b65c0fb1ff28aa832d8
+pixel-connector.pyz SHA-256: f0edc6ec0a61bb946ca49c1bafd4d645d67c35baa35d961c7ad6d26da1b85ed8
 ```
 
 Windows (PowerShell): komut kutusundaki **Windows** sekmesini kullanın (`irm …/install.ps1 -OutFile install.ps1`, sonra
@@ -474,9 +474,16 @@ sonra `pixel-connector runtimes start ollama`.
 - **"Bu tarayıcıdaki oda anahtarı geçersiz".** Tarayıcıda kayıtlı yazma anahtarı bu odaya ait değil (röle bileti 401).
   Odanın katılım bağlantısını (`#key=…` içeren) yeniden açın. **"Sunucuda röle ayarlı değil"** ise Vercel'de röle
   ayarları (`RELAY_SECRET`, `PIXEL_RELAY_URL`) eksiktir.
-- **"Röle: güvenlik politikası (CSP) röle adresini engelliyor".** `vercel.json` içindeki CSP'de röle adresi yanlış:
-  `python3 tools/set_relay_host.py <alt-alan>` çalıştırın, commit + push.
-- **Röleye bağlanılamıyorsa ve workers.dev engelliyse:** Kendi alan adınızı Workers'a bağlayın (ör. relay.pixeloffice.com.tr). Cloudflare panelinde Workers & Pages → pixel-relay → Settings → Domains & Routes → Add → Custom domain yolunu izleyin.
+- **"Röle: güvenlik politikası (CSP) röle adresini engelliyor".** İki sebebi olabilir:
+  - `vercel.json` içindeki CSP'de röle adresi Vercel'deki `PIXEL_RELAY_URL` ile aynı değil:
+    `python3 tools/set_relay_host.py wss://relay.pixeloffice.com.tr` çalıştırın, commit + push.
+  - Röle adresi yeni değiştiyse ve telefon eski sayfayı önbellekten açıyorsa: eski CSP yeni adrese izin vermez. Sayfayı
+    (ana ekran uygulaması dahil) tamamen kapatıp yeniden açın; olmazsa tarayıcıda bu sitenin verilerini temizleyin
+    (Chrome: adres çubuğundaki simge → Site ayarları → Verileri temizle) ve katılma bağlantısıyla yeniden açın.
+- **Röleye bağlanılamıyor, `*.workers.dev` engelli.** Türkiye'deki bazı internet sağlayıcıları `*.workers.dev`'i SNI ile
+  engelliyor (22.10.2026: aynı Cloudflare IP'sine başka alan adıyla TLS açılıyor, `*.workers.dev` ile açılmıyor). Röle bu
+  yüzden özel alan adında çalışır: `wss://relay.pixeloffice.com.tr` (Cloudflare → Workers & Pages → pixel-relay → Settings →
+  Domains & Routes → Add → Custom domain; alan adının DNS bölgesi Cloudflare'de olmalı). Adımlar: [`docs/YAYIN.md`](docs/YAYIN.md).
 - **"Röle şu an meşgul ya da günlük kota doldu".** Cloudflare ücretsiz Durable Objects kotası (günde 100.000 istek) dolmuş
   olabilir; 03:00'te (TSİ, 00:00 UTC) sıfırlanır. Cloudflare → Workers & Pages → pixel-relay → Metrics.
 - **"Cihaz çevrimdışı".** Bağlayıcı çalışmıyor ya da bilgisayar uykuda: `pixel-connector doctor`,
@@ -485,6 +492,10 @@ sonra `pixel-connector runtimes start ollama`.
   çalıştığından emin olun (`pair` komutu çalışan servise bağlanır).
 - **"Bu klasöre izin verilmiyor".** Klasör `connector.json → workspaces` listesinde değil ya da yasaklı bir yerde.
 - **"Motor cihazda bulunamadı".** `pixel-connector doctor` Claude Code ve Ollama'yı kontrol eder; `engines.claude.path`'i ayarlayın.
+  Bağlayıcı 3.2.3'ten itibaren ayarlı yol çalışmaz hale gelirse (ör. VS Code, Claude Code eklentisini güncelleyip eski sürüm
+  klasörünü sildiğinde) kurulumdaki aramayla yeni yolu kendisi bulur, `connector.json`'a yazar ve `audit.log`'a
+  `engine.path_refresh` düşer. Yalnızca size ya da root'a ait, başkalarının yazamadığı ve çalışma klasörlerinin dışındaki
+  dosyalar seçilir; hiçbiri yoksa kurulum komutunu yeniden çalıştırın.
 - **"Bütçe sınırına ulaşıldı".** Bütçeyi panelden ya da `connector.json`'dan artırın; dönem başında kendiliğinden sıfırlanır.
 - **Onay bekleyen görev.** `pixel-connector approve` (liste), `pixel-connector approve <id>` ya da `pixel-connector approve --link`
   ile açılan yerel sayfa.
@@ -513,7 +524,8 @@ Vercel, `vercel.json` içindeki başlıklara ortam değişkeni koyamaz; bu yüzd
 (CSP `connect-src`) bir kez yazılır. Tek komut:
 
 ```sh
-python3 tools/set_relay_host.py <workers.dev-alt-alan-adınız>      # ör. timur → wss://pixel-relay.timur.workers.dev
+python3 tools/set_relay_host.py wss://relay.pixeloffice.com.tr     # özel alan adı (önerilen; workers.dev engellenebilir)
+python3 tools/set_relay_host.py <workers.dev-alt-alan-adınız>      # yalnızca deneme: ör. timur → wss://pixel-relay.timur.workers.dev
 python3 tools/set_relay_host.py --show                             # şu anki değer
 ```
 

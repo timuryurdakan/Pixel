@@ -84,6 +84,15 @@ AUTH_MAP = {"claude.ai": "subscription", "oauth_token": "subscription", "api_key
             "api_key_helper": "api_key", "none": "unknown"}
 
 
+CLAUDE_MISSING_TR = ("Claude Code bulunamadı: ayarlı yol çalışmıyor ve başka kurulum bulunamadı. Kurulum betiğini yeniden "
+                     "çalıştırın ya da connector.json → engines.claude.path ayarlayın.")
+
+
+def path_works(path) -> bool:
+    """An absolute, existing, executable file (validate() already turned a bare name into an absolute path)."""
+    return isinstance(path, str) and os.path.isabs(path) and os.path.isfile(path) and os.access(path, os.X_OK)
+
+
 def parse_version(text: str) -> Optional[Tuple[int, int, int]]:
     m = re.search(r"(\d+)\.(\d+)\.(\d+)", text or "")
     return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
@@ -318,7 +327,8 @@ class ClaudeEngine:
 
     def __init__(self, cfg: dict, profiles: dict, popen=subprocess.Popen, run=subprocess.run,
                  env: Optional[Dict[str, str]] = None, ledger_note: Optional[Callable[[dict], None]] = None,
-                 drop_env: Iterable[str] = ()) -> None:
+                 drop_env: Iterable[str] = (), discover: Optional[Callable[[], Optional[str]]] = None,
+                 on_path_refresh: Optional[Callable[[Optional[str], str, Optional[str]], None]] = None) -> None:
         self.cfg = cfg
         self.drop_env = tuple(drop_env)
         self.profiles = profiles
@@ -329,6 +339,9 @@ class ClaudeEngine:
         self._version = Cached(self._probe_version, 3600)
         self._auth = Cached(self._probe_auth, 3600)
         self.last_init: Optional[dict] = None
+        self.discover = discover
+        self.on_path_refresh = on_path_refresh or (lambda old, new, version: None)
+        self._path_lock = threading.Lock()
 
     def child_env(self) -> Dict[str, str]:
         return child_env(self.env, self.drop_env)
@@ -357,7 +370,30 @@ class ClaudeEngine:
         except (OSError, subprocess.SubprocessError, ValueError):
             return "unknown"
 
+    def ensure_path(self) -> Optional[str]:
+        """v2.md H38: VS Code updates the Claude Code extension and deletes the old version folder, so a configured
+        path into it goes stale. When the configured path no longer exists / isn't executable (or none is set), look for
+        a replacement with the setup discovery (`discover`, which applies the trust rule of config.trusted_binary and
+        skips workspaces), use it and report it (`on_path_refresh` persists + audits). A path that still works is never
+        replaced. Without `discover` (tests, fakes) this is a no-op. → the path in effect."""
+        if self.discover is None or not self.cfg.get("enabled", True):
+            return self.cfg.get("path")
+        with self._path_lock:
+            cur = self.cfg.get("path")
+            if path_works(cur):
+                return cur
+            new = self.discover()
+            self._version.invalidate()
+            self._auth.invalidate()
+            if not new or new == cur:
+                return cur
+            self.cfg["path"] = new
+            v = self._version.get()
+            self.on_path_refresh(cur, new, "%d.%d.%d" % v if v else None)
+            return new
+
     def version(self) -> Optional[Tuple[int, int, int]]:
+        self.ensure_path()
         return self._version.get()
 
     def available(self) -> dict:
@@ -450,7 +486,7 @@ class ClaudeRun(Running):
         version = eng.version()
         if version is None:
             self._end("error", None, empty_usage(), None, "unknown",
-                      error={"code": "engine_unavailable", "message": "claude not found"})
+                      error={"code": "engine_unavailable", "message": CLAUDE_MISSING_TR})
             return None
         model = self.ctx.model or cfg.get("defaultModel")
         argv = build_argv(cfg["path"], self.ctx.profile, eng.profiles, agent["claudeSession"], resume, model,

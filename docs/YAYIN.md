@@ -4,15 +4,22 @@ Bu belge, Pixel Office v3 "Ajan Kontrol Merkezi" yayına alma adımlarının tek
 
 Sırayla yapın. Node.js kurmanız **gerekmez**. Ekrandaki düğme adları zamanla değişebilir; değerler değişmez.
 
+> **Röle adresi özel bir alan adı olmalı.** Türkiye'deki bazı internet sağlayıcıları `*.workers.dev` adreslerini SNI ile
+> engelliyor (22.10.2026'da doğrulandı: aynı Cloudflare IP'sine başka bir alan adıyla TLS açılıyor, `*.workers.dev` ile
+> açılmıyor). Bu yüzden canlı röle `wss://relay.pixeloffice.com.tr` adresindedir; `workers.dev` adresi yalnızca ilk kurulum
+> ve deneme içindir. Aşağıda `<röle-adresi>` bu özel alan adı demektir (ör. `relay.pixeloffice.com.tr`).
+
 ---
 
 ## 1. Röle ve Alan Adı Hazırlığı
 
-1. **Röle adresini sabitleyin** (Cloudflare'de seçtiğiniz `workers.dev` alt alan adıyla; hesabınız yoksa önce 3. adımı yapın):
+1. **Röle adresini sabitleyin** (özel alan adıyla; alan adını Cloudflare'e bağlamak 3a adımında):
    ```bash
-   python3 tools/set_relay_host.py <alt-alan>
+   python3 tools/set_relay_host.py wss://relay.pixeloffice.com.tr
    ```
-   Çıktıdaki `wss://pixel-relay.<alt-alan>.workers.dev` adresini not edin. *(Özel alan adı kullanılıyorsa örn. `wss://relay.pixeloffice.com.tr`).*
+   Bu komut `vercel.json` CSP'sindeki `connect-src` değerini yazar. *(Yalnızca deneme için `workers.dev` alt alan adı da
+   verilebilir: `python3 tools/set_relay_host.py <alt-alan>` → `wss://pixel-relay.<alt-alan>.workers.dev`; bazı
+   sağlayıcılarda engellidir.)*
 2. **GitHub'a gönderin:**
    ```bash
    git add -A && git commit -m "v3 yayına alma" && git push
@@ -35,6 +42,14 @@ Sırayla yapın. Node.js kurmanız **gerekmez**. Ekrandaki düğme adları zaman
      | Build watch paths → Include | `relay/*` |
 
    - **Save and Deploy**'a tıklayın. Derleme günlüğünde `fail 0` görünmelidir.
+3a. **Özel alan adını Worker'a bağlayın** (zorunlu; `workers.dev` engellenebilir):
+   - Alan adının DNS bölgesi Cloudflare'de olmalı. Pixel Office'te bölge 22.10.2026'da Vercel'den Cloudflare'e taşındı:
+     alan adı kayıt firmasında ad sunucuları `ali.ns.cloudflare.com` ve `jerome.ns.cloudflare.com` yapıldı; sitenin
+     Vercel'i gösteren kayıtları (apex ve `www`) Cloudflare'de **DNS only** (gri bulut) olarak kaldı, böylece site yine
+     Vercel'den sunulur.
+   - **Workers & Pages → pixel-relay → Settings → Domains & Routes → Add → Custom domain** → `relay.pixeloffice.com.tr`.
+     Cloudflare kaydı ve sertifikayı kendisi oluşturur (birkaç dakika sürebilir).
+   - Deneme: `curl https://relay.pixeloffice.com.tr/health` → `{"ok":true,"v":1}`.
 4. **`RELAY_SECRET` üretin:**
    ```bash
    python3 -c "import secrets;print(secrets.token_urlsafe(32))"
@@ -48,7 +63,7 @@ Sırayla yapın. Node.js kurmanız **gerekmez**. Ekrandaki düğme adları zaman
 
 6. **Vercel'e iki ortam değişkeni ekleyin** (Project → Settings → Environment Variables, **Production**):
    - `RELAY_SECRET` = 4. adımdaki **aynı** sır değeri
-   - `PIXEL_RELAY_URL` = `wss://pixel-relay.<alt-alan>.workers.dev` (veya özel alan adı `wss://relay.pixeloffice.com.tr`; sonunda `/` olmamalıdır)
+   - `PIXEL_RELAY_URL` = `wss://relay.pixeloffice.com.tr` (1. adımdaki adresin **aynısı**; sonunda `/` olmamalıdır)
 7. **CSP kontrolü:**
    ```bash
    python3 tools/set_relay_host.py --show
@@ -62,7 +77,7 @@ Sırayla yapın. Node.js kurmanız **gerekmez**. Ekrandaki düğme adları zaman
 9. **Uç noktaları doğrulayın:**
    ```bash
    # 1. Röle sağlık kontrolü
-   curl https://pixel-relay.<alt-alan>.workers.dev/health
+   curl https://<röle-adresi>/health
    # Yanıt: {"ok":true,"v":1}
 
    # 2. Site yapılandırması
@@ -77,7 +92,7 @@ Sırayla yapın. Node.js kurmanız **gerekmez**. Ekrandaki düğme adları zaman
    # application/zip beklenir (text/plain olsa da çalışır)
 
    # 5. Uyumluluk testleri
-   RELAY_SECRET='<secret>' python3 tests/relay_conformance.py --url wss://pixel-relay.<alt-alan>.workers.dev
+   RELAY_SECRET='<secret>' python3 tests/relay_conformance.py --url wss://<röle-adresi>
    # Yanıt: OK
    ```
 
@@ -107,3 +122,12 @@ Sırayla yapın. Node.js kurmanız **gerekmez**. Ekrandaki düğme adları zaman
     - Cloudflare: Workers & Pages → pixel-relay → Metrics (Durable Objects istekleri, süre).
     - Vercel: Usage (Function invocations).
     - Upstash: Command usage.
+
+## 7. Röle adresi değişirse
+
+- Sıra: Worker'a yeni özel alan adını ekleyin → `python3 tools/set_relay_host.py wss://<yeni-adres>` + commit + push →
+  Vercel'de `PIXEL_RELAY_URL`'yi aynı değere çekin → **Redeploy** → `curl https://<site>/api/config` yeni adresi göstermeli.
+- Bağlayıcıda bir şey değişmez: adresi her bağlantıda sunucudan (`/api/config`) alır.
+- Telefonda eski sayfa önbellekte kaldıysa Cihazlar sayfası "güvenlik politikası (CSP) röle adresini engelliyor" der (eski
+  CSP yeni adrese izin vermez). Sayfayı tamamen kapatıp yeniden açın; olmazsa site verilerini temizleyin (Chrome: adres
+  çubuğundaki simge → Site ayarları → Verileri temizle). Ana ekrana eklenmiş uygulama için de aynısı geçerlidir.

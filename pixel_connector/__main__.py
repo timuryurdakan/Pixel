@@ -830,9 +830,8 @@ def cmd_doctor(args) -> int:
         OUT("connector.json: ✗ (%s)" % "; ".join(cfg.errors[:3]))
         return 1
     OUT("connector.json: ✓")
-    from .engines.claude import ClaudeEngine
     from .engines.ollama import OllamaEngine
-    c = ClaudeEngine(cfg.data["engines"]["claude"], cfg.data["profiles"]).available()
+    c = doctor_claude_engine(home, cfg).available()
     OUT("Claude Code: %s" % ("✓ %s (giriş: %s)" % (c["version"], c["auth"]) if c["available"] else "bulunamadı"))
     if c["available"] and cfg.data["workspaces"]:
         OUT("  Uyarı: Claude Code bu klasördeki proje ayarlarını çalıştırır (hook'lar, .mcp.json; güven sorusu yok).")
@@ -914,6 +913,23 @@ def running_status_line(home: str, request=None) -> str:
         when = _fmt_ms(d["relayErrorAt"]) if isinstance(d.get("relayErrorAt"), int) else "?"
         line += "\n  Son röle hatası: %s (%s)" % (term_safe(d["relayError"], 160), when)
     return line
+
+
+def doctor_claude_engine(home: str, cfg):
+    """ClaudeEngine for `doctor` with the run-time path refresh (v2.md H38): a stale engines.claude.path is replaced,
+    persisted and audited exactly as the service does it, and the user sees one line about it."""
+    from .audit import AuditLog
+    from .engines.claude import ClaudeEngine
+    audit = AuditLog(os.path.join(home, CFG.AUDIT_FILE), cfg.data["audit"]["storePrompts"])
+
+    def refreshed(old, new, version):
+        err = CFG.claude_path_refreshed(home, audit, old, new, version)
+        OUT("Claude Code yolu güncellendi (eski yol çalışmıyordu): %s%s" % (
+            term_safe(new), "" if err is None else " — connector.json yazılamadı (%s)" % err))
+
+    return ClaudeEngine(cfg.data["engines"]["claude"], cfg.data["profiles"],
+                        discover=lambda: CFG.find_claude(exclude=[w["real"] for w in cfg.data["workspaces"]]),
+                        on_path_refresh=refreshed)
 
 
 def cmd_install_service(args) -> int:

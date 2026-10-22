@@ -71,6 +71,10 @@ class Cached:
                 self._t = self.clock()
             return self._v
 
+    def invalidate(self) -> None:
+        with self._lock:
+            self._t = -1e18
+
 
 # -- chat history for local engines (§8.2) --------------------------------------------------------
 

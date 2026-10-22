@@ -15,6 +15,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import tempfile
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
@@ -530,32 +531,168 @@ def _is_exe(path: str) -> bool:
     return os.path.isfile(path) and os.access(path, os.X_OK)
 
 
+# Editors whose extension folder may hold the Claude Code extension (`anthropic.claude-code-<version>-<platform>`):
+# VS Code, VS Code Insiders, VS Code Server (Remote-SSH), Cursor, Antigravity, Windsurf. Same layout on Linux, macOS and
+# Windows (under the user profile).
+EDITOR_EXTENSION_DIRS = (".vscode", ".vscode-insiders", ".vscode-server", ".cursor", ".antigravity", ".windsurf")
+CLAUDE_BINARY_NAMES = ("claude.exe", "claude.cmd", "claude") if os.name == "nt" else ("claude",)
+
+
+def _extension_binaries(h: str) -> List[str]:
+    """Claude Code binaries inside editor extensions, newest version first (numeric: 2.1.306 > 2.1.99). VS Code updates
+    the extension and deletes the old folder, which is why a configured path into it goes stale (v2.md H38)."""
+    found = []
+    for rank, editor in enumerate(EDITOR_EXTENSION_DIRS):
+        for name in CLAUDE_BINARY_NAMES:
+            for p in glob.glob(os.path.join(h, editor, "extensions", "anthropic.claude-code-*", "resources",
+                                            "native-binary", name)):
+                folder = p.split(os.sep + "extensions" + os.sep, 1)[-1].split(os.sep, 1)[0]
+                found.append((_version_key(folder), -rank, p))
+    return [p for _, _, p in sorted(found, reverse=True)]
+
+
 def claude_candidates(user_home: str) -> List[str]:
     """Usual install locations of `claude` that a minimal service PATH misses (v2.md H9), in preference order: the
     native installer (~/.local/bin, ~/.claude/local), npm prefixes, the newest nvm Node, Homebrew and /usr/local, and
-    last the binary inside the newest Claude Code VS Code extension."""
+    last the binary inside the newest Claude Code editor extension (H38)."""
     h = user_home
-    out = [os.path.join(h, ".local", "bin", "claude"), os.path.join(h, ".claude", "local", "claude"),
-           os.path.join(h, ".npm-global", "bin", "claude")]
+    out = []
+    for name in CLAUDE_BINARY_NAMES:
+        out += [os.path.join(h, ".local", "bin", name), os.path.join(h, ".claude", "local", name),
+                os.path.join(h, ".npm-global", "bin", name)]
+    if os.name == "nt":
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            out += [os.path.join(appdata, "npm", "claude.cmd"), os.path.join(appdata, "npm", "claude.exe")]
     nvm = sorted(glob.glob(os.path.join(h, ".nvm", "versions", "node", "*", "bin", "claude")),
                  key=lambda p: _version_key(os.path.basename(os.path.dirname(os.path.dirname(p)))), reverse=True)
     out += nvm
-    out += ["/opt/homebrew/bin/claude", "/usr/local/bin/claude"]
-    ext = glob.glob(os.path.join(h, ".vscode", "extensions", "anthropic.claude-code-*", "resources", "native-binary",
-                                 "claude"))
-    out += sorted(ext, key=lambda p: _version_key(p.split(os.sep + "extensions" + os.sep, 1)[-1]), reverse=True)
+    if os.name != "nt":
+        out += ["/opt/homebrew/bin/claude", "/usr/local/bin/claude"]
+    out += _extension_binaries(h)
     return out
 
 
-def find_claude(user_home: Optional[str] = None, which=shutil.which) -> Optional[str]:
-    """Absolute path of an executable `claude`: PATH first, then claude_candidates(). None when there is none."""
+def _private_gids(uid: int) -> set:
+    """Groups whose write bit is harmless: root's group and the user's own private group (Debian/Ubuntu "user private
+    groups", umask 002: ~/.vscode/extensions is 0775 owned by timur:timur) when nobody else is a member."""
+    gids = {0}
+    try:
+        import grp
+        import pwd
+        pw = pwd.getpwuid(uid)
+        members = set(grp.getgrgid(pw.pw_gid).gr_mem)
+        if members <= {pw.pw_name}:
+            gids.add(pw.pw_gid)
+    except (ImportError, KeyError):
+        pass
+    return gids
+
+
+def _safe_node(path: str, uid: int, gids: set) -> bool:
+    try:
+        st = os.stat(path)
+    except OSError:
+        return False
+    if st.st_uid not in (uid, 0):
+        return False
+    mode = st.st_mode
+    if mode & stat.S_IWOTH and not (stat.S_ISDIR(mode) and mode & stat.S_ISVTX and st.st_uid == 0):
+        return False                                    # world-writable (a root-owned sticky dir like /tmp is fine)
+    return not (mode & stat.S_IWGRP and st.st_gid not in gids)
+
+
+def _ancestors(path: str) -> List[str]:
+    out = []
+    d = os.path.dirname(path)
+    while True:
+        out.append(d)
+        parent = os.path.dirname(d)
+        if parent == d:
+            return out
+        d = parent
+
+
+def trusted_binary(path: str, uid: Optional[int] = None) -> bool:
+    """Discovery security rule (v2.md H38): an automatically found `claude` is used only when nobody but the user or
+    root can have put it there: the file (after symlinks) and every directory above it, and above the link itself, are
+    owned by the user or root and are not group/world-writable (except root's group, the user's private group and a
+    root-owned sticky directory such as /tmp). Windows: ACLs are not inspected; only the executable check applies and
+    the candidates are fixed per-user/install locations."""
+    if not isinstance(path, str) or not os.path.isabs(path) or not _is_exe(path):
+        return False
+    if os.name == "nt":
+        return True
+    uid = os.getuid() if uid is None else uid
+    gids = _private_gids(uid)
+    real = os.path.realpath(path)
+    nodes = [real] + _ancestors(real) + _ancestors(os.path.abspath(path))
+    return all(_safe_node(n, uid, gids) for n in dict.fromkeys(nodes))
+
+
+def _inside(path: str, roots: List[str]) -> bool:
+    real = os.path.realpath(path)
+    for r in roots:
+        try:
+            if os.path.commonpath([real, os.path.realpath(r)]) == os.path.realpath(r):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def find_claude(user_home: Optional[str] = None, which=shutil.which, exclude: Optional[List[str]] = None) -> Optional[str]:
+    """Absolute path of an executable `claude`: PATH first, then claude_candidates(). None when there is none.
+    Used by `setup` and at run time (H38). A candidate is skipped when it fails trusted_binary(), sits inside one of
+    `exclude` (the workspaces: an agent can write there) or comes from a relative PATH entry (`.`, `node_modules/.bin`)."""
+    roots = list(exclude or [])
     found = which("claude")
-    if found:
-        return os.path.abspath(found)
-    for p in claude_candidates(user_home or os.path.expanduser("~")):
-        if _is_exe(p):
+    cands = [found] if found and os.path.isabs(found) else []
+    cands += claude_candidates(user_home or os.path.expanduser("~"))
+    for p in cands:
+        if trusted_binary(p) and not _inside(p, roots):
             return p
     return None
+
+
+def claude_path_label(path: Optional[str]) -> Optional[str]:
+    """Short, non-identifying label for the audit log: the extension folder for editor builds, else the file name."""
+    if not path:
+        return None
+    for part in reversed(re.split(r"[\\/]", path)):
+        if part.startswith("anthropic.claude-code-"):
+            return part[:80]
+    return os.path.basename(path)[:80]
+
+
+def persist_claude_path(home: str, path: str) -> None:
+    """Write engines.claude.path into connector.json with the setup writer (atomic, 0600); every other field as is.
+    Raises OSError / ValueError when the file is missing or not an object."""
+    cfg_path = os.path.join(home, CONFIG_FILE)
+    raw = read_json(cfg_path)
+    if not isinstance(raw, dict):
+        raise ValueError("connector.json unreadable")
+    eng = raw.get("engines")
+    if not isinstance(eng, dict):
+        eng = raw["engines"] = {}
+    c = eng.get("claude")
+    if not isinstance(c, dict):
+        c = eng["claude"] = {}
+    c["path"] = path
+    write_json(cfg_path, raw)
+
+
+def claude_path_refreshed(home: str, audit, old: Optional[str], new: str, version: Optional[str]) -> Optional[str]:
+    """Run-time refresh hook (H38): persist the new path and log `engine.path_refresh` (labels + version only).
+    → None, or a short error text when connector.json couldn't be written (the new path is still used this run)."""
+    err = None
+    try:
+        persist_claude_path(home, new)
+    except (OSError, ValueError) as e:
+        err = type(e).__name__
+    audit.write("engine.path_refresh", engine="claude", old=claude_path_label(old), new=claude_path_label(new),
+                version=version, persisted=err is None)
+    return err
 
 
 def claude_path_ok(path, which=shutil.which) -> bool:

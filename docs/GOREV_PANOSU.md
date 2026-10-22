@@ -50,10 +50,10 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | A3 | Rehber sayfası iyileştirmesi | Antigravity | ✅ Teslim edildi |
 | A4 | v4 Otomasyonlar ön araştırması | Antigravity | ✅ Teslim edildi |
 | A5 | Ofis efektleri: parçacık, ışık, tıklama tepkisi, ses (kullanıcı isteği) | Antigravity | 🔀 Birleştirildi |
-| C3 | Aşama 20: `v2.md` raporundaki paketler (5–8 kaldı) | Claude | 🔄 |
+| C3 | Aşama 20: `v2.md` raporundaki paketler (1–8 bitti, 2026-10-22) | Claude | ✅ |
 | A6 | v4 mimari belgesini düzelt ve projeye al (şimdi yapılabilir) | Antigravity | ✅ Teslim edildi |
 | A7 | Claude'un kalan Aşama 20 paketlerini devral (yalnızca kullanıcı isterse) | Antigravity | ⬜ |
-| A8 | v4-A: ofis duvarında Görev Tahtası (C3 ✅ sonrası) | Antigravity | ⬜ |
+| A8 | v4-A: ofis duvarında Görev Tahtası (**şimdi başlayabilir**: C3 ✅; push'u Antigravity yapar) | Antigravity | ⬜ |
 | A9 | v4-B: masadan masaya devir (A8 sonrası) | Antigravity | ⬜ |
 | A10 | v4-C: iş akışı motoru ve ilk şablon (A9 sonrası) | Antigravity | ⬜ |
 | A11 | Aşama 20 / Paket 6: bulut temizliği (**şimdi**, C3'ten bağımsız; push yok, Claude birleştirir) | Antigravity | ✅ Teslim edildi |
@@ -214,3 +214,11 @@ görüntüleri, bilinen sorunlar.
   - **E7 (v3 özellikleri):** A5 görsel efektleri (parçacıklar, ortam ışığı), maskot kedi (`mascot-cat`), chiptune Web Audio sesleri ve 🔊/🔇 düğmesi, `prefers-reduced-motion` desteği, `#key=` olmadan açılan odalarda "Yalnızca izleme" rozeti, Aşama 18 Antigravity izleyicisi ve Aşama 19 mobil uzaktan onaylar `README.md` ve `docs/ARCHITECTURE.md` (§7.10) belgelerine eklendi.
   - **`v2.md`:** D1, D2, D3, D4, F5, F6 ve E7 maddeleri `✅ (Paket 8b, Antigravity)` olarak işaretlendi.
   - **Doğrulama & Testler:** `python3 -m unittest discover -s tests` → 694 test geçti, 1 atlandı. `python3 tools/build_connector.py --check` başarılı ("web/connector is up to date"). Hiçbir kod, test ya da `web/` dosyasına dokunulmadı; yalnızca belgelere dokunuldu.
+- **2026-10-22, Claude (C3 ✅, Aşama 20 kapanışı):** A12 birleştirildi (`3cb0f18`), Paket 8a `39cfb27`. Aşama 20'nin
+  tüm paketleri bitti. Bugün ayrıca: Aşama 19 gerçek telefon testi geçti (Android telefondan onay ~5 sn'de, dosya
+  oluştu); röle `wss://relay.pixeloffice.com.tr` özel alan adına taşındı (`cbeb4e8`; Türk sağlayıcıları `*.workers.dev`'i
+  SNI ile engelliyor), belgeler güncellendi (`docs/YAYIN.md`, README, `docs/V3.md`); yeni hata **H38** düzeltildi
+  (VS Code eklenti güncellemesinden sonra eskiyen Claude Code yolu artık çalışırken kendiliğinden yenileniyor; bağlayıcı
+  3.2.3). **Antigravity için:** A8 şimdi başlayabilir. Bundan sonra kendi işini `docs/V4_ANTIGRAVITY.md` §2'deki yolla
+  kendisi push'lar; başlamadan önce (kullanıcı bu kapanış commit'ini push'ladıktan sonra)
+  `git fetch origin && git merge origin/main`.

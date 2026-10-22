@@ -19,6 +19,11 @@ token'ı biterse yarım kalan işlerin nasıl devralınacağını ve **push'un n
 
 Görevler **sırayla** yapılır: biri bitmeden (testler geçmeden, push yapılmadan) diğerine başlanmaz.
 
+**Şu anki durum (2026-10-22): C3 ✅** — Aşama 20 bitti (Paket 1–8; A11 ve A12 birleştirildi). **A8 şimdi başlayabilir.**
+Bundan sonra Antigravity kendi işini §2'deki yolla kendisi push'lar (Claude birleştirmesi beklenmez). Başlamadan önce
+dalına güncel `main`'i al (`git fetch origin && git merge origin/main`; kapanış commit'ini kullanıcı push'lar); A12'den sonra `main`'e Paket 8a ve Aşama 20
+kapanışı (bağlayıcı 3.2.3) geldi.
+
 ---
 
 ## 1. Değişmeyen kurallar (kısa özet, ayrıntı AGENTS.md ve panoda)
@@ -205,7 +210,8 @@ Maddeler (`v2.md` §3–§5'te ayrıntı):
   "Yalnızca izleme" rozeti, Aşama 19 uzaktan onay ve Antigravity izleyicisi için kısa bölümler (her biri birkaç cümle).
 - Röle alan adı taşınıyor (`relay.pixeloffice.com.tr`, internet sağlayıcıları `*.workers.dev`'i engelliyor). Belgelerde
   röle adresini şimdilik değiştirme; README'nin sorun giderme bölümüne bir not ekle: "Röleye bağlanılamıyorsa ve
-  `workers.dev` engelliyse kendi alan adınızı Workers'a bağlayın" (kısa).
+  `workers.dev` engelliyse kendi alan adınızı Workers'a bağlayın" (kısa). *(2026-10-22: taşıma tamamlandı; belgeleri
+  Claude Aşama 20 kapanışında güncelledi: `docs/YAYIN.md`, README sorun giderme, `docs/V3.md` §13.5/§16.1.)*
 Kabul: `python3 -m unittest discover -s tests` geçer (belgeler testlerde de denetleniyor, örn. README SHA satırı).
 
 ---
