@@ -255,8 +255,15 @@ def _ukey(u: dict) -> tuple:
 
 
 class Sender:
-    def __init__(self, target: dict, post=None, clock=time.time, start_thread: bool = True) -> None:
+    def __init__(self, target: dict, post=None, clock=time.time, start_thread: bool = True,
+                 local_debounce: float = LOCAL_DEBOUNCE, cloud_debounce: float = CLOUD_DEBOUNCE,
+                 intra_group: float = CLOUD_INTRA_GROUP, keepalive: float = KEEPALIVE) -> None:
         self.target = target
+        # Policy timings are per instance so tests (and the connector's 20 min keep-alive) can set them.
+        self.local_debounce = local_debounce
+        self.cloud_debounce = cloud_debounce
+        self.intra_group = intra_group
+        self.keepalive = keepalive
         self.cloud = bool(target.get("room"))
         self.clock = clock
         self._post = post or (lambda updates, timeout: post_updates(self.target, updates, timeout=timeout))
@@ -294,14 +301,14 @@ class Sender:
         if rec.dkey == rec.skey:
             if rec.final_or_gone or rec.sent_t is None:
                 return None
-            return rec.sent_t + KEEPALIVE
+            return rec.sent_t + self.keepalive
         fp = rec.first_pending if rec.first_pending is not None else self.clock()
         if not self.cloud:
-            return fp + LOCAL_DEBOUNCE
+            return fp + self.local_debounce
         st = rec.desired.get("state")
         if rec.sent_group is None or GROUPS.get(st) != rec.sent_group or st == "offline" or rec.desired.get("final"):
-            return fp + CLOUD_DEBOUNCE
-        return max(fp, rec.sent_t + CLOUD_INTRA_GROUP)
+            return fp + self.cloud_debounce
+        return max(fp, rec.sent_t + self.intra_group)
 
     def next_due(self) -> object:
         with self._lock:

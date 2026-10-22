@@ -192,9 +192,9 @@ class ConnectorCase(unittest.TestCase):
 
 class VersionAndBuild(unittest.TestCase):
     def test_version_and_dev_build_from_source(self):
-        self.assertEqual(pixel_connector.__version__, "3.2.1")
+        self.assertEqual(pixel_connector.__version__, "3.2.2")
         self.assertEqual(pixel_connector.__build__, "dev")
-        self.assertEqual(pixel_connector.version_string(), "3.2.1 (build dev)")
+        self.assertEqual(pixel_connector.version_string(), "3.2.2 (build dev)")
         self.assertFalse((ROOT / "pixel_connector" / "_build.py").exists(), "_build.py is generated, never committed")
 
     def test_cli_version_flag(self):
@@ -202,7 +202,7 @@ class VersionAndBuild(unittest.TestCase):
         with redirect_stdout(out), self.assertRaises(SystemExit) as cm:
             CLI.main(["--version"])
         self.assertEqual(cm.exception.code, 0)
-        self.assertEqual(out.getvalue().strip(), "pixel-connector 3.2.1 (build dev)")
+        self.assertEqual(out.getvalue().strip(), "pixel-connector 3.2.2 (build dev)")
 
     def test_build_id_is_deterministic_and_tracks_content(self):
         files = build_connector.sources()
@@ -222,7 +222,7 @@ class VersionAndBuild(unittest.TestCase):
         self.assertIn('BUILD = "%s"' % bid, mod)
         r = subprocess.run([sys.executable, str(PYZ), "--version"], capture_output=True, text=True, timeout=60)
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(r.stdout.strip(), "pixel-connector 3.2.1 (build %s)" % bid)
+        self.assertEqual(r.stdout.strip(), "pixel-connector 3.2.2 (build %s)" % bid)
         code = ("import sys; sys.path.insert(0, sys.argv[1]); import pixel_connector.app as a; "
                 "print(a.running_pyz_sha256())")
         r = subprocess.run([sys.executable, "-I", "-c", code, str(PYZ)], capture_output=True, text=True, timeout=60)
@@ -286,13 +286,13 @@ class VersionOnTheWire(ConnectorCase):
     def test_device_info_and_ctl_status(self):
         conn = self.make()
         info = conn.device_info()
-        self.assertEqual((info["connector"], info["build"], info["pyz"]), ("3.2.1", "dev", None))
+        self.assertEqual((info["connector"], info["build"], info["pyz"]), ("3.2.2", "dev", None))
         st, d = conn.ctl_routes()[("GET", "/ctl/status")]({}, {})
         self.assertEqual(st, 200)
         self.assertEqual((d["version"], d["build"], d["relayError"], d["relayErrorAt"]),
-                         ("3.2.1", "dev", "ticket:401", 1700000000500))
+                         ("3.2.2", "dev", "ticket:401", 1700000000500))
         line = CLI.running_status_line(self.home)                        # through the real control server
-        self.assertIn("3.2.1 (build dev)", line)
+        self.assertIn("3.2.2 (build dev)", line)
         self.assertIn("Son röle hatası: ticket:401", line)
 
 
@@ -1086,6 +1086,92 @@ class PairErrors(unittest.TestCase):
         rc, _, err = self.run_pair([self.START, (200, None)])
         self.assertEqual(rc, 1)
         self.assertIn("yanıt vermedi", err)
+
+
+
+class WriteLog:
+    """A text stream recording each write() call, shared by "stdout" and "stderr" like the journal under systemd."""
+
+    def __init__(self, calls):
+        self.calls = calls
+
+    def write(self, s):
+        self.calls.append(s)
+        return len(s)
+
+    def flush(self):
+        pass
+
+
+class RunLogLines(unittest.TestCase):
+    """H37: the relay status line and the startup banner each end up on their own line (one write per line)."""
+
+    def test_cmd_run_writes_whole_lines(self):
+        calls = []
+        started = threading.Event()
+
+        class FakeConnector:
+            def __init__(self, home, cfg, log):
+                self.log = log
+                self.key = SimpleNamespace(device_id="dev12345")
+
+            def start(self):
+                # the relay thread announces its status while the main thread prints the banner
+                t = threading.Thread(target=lambda: (self.log("Röle: connecting"), started.set()))
+                t.start()
+                t.join()
+
+            def stop(self):
+                self.log("Röle: stopped")
+
+        with tempfile.TemporaryDirectory() as h:
+            home = os.path.join(h, "connector")
+            CFG.ensure_dir(home)
+            CFG.write_json(os.path.join(home, CFG.CONFIG_FILE),
+                           CFG.initial_config("https://pixel.example.app", ROOM, KEY, "Timur", "PC", None))
+            out = WriteLog(calls)
+            with mock.patch("pixel_connector.app.Connector", FakeConnector), \
+                    mock.patch.object(CLI.signal, "signal", side_effect=lambda sig, handler: handler(sig, None)), \
+                    mock.patch.object(sys, "stdout", out), mock.patch.object(sys, "stderr", out):
+                rc = CLI.main(["--home", home, "run"])
+        self.assertEqual(rc, 0)
+        self.assertTrue(started.is_set())
+        for c in calls:
+            self.assertTrue(c.endswith("\n") and c.count("\n") == 1, calls)
+        lines = "".join(calls).splitlines()
+        self.assertEqual(lines[0], "Röle: connecting")
+        self.assertTrue(lines[1].startswith("Pixel Office bağlayıcı %s" % pixel_connector.__version__), lines)
+        self.assertEqual(lines[2:], ["Kapatılıyor…", "Röle: stopped"])
+
+    def test_concurrent_lines_never_mix_on_one_descriptor(self):
+        r, w = os.pipe()
+        a = io.TextIOWrapper(os.fdopen(w, "wb", buffering=0, closefd=False), encoding="utf-8", write_through=True)
+        b = io.TextIOWrapper(os.fdopen(w, "wb", buffering=0, closefd=False), encoding="utf-8", write_through=True)
+        msgs = {"Röle: connecting", "Pixel Office bağlayıcı çalışıyor"}
+
+        def writer(stream, msg):
+            for _ in range(200):
+                CLI.log_line(msg, stream)
+        ts = [threading.Thread(target=writer, args=(a, "Röle: connecting")),
+              threading.Thread(target=writer, args=(b, "Pixel Office bağlayıcı çalışıyor"))]
+        chunks = []
+        reader = threading.Thread(target=lambda: chunks.extend(iter(lambda: os.read(r, 65536), b"")))
+        reader.start()
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join()
+        os.close(w)
+        reader.join(10)
+        os.close(r)
+        lines = b"".join(chunks).decode("utf-8").splitlines()
+        self.assertEqual(len(lines), 400)
+        self.assertEqual(set(lines), msgs)
+
+    def test_closed_stream_is_ignored(self):
+        s = io.StringIO()
+        s.close()
+        CLI.log_line("x", s)                       # no exception: a closed journal must not kill the service
 
 
 if __name__ == "__main__":

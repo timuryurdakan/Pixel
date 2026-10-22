@@ -8,7 +8,7 @@ budget gauge + block, runtime start/stop (allow-listed harmless argv), model loa
 unpaired second browser (no prompt box), the phone layout at 390 and 360 px, unpairing, and no console errors.
 A v2 room without a relay shows no v3 controls.
 
-`run_scenario()` is also used by a manual run against `dev_server.py --relay` plus a `pixel-connector run` process
+`run_scenario()` (all `Scenario` steps in one go) is also used by a manual run against `dev_server.py --relay` plus a `pixel-connector run` process
 (see PROJECT.md, Aşama 14 log), with `CtlPairing` instead of `InProcPairing`.
 
 Skipped when google-chrome / chromium is not installed. Nothing touches ~/.claude or ~/.pixel-office.
@@ -122,16 +122,49 @@ def pair_once(page, dev, code_text, decide=None):
     return page.text("#pair-status")
 
 
-def run_scenario(t, base, room, key, dev, llm, fake_claude_dir, shots=None, chrome_factory=Chrome):
-    """The whole Phase 14 flow. `t` is a unittest.TestCase (assertions), `dev` a pairing adapter."""
-    shot = (lambda p, name: p.screenshot(os.path.join(shots, name))) if shots else (lambda p, name: None)
-    with chrome_factory() as chrome:
-        A = chrome.page(width=1280, height=900)
-        open_room(A, base, room, key)
+class Scenario:
+    """The Phase 14 flow as ordered steps sharing one browser (`A`), so a test can report each step on its own.
+    Every step takes `t`, a unittest.TestCase used for the assertions. STEPS lists them in order with the earlier
+    steps each one needs (a step only makes sense once those passed)."""
+
+    STEPS = (
+        ("pairing", ()),
+        ("runtimes", ("pairing",)),
+        ("ollama_agent", ("pairing",)),
+        ("second_tab", ("ollama_agent",)),
+        ("budget", ("ollama_agent",)),
+        ("claude_agent", ("pairing",)),
+        ("unpaired_browser", ("ollama_agent", "claude_agent")),
+        ("phone_layout", ("runtimes", "claude_agent")),
+        ("unpair", ("pairing",)),
+    )
+
+    def __init__(self, base, room, key, dev, llm, fake_claude_dir, shots=None, chrome_factory=Chrome):
+        self.base, self.room, self.key, self.dev, self.llm = base, room, key, dev, llm
+        self.fake_claude_dir = fake_claude_dir
+        self.chrome_factory = chrome_factory
+        self.shot = (lambda p, name: p.screenshot(os.path.join(shots, name))) if shots else (lambda p, name: None)
+        self.chrome = None
+        self.A = None
+
+    def __enter__(self):
+        self.chrome = self.chrome_factory()
+        return self
+
+    def __exit__(self, *a):
+        self.chrome.close()
+
+    def _main_page(self):
+        if self.A is None:
+            self.A = self.chrome.page(width=1280, height=900)
+            open_room(self.A, self.base, self.room, self.key)
+        return self.A
+
+    # ---- pairing wizard: wrong code, SAS refusal, correct code --------------------------------
+    def pairing(self, t):
+        A, dev, room = self._main_page(), self.dev, self.room
         A.wait("!!document.querySelector('#btn-devices:not([hidden])')", 15, what="Cihazlar button")
         t.assertTrue(A.eval("document.getElementById('btn-newagent').hidden"))
-
-        # ---- pairing wizard: wrong code, SAS refusal, correct code --------------------------------
         A.click("#btn-devices")
         A.wait("!document.getElementById('devices-page').hidden")
         t.assertIn("eşleşmedi", A.text("#devices-page .dev-body"))
@@ -155,7 +188,7 @@ def run_scenario(t, base, room, key, dev, llm, fake_claude_dir, shots=None, chro
 
         def decide(sas_page, sas_dev):
             seen["page"], seen["dev"] = sas_page, sas_dev
-            shot(A, "ui_pair_sas.png")
+            self.shot(A, "ui_pair_sas.png")
             return sas_page == sas_dev
         msg = pair_once(A, dev, code, decide=decide)
         t.assertEqual(seen["page"], seen["dev"])
@@ -164,7 +197,9 @@ def run_scenario(t, base, room, key, dev, llm, fake_claude_dir, shots=None, chro
         A.wait("!!document.querySelector('.dev-card .dev-dot.on')", 20, what="device online")
         A.wait("document.querySelectorAll('.rt').length >= 2", 15, what="runtimes")
 
-        # ---- runtimes: start/stop (allow-listed harmless argv), model load/unload --------------------
+    # ---- runtimes: start/stop (allow-listed harmless argv), model load/unload --------------------
+    def runtimes(self, t):
+        A = self.A
         click_text(A, ".rt[data-runtime='dummy'] .rt-actions .btn", "Başlat")     # → ["true"]
         A.wait("(document.querySelector(\".rt[data-runtime='dummy'] .rt-msg\")||{}).textContent === 'Başlatıldı'", 20)
         click_text(A, ".rt[data-runtime='dummy'] .rt-actions .btn", "Durdur")     # → ["false"] (exit 1)
@@ -172,17 +207,19 @@ def run_scenario(t, base, room, key, dev, llm, fake_claude_dir, shots=None, chro
         A.click(".rt[data-runtime='ollama'] .rt-models li .btn")           # Yükle
         A.wait("/yüklendi/.test((document.querySelector(\".rt[data-runtime='ollama'] .rt-msg\")||{}).textContent)", 20)
         A.wait("/Yüklü ·/.test(document.querySelector(\".rt[data-runtime='ollama'] .rt-models\").textContent)", 10)
-        shot(A, "ui_devices.png")
+        self.shot(A, "ui_devices.png")
         A.click(".rt[data-runtime='ollama'] .rt-models li .btn")           # Boşalt
         A.wait("/boşaltıldı/.test((document.querySelector(\".rt[data-runtime='ollama'] .rt-msg\")||{}).textContent)", 20)
-        t.assertEqual([r["path"] for r in llm.requests if r["path"] == "/api/generate"], ["/api/generate"] * 2)
+        t.assertEqual([r["path"] for r in self.llm.requests if r["path"] == "/api/generate"], ["/api/generate"] * 2)
 
-        # ---- new agent (Ollama) → character enters, details panel opens with the prompt box --------
+    # ---- new agent (Ollama) → character enters; prompt → streaming → end; working → idle ----------
+    def ollama_agent(self, t):
+        A = self.A
         A.click(".dev-card .dev-sec-head .btn.accent")
         A.wait("document.getElementById('dlg-agent').open && document.querySelectorAll('#agent-engines input').length > 0")
         A.eval("document.querySelector('#agent-engines input[value=ollama]').click()")
         A.type("#agent-form [name=name]", "<img src=x onerror=a>")
-        shot(A, "ui_new_agent.png")
+        self.shot(A, "ui_new_agent.png")
         A.click("#agent-form [name=create]")
         A.wait("!document.getElementById('dlg-agent').open", 20, what="dialog closed")
         A.wait("[...window.pixelOffice.agents.values()].some(a => a.control)", 40, what="character in the office")
@@ -190,14 +227,13 @@ def run_scenario(t, base, room, key, dev, llm, fake_claude_dir, shots=None, chro
         t.assertIn("<img", A.text(".agent-name"))
         t.assertTrue(A.eval("!!document.querySelector('.ctl-badge')"))
 
-        # ---- prompt → streaming → end; office state working → idle -----------------------------------
         A.type("#agent-control .ctl-ta", "Merhaba **dünya**")
         A.eval("document.querySelector('#agent-control .ctl-ta').dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', ctrlKey: true, bubbles: true}))")
         A.wait("/Çalışıyor/.test(document.querySelector('.ctl-run').textContent)", 10, what="running")
         A.wait("document.querySelectorAll('.ctl-out .md-p').length > 0", 15, what="streamed text")
         A.wait("[...window.pixelOffice.agents.values()].some(a => a.control && a.state === 'working')", 30,
                what="character working")
-        shot(A, "ui_streaming.png")
+        self.shot(A, "ui_streaming.png")
         A.wait("!!document.querySelector('.ctl-out .out-end')", 60, what="task end")
         t.assertIn("Tamamlandı", A.text(".ctl-out .out-end"))
         t.assertIn("maliyet yok", A.text(".ctl-out .out-end"))
@@ -210,23 +246,29 @@ def run_scenario(t, base, room, key, dev, llm, fake_claude_dir, shots=None, chro
                what="character back to coffee")
         A.wait("/Bugün: \\d/.test(document.querySelector('.ctl-usage .usage-line').textContent)", 15)
 
-        # ---- second tab of the same browser watches; recent tasks -----------------------------------
-        A2 = chrome.page(width=1100, height=850)
-        open_room(A2, base, room, key)
-        A2.wait("[...window.pixelOffice.agents.values()].some(a => a.control)", 20)
-        A2.eval("(() => { const a = [...window.pixelOffice.agents.values()].find(a => a.control); document.querySelector(`[data-id=\"${a.id}\"]`).click(); })()")
-        A2.wait("!!document.querySelector('#agent-control .ctl-ta:not(:disabled)')", 25, what="tab 2 ready")
-        time.sleep(0.5)
-        A.type("#agent-control .ctl-ta", "İkinci görev")
-        A.click("#agent-control .ctl-send")
-        A2.wait("document.querySelectorAll('.ctl-out .out-task').length > 0", 20, what="watched stream in tab 2")
-        A2.wait("!!document.querySelector('.ctl-out .out-end')", 60)
-        A.wait("document.querySelectorAll('.ctl-out .out-end').length >= 2", 60)
-        A.eval("document.querySelector('.ctl-recent').open = true; document.querySelector('.ctl-recent').dispatchEvent(new Event('toggle'))")
-        A.wait("document.querySelectorAll('.recent-task').length >= 2", 15, what="Son görevler")
-        A2.close()
+    # ---- second tab of the same browser watches; recent tasks -----------------------------------
+    def second_tab(self, t):
+        A = self.A
+        A2 = self.chrome.page(width=1100, height=850)
+        try:
+            open_room(A2, self.base, self.room, self.key)
+            A2.wait("[...window.pixelOffice.agents.values()].some(a => a.control)", 20)
+            A2.eval("(() => { const a = [...window.pixelOffice.agents.values()].find(a => a.control); document.querySelector(`[data-id=\"${a.id}\"]`).click(); })()")
+            A2.wait("!!document.querySelector('#agent-control .ctl-ta:not(:disabled)')", 25, what="tab 2 ready")
+            time.sleep(0.5)
+            A.type("#agent-control .ctl-ta", "İkinci görev")
+            A.click("#agent-control .ctl-send")
+            A2.wait("document.querySelectorAll('.ctl-out .out-task').length > 0", 20, what="watched stream in tab 2")
+            A2.wait("!!document.querySelector('.ctl-out .out-end')", 60)
+            A.wait("document.querySelectorAll('.ctl-out .out-end').length >= 2", 60)
+            A.eval("document.querySelector('.ctl-recent').open = true; document.querySelector('.ctl-recent').dispatchEvent(new Event('toggle'))")
+            A.wait("document.querySelectorAll('.recent-task').length >= 2", 15, what="Son görevler")
+        finally:
+            A2.close()
 
-        # ---- budget: set → gauge, block → new task refused ---------------------------------------------
+    # ---- budget: set → gauge, block → new task refused ---------------------------------------------
+    def budget(self, t):
+        A = self.A
         A.eval("document.querySelector('#agent-control .budget-edit').open = true")
         A.eval("(() => { const f = document.querySelector('#agent-control .budget-form'); f.elements.limit.value = '50';"
                " f.elements.unit.value = 'tokens'; f.elements.action.value = 'block'; f.requestSubmit(); })()")
@@ -235,7 +277,7 @@ def run_scenario(t, base, room, key, dev, llm, fake_claude_dir, shots=None, chro
         t.assertRegex(g, r"Günlük bütçe %\d+ \(.* / 50 token\)")
         t.assertEqual(A.eval("document.querySelector('#agent-control .gauge').dataset.state"), "over")
         t.assertIn("Bütçe doldu", g)
-        shot(A, "ui_budget.png")
+        self.shot(A, "ui_budget.png")
         A.type("#agent-control .ctl-ta", "Bütçe dolu mu?")
         A.click("#agent-control .ctl-send")
         A.wait("/Bütçe sınırına ulaşıldı/.test(document.querySelector('#agent-control .ctl-msg').textContent)", 15)
@@ -243,9 +285,11 @@ def run_scenario(t, base, room, key, dev, llm, fake_claude_dir, shots=None, chro
         A.click("#agent-control .budget-form [name=del]")
         A.wait("!document.querySelector('#agent-control .gauge')", 15, what="gauge removed")
 
-        # ---- Claude agent: cancel a running task; tool rows; honest cost label ----------------------------
-        F.set_plan(fake_claude_dir, [{"fixture": "claude_stream_slow.jsonl", "delay": 0.05},
-                                     {"fixture": "claude_stream_success_tools.jsonl", "delay": 0.05}])
+    # ---- Claude agent: cancel a running task; tool rows; honest cost label ----------------------------
+    def claude_agent(self, t):
+        A = self.A
+        F.set_plan(self.fake_claude_dir, [{"fixture": "claude_stream_slow.jsonl", "delay": 0.05},
+                                          {"fixture": "claude_stream_success_tools.jsonl", "delay": 0.05}])
         A.click("#btn-newagent")
         A.wait("document.getElementById('dlg-agent').open && !!document.querySelector('#agent-engines input[value=claude]:not(:disabled)')", 15)
         A.eval("document.querySelector('#agent-engines input[value=claude]').click()")
@@ -273,49 +317,58 @@ def run_scenario(t, base, room, key, dev, llm, fake_claude_dir, shots=None, chro
         t.assertTrue(A.eval("!!document.querySelector('.ctl-out .part-tool.ok')"), A.text(".ctl-out"))
         t.assertIn("API eşdeğeri tahmini", A.text(".ctl-out"))
         t.assertIn("Claude", A.text("#agent-control .ctl-usage"))          # subscription limit honesty line
-        shot(A, "ui_desktop_prompt.png")
+        self.shot(A, "ui_desktop_prompt.png")
 
-        # ---- unpaired second browser: sees the characters, no prompt box ----------------------------------
-        with chrome_factory() as chrome2:
+    # ---- unpaired second browser: sees the characters, no prompt box ----------------------------------
+    def unpaired_browser(self, t):
+        with self.chrome_factory() as chrome2:
             B = chrome2.page(width=1280, height=900)
-            open_room(B, base, room, key)
+            open_room(B, self.base, self.room, self.key)
             B.wait("document.querySelectorAll('#agent-list .agent').length >= 2", 20)
             B.eval("document.querySelector('#agent-list .agent').click()")
             B.wait("!!document.querySelector('#agent-control .ctl-unpaired')", 15, what="unpaired hint")
             t.assertFalse(B.eval("!!document.querySelector('#agent-control textarea')"))
             t.assertFalse(B.eval("!!document.querySelector('.ctl-badge')"))
-            shot(B, "ui_unpaired_browser.png")
+            self.shot(B, "ui_unpaired_browser.png")
             t.assertEqual(B.errors, [])
 
-        # ---- phone layout (390 and 360 px) ---------------------------------------------------------------
+    # ---- phone layout (390 and 360 px) ---------------------------------------------------------------
+    def phone_layout(self, t):
         for w, h in ((390, 844), (360, 740)):
-            P = chrome.page(width=w, height=h, mobile=True)
-            open_room(P, base, room, key)
-            P.wait("!document.getElementById('tabbar').hidden && getComputedStyle(document.getElementById('tabbar')).display === 'flex'", 15)
-            t.assertTrue(no_hscroll(P), "horizontal scroll in office tab at %d px" % w)
-            P.click("#tabbar [data-tab=agents]")
-            P.wait("document.querySelectorAll('#agent-list .agent').length >= 2", 20)
-            P.eval("[...document.querySelectorAll('#agent-list .agent')].find(li => li.textContent.includes('Kâtip')).click()")
-            P.wait("!!document.querySelector('#agent-control .ctl-ta:not(:disabled)')", 25, what="phone prompt box")
-            box = P.eval("(() => { const r = document.querySelector('#agent-control .ctl-compose').getBoundingClientRect();"
-                         " return {top: r.top, bottom: r.bottom, h: innerHeight}; })()")
-            t.assertLessEqual(box["bottom"], box["h"] + 1, box)
-            t.assertGreater(box["top"], box["h"] * 0.4, box)                     # sticky at the bottom
-            t.assertTrue(no_hscroll(P), "horizontal scroll in the agent sheet at %d px" % w)
-            if w == 390:
-                shot(P, "ui_phone_agent.png")
-            P.click("#sheet-back")
-            P.click("#tabbar [data-tab=devices]")
-            P.wait("!document.getElementById('devices-page').hidden && document.querySelectorAll('.rt').length >= 2", 20)
-            t.assertTrue(no_hscroll(P), "horizontal scroll in the devices tab at %d px" % w)
-            sz = P.eval("(() => { const b = document.querySelector('.rt .rt-btn'); const r = b.getBoundingClientRect(); return [r.width, r.height]; })()")
-            t.assertGreaterEqual(sz[1], 44)
-            if w == 390:
-                shot(P, "ui_phone_devices.png")
-            t.assertEqual(P.errors, [], "console errors at %d px" % w)
-            P.close()
+            P = self.chrome.page(width=w, height=h, mobile=True)
+            try:
+                self._phone_checks(t, P, w, h)
+            finally:
+                P.close()
 
-        # ---- unpair -----------------------------------------------------------------------------------------
+    def _phone_checks(self, t, P, w, h):
+        open_room(P, self.base, self.room, self.key)
+        P.wait("!document.getElementById('tabbar').hidden && getComputedStyle(document.getElementById('tabbar')).display === 'flex'", 15)
+        t.assertTrue(no_hscroll(P), "horizontal scroll in office tab at %d px" % w)
+        P.click("#tabbar [data-tab=agents]")
+        P.wait("document.querySelectorAll('#agent-list .agent').length >= 2", 20)
+        P.eval("[...document.querySelectorAll('#agent-list .agent')].find(li => li.textContent.includes('Kâtip')).click()")
+        P.wait("!!document.querySelector('#agent-control .ctl-ta:not(:disabled)')", 25, what="phone prompt box")
+        box = P.eval("(() => { const r = document.querySelector('#agent-control .ctl-compose').getBoundingClientRect();"
+                     " return {top: r.top, bottom: r.bottom, h: innerHeight}; })()")
+        t.assertLessEqual(box["bottom"], box["h"] + 1, box)
+        t.assertGreater(box["top"], box["h"] * 0.4, box)                     # sticky at the bottom
+        t.assertTrue(no_hscroll(P), "horizontal scroll in the agent sheet at %d px" % w)
+        if w == 390:
+            self.shot(P, "ui_phone_agent.png")
+        P.click("#sheet-back")
+        P.click("#tabbar [data-tab=devices]")
+        P.wait("!document.getElementById('devices-page').hidden && document.querySelectorAll('.rt').length >= 2", 20)
+        t.assertTrue(no_hscroll(P), "horizontal scroll in the devices tab at %d px" % w)
+        sz = P.eval("(() => { const b = document.querySelector('.rt .rt-btn'); const r = b.getBoundingClientRect(); return [r.width, r.height]; })()")
+        t.assertGreaterEqual(sz[1], 44)
+        if w == 390:
+            self.shot(P, "ui_phone_devices.png")
+        t.assertEqual(P.errors, [], "console errors at %d px" % w)
+
+    # ---- unpair -----------------------------------------------------------------------------------------
+    def unpair(self, t):
+        A, dev = self.A, self.dev
         A.click("#btn-devices")
         A.wait("!!document.querySelector('.dev-card .dev-foot .btn')")
         n_before = len(dev.peers())
@@ -334,39 +387,106 @@ def run_scenario(t, base, room, key, dev, llm, fake_claude_dir, shots=None, chro
         t.assertEqual(A.errors, [])
 
 
+def run_scenario(t, base, room, key, dev, llm, fake_claude_dir, shots=None, chrome_factory=Chrome):
+    """The whole Phase 14 flow in one go (manual runs against a real `pixel-connector run`, see the module doc)."""
+    with Scenario(base, room, key, dev, llm, fake_claude_dir, shots, chrome_factory) as sc:
+        for name, _needs in Scenario.STEPS:
+            getattr(sc, name)(t)
+
+
 @unittest.skipUnless(CHROME, "headless Chrome not installed")
 class V3UiTests(unittest.TestCase):
-    def setUp(self):
-        self.env = E.V3Env()
-        self.llm = F.FakeLLM(words=["Merhaba ", "**dünya** ", "<script>alert(1)</script>", "\n\n```py\nprint(1)\n```\n"]
-                             + ["kelime "] * 20 + ["bitti."], delay=0.25)
-        self.fake_dir = os.path.join(self.env.tmp, "fakeclaude")
-        claude = F.write_fake_claude(self.fake_dir)
-        os.environ["CLAUDE_FAKE_DIR"] = self.fake_dir
-        url = self.llm.url
-        home = self.env.connector_home(
-            engines={"claude": {"path": claude, "enabled": True}, "ollama": {"url": url, "enabled": True}},
-            runtimes=[{"id": "ollama", "name": "Ollama sunucusu", "kind": "ollama", "url": url,
-                       "status": {"http": url + "/api/version"}, "start": ["true"], "stop": ["true"],
-                       "models": ["qwen2.5-coder:7b"]},
-                      {"id": "dummy", "name": "Deneme", "start": ["true"], "stop": ["false"]}])
-        self.conn = self.env.connector(home)
+    """One shared environment and browser; each Scenario step is its own ordered test (unittest runs test methods
+    in name order). A step whose prerequisites failed is skipped with the name of the failed step, so a failure
+    early in the flow shows up once and every independent later check still runs."""
 
-    def tearDown(self):
-        self.conn.stop()
-        self.llm.stop()
-        self.env.stop()
+    @classmethod
+    def setUpClass(cls):
+        cls.env = E.V3Env()
+        cls.passed = set()
+        try:
+            cls.llm = F.FakeLLM(words=["Merhaba ", "**dünya** ", "<script>alert(1)</script>", "\n\n```py\nprint(1)\n```\n"]
+                                + ["kelime "] * 20 + ["bitti."], delay=0.25)
+            cls.fake_dir = os.path.join(cls.env.tmp, "fakeclaude")
+            claude = F.write_fake_claude(cls.fake_dir)
+            os.environ["CLAUDE_FAKE_DIR"] = cls.fake_dir
+            url = cls.llm.url
+            home = cls.env.connector_home(
+                engines={"claude": {"path": claude, "enabled": True}, "ollama": {"url": url, "enabled": True}},
+                runtimes=[{"id": "ollama", "name": "Ollama sunucusu", "kind": "ollama", "url": url,
+                           "status": {"http": url + "/api/version"}, "start": ["true"], "stop": ["true"],
+                           "models": ["qwen2.5-coder:7b"]},
+                          {"id": "dummy", "name": "Deneme", "start": ["true"], "stop": ["false"]}])
+            cls.conn = cls.env.connector(home)
+            cls.scenario = Scenario(cls.env.base, cls.env.room, cls.env.key, InProcPairing(cls.conn), cls.llm,
+                                    cls.fake_dir, shots=os.environ.get("PIXEL_UI_SHOTS")).__enter__()
+        except BaseException:
+            cls._stop()
+            raise
+
+    @classmethod
+    def _stop(cls):
+        for name in ("scenario", "conn", "llm"):
+            obj = cls.__dict__.get(name)
+            if obj is not None:
+                obj.__exit__() if name == "scenario" else obj.stop()
+        cls.env.stop()
         os.environ.pop("CLAUDE_FAKE_DIR", None)
 
-    def test_full_flow(self):
-        run_scenario(self, self.env.base, self.env.room, self.env.key, InProcPairing(self.conn), self.llm, self.fake_dir,
-                     shots=os.environ.get("PIXEL_UI_SHOTS"))
+    @classmethod
+    def tearDownClass(cls):
+        cls._stop()
+
+    def _step(self, name):
+        needs = dict(Scenario.STEPS)[name]
+        missing = [n for n in needs if n not in self.passed]
+        if missing:
+            self.skipTest("earlier step failed: " + ", ".join(missing))
+        getattr(self.scenario, name)(self)
+        self.passed.add(name)
+
+    def test_01_pairing(self):
+        self._step("pairing")
+
+    def test_02_runtimes(self):
+        self._step("runtimes")
+
+    def test_03_ollama_agent(self):
+        self._step("ollama_agent")
+
+    def test_04_second_tab(self):
+        self._step("second_tab")
+
+    def test_05_budget(self):
+        self._step("budget")
+
+    def test_06_claude_agent(self):
+        self._step("claude_agent")
+
+    def test_07_unpaired_browser(self):
+        self._step("unpaired_browser")
+
+    def test_08_phone_layout(self):
+        self._step("phone_layout")
+
+    def test_09_unpair(self):
+        self._step("unpair")
+
+    def test_10_audit_and_privacy(self):
         evs = [r["ev"] for r in self.conn.audit.read()]
-        self.assertEqual(evs.count("pair.fail"), 2)
-        self.assertIn("task.cancel", evs)
-        self.assertIn("peer.revoke", evs)
+        if "pairing" in self.passed:
+            self.assertEqual(evs.count("pair.fail"), 2)
+        if "claude_agent" in self.passed:
+            self.assertIn("task.cancel", evs)
+        if "unpair" in self.passed:
+            self.assertIn("peer.revoke", evs)
         # privacy: no prompt text in any relay frame
         self.assertFalse(any("Merhaba **dünya**" in f or "İkinci görev" in f for f in self.env.relay_frames))
+
+    def test_11_every_step_has_a_test(self):
+        tests = sorted(n for n in dir(self) if n.startswith("test_"))
+        for name, _needs in Scenario.STEPS:
+            self.assertTrue(any(n.endswith("_" + name) for n in tests), name)
 
 
 @unittest.skipUnless(CHROME, "headless Chrome not installed")

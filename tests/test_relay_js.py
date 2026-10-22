@@ -80,7 +80,7 @@ def run_in_chrome(timeout: float = 90.0) -> dict:
     srv = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
     srv.done = threading.Event()
     srv.result = None
-    th = threading.Thread(target=srv.serve_forever, daemon=True)
+    th = threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
     th.start()
     profile = tempfile.mkdtemp(prefix="pixel-relay-js-")
     proc = subprocess.Popen([CHROME, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",

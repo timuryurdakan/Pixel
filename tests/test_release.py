@@ -87,7 +87,7 @@ class VercelFunctionDetectionTests(unittest.TestCase):
         with mock.patch.object(app_mod, "_default", test_app):
             h = load_api(ROOT / "api" / "config.py").handler
             srv = ThreadingHTTPServer(("127.0.0.1", 0), h)
-            t = threading.Thread(target=srv.serve_forever, daemon=True)
+            t = threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
             t.start()
             try:
                 c = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=5)
@@ -113,7 +113,7 @@ class RelayTicketFunctionTests(unittest.TestCase):
         with mock.patch.object(app_mod, "_default", test_app):
             h = load_api(ROOT / "api" / "relay_ticket.py").handler
             srv = ThreadingHTTPServer(("127.0.0.1", 0), h)
-            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
             try:
                 c = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=5)
                 c.request("POST", f"/api/relay_ticket?room={rid}", body=b'{"role":"device","id":"abcdefghijklmnop"}',
@@ -210,6 +210,16 @@ class ReleaseFilesTests(unittest.TestCase):
                 continue
             with self.subTest(file=str(p.relative_to(ROOT))):
                 self.assertIsNone(bad.search(p.read_text(encoding="utf-8", errors="replace")))
+
+    def test_pages_have_no_inline_script(self):
+        """CSP `script-src 'self'` (v2.md H36): every <script> loads a file, no inline code or on…= handlers."""
+        for page in sorted((ROOT / "web").rglob("*.html")):
+            html = page.read_text(encoding="utf-8")
+            for attrs, body in re.findall(r"<script\b([^>]*)>(.*?)</script>", html, re.S | re.I):
+                self.assertIn("src=", attrs, page.name)
+                self.assertEqual(body.strip(), "", page.name)
+            self.assertIsNone(re.search(r"<[^>]+\son[a-z]+\s*=", html, re.I), page.name)
+            self.assertNotIn("javascript:", html.lower(), page.name)
 
     def test_service_worker_never_touches_api(self):
         sw = (ROOT / "web" / "sw.js").read_text()

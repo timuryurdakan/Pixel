@@ -325,7 +325,7 @@ içine kurar, `~/.pixel-office/bin/pixel-connector` kısayolunu ve ayar dosyası
 Ekrana yazdığı özeti bu sürümün özetiyle karşılaştırın:
 
 ```
-pixel-connector.pyz SHA-256: 07373a96705ee340f2eb41c2386d02ce09298e60ecfcc31ddaefc5f76125b1a6
+pixel-connector.pyz SHA-256: cab2fdec4391fd897930ac637d58b53764d2f4a6737f6b65c0fb1ff28aa832d8
 ```
 
 Windows (PowerShell): komut kutusundaki **Windows** sekmesini kullanın (`irm …/install.ps1 -OutFile install.ps1`, sonra

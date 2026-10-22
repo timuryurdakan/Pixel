@@ -258,13 +258,6 @@ def _make_sender(pa, target: dict, clock, post=None, start_thread: bool = True):
     class ConnectorSender(pa.Sender):
         """v2 Sender with the connector keep-alive (20 min) and ages clamped to the server's limits."""
 
-        def _due(self, rec):
-            if rec.desired is not None and rec.dkey == rec.skey:
-                if rec.final_or_gone or rec.sent_t is None:
-                    return None
-                return rec.sent_t + KEEPALIVE_S
-            return super()._due(rec)
-
         def _materialize(self, u, now):
             out = super()._materialize(u, now)
             if "stateAgeMs" in out:
@@ -272,4 +265,4 @@ def _make_sender(pa, target: dict, clock, post=None, start_thread: bool = True):
             if "startedAgeMs" in out:
                 out["startedAgeMs"] = min(out["startedAgeMs"], 604_800_000)
             return out
-    return ConnectorSender(target, post=post, clock=clock, start_thread=start_thread)
+    return ConnectorSender(target, post=post, clock=clock, start_thread=start_thread, keepalive=KEEPALIVE_S)

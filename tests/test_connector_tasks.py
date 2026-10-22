@@ -21,6 +21,8 @@ from pixel_connector.approvals import ctl_request
 
 PROMPT_CANARY = "CANARY-v3-9d1e"
 OUT_CANARY = "CANARY-OUT-77aa"
+# Pairing KDF cost for these flow tests; the real 600 000 iterations are exercised in test_e2e_protocol.py.
+PAIR_ITER = 1000
 
 
 class Base(unittest.TestCase):
@@ -41,7 +43,7 @@ class Base(unittest.TestCase):
         self.home = self.env.connector_home(**ov)
         self.conn = self.env.connector(self.home, start_ctl=self.start_ctl)
         self.br = E.FakeBrowser(self.env)
-        self.dev, _, _ = E.pair(self.env, self.conn, self.br)
+        self.dev, _, _ = E.pair(self.env, self.conn, self.br, iterations=PAIR_ITER)
         self.br.connect_device(self.dev)
 
     def tearDown(self):
@@ -76,13 +78,25 @@ class Base(unittest.TestCase):
                     last = a
                     if pred(a):
                         return a
-            time.sleep(0.2)
+            time.sleep(0.05)
         raise AssertionError("office state not reached: %r" % (last,))
+
+    def office_settled(self, timeout=8.0):
+        """Wait until the office Sender has posted every pending change (instead of sleeping past its debounce)."""
+        sender = self.conn.reporter.sender
+        end = time.time() + timeout
+        while time.time() < end:
+            with sender._lock:
+                pending = [k for k, r in sender._recs.items() if r.desired is not None and r.dkey != r.skey]
+            if not pending:
+                return
+            time.sleep(0.05)
+        raise AssertionError("office updates still pending: %r" % (pending,))
 
 
 class OllamaFlowTests(Base):
     def test_stream_usage_office_audit_and_privacy(self):
-        self.llm.delay = 0.4                 # long enough for the v2 debounce to publish "working" first
+        self.llm.delay = 0.15                # long enough for the (test) office debounce to publish "working" first
         key = self.create()
         a = self.office(key, lambda a: True)
         self.assertEqual(a["control"], {"device": self.conn.key.device_id, "agent": key})
@@ -117,7 +131,7 @@ class OllamaFlowTests(Base):
         for ev in ("pair.ok", "hs.ok", "config.load"):
             self.assertIn(ev, [r["ev"] for r in recs])
         # privacy canary: not in any relay frame, status body or the audit log
-        time.sleep(1.2)
+        self.office_settled()
         blob = "\n".join(self.env.relay_frames)
         self.assertGreater(len(self.env.relay_frames), 5)
         for canary in (PROMPT_CANARY, OUT_CANARY, "Pixel", "Yerel", "qwen2.5"):
@@ -135,7 +149,7 @@ class OllamaFlowTests(Base):
         key = self.create()
         ack = self.req({"type": "task.start", "agent": key, "prompt": "uzun anlat"})
         self.br.next_msg(lambda m: m.get("type") == "task.chunk" and m["task"] == ack["task"])
-        time.sleep(1.3)                      # let the office show "working" (v2 debounce) before the cancel
+        self.office(key, lambda a: a["state"] == "working")     # the office shows "working" before the cancel
         self.br.send_e(self.dev, {"type": "task.cancel", "task": ack["task"]})
         chunks, end = self.br.task_events(ack["task"])
         self.assertEqual(end["status"], "cancelled")
@@ -149,7 +163,7 @@ class OllamaFlowTests(Base):
         self.llm.delay = 0.02
         key = self.create()
         other = E.FakeBrowser(self.env, label="Telefon")
-        E.pair(self.env, self.conn, other)
+        E.pair(self.env, self.conn, other, iterations=PAIR_ITER)
         other.connect_device(self.dev)
         other.send_e(self.dev, {"type": "agent.watch", "agent": key, "on": True})
         a1 = self.req({"type": "task.start", "agent": key, "prompt": "bir"})
@@ -253,11 +267,13 @@ class OllamaFlowTests(Base):
 
     def test_peer_revoke_from_other_browser(self):
         phone = E.FakeBrowser(self.env, label="Telefon")
-        E.pair(self.env, self.conn, phone)
+        E.pair(self.env, self.conn, phone, iterations=PAIR_ITER)
         phone.connect_device(self.dev)
         r = self.req({"type": "peer.revoke", "bid": phone.bid})
         self.assertEqual(r["type"], "peer.revoked")
-        time.sleep(0.3)
+        end = time.time() + 5
+        while time.time() < end and self.conn.peers.active(phone.bid) is not None:
+            time.sleep(0.02)
         self.assertIsNone(self.conn.peers.active(phone.bid))
         with self.assertRaises(AssertionError):
             phone.request(self.dev, {"type": "agent.list"}, timeout=1.5)
@@ -290,7 +306,7 @@ class ClaudeFlowTests(Base):
         self.assertEqual(info["engines"]["claude"], {"available": True, "version": "2.1.301", "auth": "subscription"})
         a = self.office(key, lambda a: a["state"] == "idle")
         self.assertEqual(a["control"]["agent"], key)
-        time.sleep(1.2)
+        self.office_settled()
         self.assertNotIn(PROMPT_CANARY, "\n".join(self.env.relay_frames))
         self.assertNotIn("src/app.py", "\n".join(self.env.relay_frames))
         self.assertNotIn(PROMPT_CANARY, b"".join(self.env.status_bodies).decode())
@@ -416,7 +432,7 @@ class CliPairTests(Base):
                 if p is not None and p.state == "open" and p.code != result.get("old"):
                     break
                 time.sleep(0.05)
-            result["dev"], result["sas"] = new.pair_start(self.conn.router.pairing.code)
+            result["dev"], result["sas"] = new.pair_start(self.conn.router.pairing.code, PAIR_ITER)
             result["p4"] = new.pair_finish()
 
         result["old"] = self.conn.router.pairing.code

@@ -477,7 +477,7 @@ class DevRelayServer(socketserver.ThreadingTCPServer):
 def serve_in_thread(relay: Relay, host: str = DEFAULT_HOST, port: int = 0):
     """Start a relay server on a background thread. → (server, base_url). Stop with server.shutdown(); server_close()."""
     srv = DevRelayServer((host, port), relay)
-    th = threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.2}, daemon=True, name="dev-relay")
+    th = threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True, name="dev-relay")
     th.start()
     return srv, f"ws://{host}:{srv.server_address[1]}"
 

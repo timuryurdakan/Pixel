@@ -4,6 +4,7 @@ tampered download is refused) and installs into a temp HOME."""
 
 import ast
 import hashlib
+import io
 import os
 import shutil
 import subprocess
@@ -12,6 +13,7 @@ import tempfile
 import threading
 import unittest
 import zipfile
+from contextlib import redirect_stderr
 from pathlib import Path
 
 import _helpers  # noqa: F401  (sys.path)
@@ -102,6 +104,62 @@ class BuildTests(unittest.TestCase):
 
 
 @unittest.skipUnless(shutil.which("sh"), "no POSIX shell")
+class TrackedSourcesTests(unittest.TestCase):
+    """v2.md D8: the build bundles only git-tracked package files; without git it falls back with a warning."""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix="pixel-build-"))
+        self.addCleanup(shutil.rmtree, self.root, True)
+        (self.root / "pixel_connector" / "engines").mkdir(parents=True)
+        (self.root / "web" / "hook").mkdir(parents=True)
+        for rel in ("pixel_connector/__init__.py", "pixel_connector/engines/x.py", "pixel_connector/stray.py",
+                    "pixel_connector/notes.txt", "web/hook/pixel_agent.py"):
+            (self.root / rel).write_text("# %s\n" % rel)
+
+    def git(self, *args):
+        subprocess.run(["git", "-c", "init.defaultBranch=main"] + list(args), cwd=str(self.root), check=True,
+                       capture_output=True, timeout=30)
+
+    @unittest.skipUnless(shutil.which("git"), "git not installed")
+    def test_untracked_py_is_not_bundled(self):
+        self.git("init", "-q")
+        self.git("add", "pixel_connector/__init__.py", "pixel_connector/engines/x.py", "pixel_connector/notes.txt")
+        names = [n for n, _ in build_connector.sources(self.root)]
+        self.assertEqual(names, ["__main__.py", "pixel_agent.py", "pixel_connector/__init__.py",
+                                 "pixel_connector/engines/x.py"])
+        self.assertNotIn("pixel_connector/stray.py", names)
+
+    def test_without_git_falls_back_to_every_py_with_a_warning(self):
+        def no_git(*a, **kw):
+            raise FileNotFoundError("git")
+        err = io.StringIO()
+        with redirect_stderr(err):
+            names = [n for n, _ in build_connector.sources(self.root, run=no_git)]
+        self.assertIn("pixel_connector/stray.py", names)
+        self.assertIn("pixel_connector/engines/x.py", names)
+        self.assertNotIn("pixel_connector/notes.txt", names)
+        self.assertIn("warning", err.getvalue())
+
+    def test_outside_a_checkout_falls_back_too(self):
+        def not_a_repo(argv, **kw):
+            return subprocess.CompletedProcess(argv, 128, b"", b"fatal: not a git repository")
+        err = io.StringIO()
+        with redirect_stderr(err):
+            names = [n for n, _ in build_connector.sources(self.root, run=not_a_repo)]
+        self.assertIn("pixel_connector/stray.py", names)
+        self.assertIn("not a git repository", err.getvalue())
+
+    def test_real_build_lists_exactly_the_tracked_package_files(self):
+        if not shutil.which("git"):
+            self.skipTest("git not installed")
+        r = subprocess.run(["git", "ls-files", "--", "pixel_connector"], cwd=str(ROOT), capture_output=True, text=True)
+        if r.returncode != 0:
+            self.skipTest("not a git checkout")
+        tracked = {n for n in r.stdout.split() if n.endswith(".py")}
+        bundled = {n for n, _ in build_connector.sources()} - {"__main__.py", "pixel_agent.py"}
+        self.assertEqual(bundled, tracked)
+
+
 class InstallScriptTests(unittest.TestCase):
     def serve(self, web_root):
         app = App(storage=MemoryStorage(), env={"PIXEL_SECRET": "d" * 40}, mapper=None)

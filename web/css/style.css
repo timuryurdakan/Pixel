@@ -915,3 +915,28 @@ input.pair-code { font: bold 20px/1.2 var(--font) !important; letter-spacing: 2p
   color: #111; background: var(--warn);
   font-weight: bold;
 }
+
+/* ---------- E9: phone top bar (≤ 480 px): two rows, every button a ≥ 44 px touch target ----------
+   Row 1: logo icon (the title text stays for screen readers), room name (shrinks with an ellipsis), badges, the
+   connection dot (its text stays for screen readers) and the sound button. Row 2: the toolbar as one row that scrolls
+   sideways instead of wrapping into two or three rows. */
+@media (max-width: 480px) {
+  #topbar { gap: 6px; padding: 6px 8px; }
+  .logo { font-size: 0; gap: 0; margin-right: 0; }
+  .room-name { flex: 1 1 0; min-width: 0; max-width: none; font-size: 13px; }   /* basis 0: shrinks, never wraps the row */
+  .mode-badge { margin-left: auto; font-size: 10px; padding: 2px 5px; letter-spacing: 0; }
+  .view-only { flex: 0 0 auto; font-size: 10px; padding: 2px 4px; }
+  .conn-status { font-size: 0; gap: 0; padding: 0 2px; }
+  .btn-sound { min-width: 44px; min-height: 44px; }
+  .toolbar {
+    width: 100%;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    padding: 0 2px 3px 0;              /* room for the buttons' 2 px pixel shadow inside the scroll box */
+  }
+  .toolbar::-webkit-scrollbar { display: none; }
+  .toolbar .btn { flex: 0 0 auto; min-height: 44px; white-space: nowrap; }
+}

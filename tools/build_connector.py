@@ -4,6 +4,7 @@
     python3 tools/build_connector.py            # build and write
     python3 tools/build_connector.py --check    # exit 1 if the committed files differ from a fresh build
 
+Only git-tracked files under pixel_connector/ are bundled (`git ls-files`; without git, all of them with a warning).
 The archive is reproducible: entries sorted, fixed timestamps (1980-01-01), fixed modes, stored (no compression, so
 the bytes don't depend on the local zlib). Contents: pixel_connector/**.py, pixel_agent.py (from web/hook/, used for
 office presence), a root __main__.py and a generated pixel_connector/_build.py with the build id (v2.md E1): the first
@@ -17,6 +18,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import io
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -41,14 +43,25 @@ raise SystemExit(main())
 '''
 
 
-def sources() -> list:
-    files = []
-    for p in sorted((ROOT / "pixel_connector").rglob("*.py")):
-        rel = p.relative_to(ROOT).as_posix()
-        if "__pycache__" in p.parts or rel == BUILD_MODULE:
-            continue
-        files.append((rel, p.read_bytes()))
-    files.append(("pixel_agent.py", (ROOT / "web" / "hook" / "pixel_agent.py").read_bytes()))
+def package_paths(root: Path = ROOT, run=subprocess.run) -> list:
+    """The pixel_connector/**.py files to bundle: only git-tracked ones (v2.md D8), so a stray untracked module
+    never ends up in the .pyz. Without git (or outside a checkout) every .py under the package, with a warning."""
+    try:
+        r = run(["git", "ls-files", "-z", "--", "pixel_connector"], cwd=str(root), capture_output=True, timeout=30)
+        if r.returncode != 0:
+            raise OSError((r.stderr or b"").decode("utf-8", "replace").strip() or "git ls-files failed")
+        names = [n for n in r.stdout.decode("utf-8").split("\0") if n.endswith(".py")]
+        paths = [root / n for n in names if (root / n).is_file()]
+    except (OSError, subprocess.SubprocessError) as e:
+        print("build_connector: warning: git unavailable (%s); bundling every .py under pixel_connector/" % e,
+              file=sys.stderr)
+        paths = list((root / "pixel_connector").rglob("*.py"))
+    return sorted(p for p in paths if "__pycache__" not in p.parts and p.relative_to(root).as_posix() != BUILD_MODULE)
+
+
+def sources(root: Path = ROOT, run=subprocess.run) -> list:
+    files = [(p.relative_to(root).as_posix(), p.read_bytes()) for p in package_paths(root, run)]
+    files.append(("pixel_agent.py", (root / "web" / "hook" / "pixel_agent.py").read_bytes()))
     files.append(("__main__.py", MAIN))
     return sorted(files)
 

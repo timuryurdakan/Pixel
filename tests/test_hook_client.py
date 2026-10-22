@@ -209,7 +209,7 @@ class PrivacyTests(unittest.TestCase):
                 req.rfile = io.BytesIO(body)
             return orig(req)
         app.dispatch = spy
-        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
         self.addCleanup(srv.server_close)
         self.addCleanup(srv.shutdown)
         base = "http://127.0.0.1:%d" % srv.server_address[1]

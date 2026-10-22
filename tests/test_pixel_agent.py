@@ -23,6 +23,7 @@ import _helpers  # noqa: F401  (sys.path)
 ROOT = Path(__file__).resolve().parent.parent
 AGENT_PY = ROOT / "web" / "hook" / "pixel_agent.py"
 CANARY = "CANARY-7f3a"
+POLL = 0.05                   # serve_forever poll interval: shutdown() returns in ~50 ms instead of 0.5 s
 
 spec = importlib.util.spec_from_file_location("pixel_agent_under_test", AGENT_PY)
 pa = importlib.util.module_from_spec(spec)
@@ -81,6 +82,7 @@ class StatusSink:
                 n = int(self.headers.get("Content-Length") or 0)
                 body = self.rfile.read(n)
                 sink.bodies.append((time.monotonic(), self.path, json.loads(body)))
+                sink.on_body()
                 sink.headers.append(dict(self.headers))
                 out = b'{"ok":true}'
                 self.send_response(200)
@@ -92,8 +94,23 @@ class StatusSink:
                 pass
         self.srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
         self.srv.daemon_threads = True
-        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        threading.Thread(target=self.srv.serve_forever, kwargs={"poll_interval": POLL}, daemon=True).start()
         self.url = "http://127.0.0.1:%d" % self.srv.server_address[1]
+
+    def watch_cycle(self, idle_flag, again_flag):
+        """Touch `idle_flag` once an "idle" update arrived and `again_flag` once "working" followed it, so the
+        child process in PixelRunTests waits for what the server saw instead of sleeping past the debounce."""
+        self.flags = (Path(idle_flag), Path(again_flag))
+
+    def on_body(self):
+        flags = getattr(self, "flags", None)
+        if not flags:
+            return
+        states = [u["state"] for u in self.updates()]
+        if "idle" in states:
+            flags[0].touch()
+            if "working" in states[states.index("idle"):]:
+                flags[1].touch()
 
     def updates(self):
         out = []
@@ -314,7 +331,7 @@ class BackendParityTests(unittest.TestCase):
         app = App(storage=MemoryStorage(), env={"PIXEL_SECRET": "x" * 40})
         cloud = DevServer(("127.0.0.1", 0), app, ROOT / "web")
         for srv in (local, cloud):
-            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": POLL}, daemon=True).start()
             self.addCleanup(srv.server_close)
             self.addCleanup(srv.shutdown)
         room = json.loads(app.dispatch(Request("POST", "/api/rooms", {}, body=b"{}", client_ip="1.1.1.1")).body)
@@ -348,10 +365,18 @@ CHILD = textwrap.dedent("""
     if os.environ.get("WAIT_TERM"):
         print("ready", flush=True)
         time.sleep(30)
-    time.sleep(float(os.environ.get("QUIET", "1.6")))
+    def wait_for(flag, fallback):
+        # With a flag file: wait (bounded) until the test's status sink has seen the state; else a fixed sleep.
+        if not flag:
+            time.sleep(fallback)
+            return
+        end = time.time() + 15
+        while time.time() < end and not os.path.exists(flag):
+            time.sleep(0.02)
+    wait_for(os.environ.get("IDLE_FLAG"), float(os.environ.get("QUIET", "1.6")))
     print("again", flush=True)
     sys.stderr.write("err line\\n")
-    time.sleep(float(os.environ.get("TAIL", "0.45")))
+    wait_for(os.environ.get("AGAIN_FLAG"), float(os.environ.get("TAIL", "0.45")))
     sys.exit(int(os.environ.get("RC", "3")))
 """)
 
@@ -397,19 +422,24 @@ class PixelRunTests(unittest.TestCase):
         self.assertNotIn(CANARY, blob)                  # neither output nor arguments are sent
         self.assertNotIn("tick", blob)
 
+    def cycle_env(self):
+        idle, again = self.tmp / "seen-idle", self.tmp / "seen-again"
+        self.sink.watch_cycle(idle, again)
+        return {"IDLE_FLAG": str(idle), "AGAIN_FLAG": str(again)}
+
     def test_pipe_mode(self):
-        rc, out, err = self.wrapper("--pipe")
+        rc, out, err = self.wrapper("--pipe", extra_env=self.cycle_env())
         self.check_cycle(rc, out)
         self.assertIn(b"err line", err)
 
     @unittest.skipUnless(os.name == "posix", "pty is POSIX only")
     def test_pty_mode(self):
-        rc, out, err = self.wrapper("--pty")
+        rc, out, err = self.wrapper("--pty", extra_env=self.cycle_env())
         self.check_cycle(rc, out)
         self.assertIn(b"err line", out)                 # stderr goes through the pty too
 
     def test_exit_zero_and_offline(self):
-        rc, out, err = self.wrapper("--pipe", rc="0", extra_env={"QUIET": "0"})
+        rc, out, err = self.wrapper("--pipe", rc="0", extra_env={"QUIET": "0", "TAIL": "0"})
         self.assertEqual(rc, 0)
         self.assertEqual(self.sink.updates()[-1].get("label"), "Bitti")
 
@@ -548,7 +578,7 @@ class FakeUpstream:
                 return self.fixed(b"{}")
         self.srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
         self.srv.daemon_threads = True
-        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        threading.Thread(target=self.srv.serve_forever, kwargs={"poll_interval": POLL}, daemon=True).start()
         self.port = self.srv.server_address[1]
 
     def close(self):
@@ -581,7 +611,7 @@ class ProxyTests(unittest.TestCase):
             return a
         self.proxy = pa.make_proxy("127.0.0.1", 0, "http://127.0.0.1:%d" % self.up.port, factory, "local-llm",
                                    send_model=False)
-        threading.Thread(target=self.proxy.serve_forever, daemon=True).start()
+        threading.Thread(target=self.proxy.serve_forever, kwargs={"poll_interval": POLL}, daemon=True).start()
         self.addCleanup(self.proxy.server_close)
         self.addCleanup(self.proxy.shutdown)
         self.pport = self.proxy.server_address[1]
@@ -711,11 +741,14 @@ class ProxyTests(unittest.TestCase):
         dead = s.getsockname()[1]
         s.close()
         px = pa.make_proxy("127.0.0.1", 0, "http://127.0.0.1:%d" % dead, lambda n: self.agents.setdefault(n, FakeAgent(n)))
-        threading.Thread(target=px.serve_forever, daemon=True).start()
+        threading.Thread(target=px.serve_forever, kwargs={"poll_interval": POLL}, daemon=True).start()
         self.addCleanup(px.server_close)
         self.addCleanup(px.shutdown)
         st, _, body = raw_request(px.server_address[1], "POST", "/v1/chat/completions", {})
-        time.sleep(0.1)
+        deadline = time.time() + 5
+        while time.time() < deadline and not (self.agents.get("local-llm") and self.agents["local-llm"].reports
+                                              and self.agents["local-llm"].reports[-1][2] == "LLM hatası"):
+            time.sleep(0.005)
         self.assertEqual((st, json.loads(body)), (502, {"error": "upstream_unreachable"}))
         self.assertEqual(self.agents["local-llm"].reports[-1][2], "LLM hatası")
 

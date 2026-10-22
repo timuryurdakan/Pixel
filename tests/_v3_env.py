@@ -29,6 +29,9 @@ from pixel_connector import ws as W  # noqa: E402
 from pixel_connector.session import decode_body, encode_body  # noqa: E402
 
 RELAY_SECRET = "x" * 43
+# The office Sender's cloud debounce (1 s in production, pixel_agent.CLOUD_DEBOUNCE) shortened for tests, so status
+# changes reach the dev server without waiting a real second; the policy itself is unit-tested with a fake clock.
+TEST_OFFICE_DEBOUNCE_S = 0.2
 
 
 class V3Env:
@@ -120,13 +123,15 @@ class V3Env:
         CFG.write_json(os.path.join(home, CFG.CONFIG_FILE), cfg)
         return home
 
-    def connector(self, home, start_ctl=False, **kw):
+    def connector(self, home, start_ctl=False, office_debounce=TEST_OFFICE_DEBOUNCE_S, **kw):
         from pixel_connector.app import Connector
         from pixel_connector.relay import RelayClient
         cfg = CFG.load_config(home, user_home=self.tmp)
         assert cfg.ok, cfg.errors
         conn = Connector(home, cfg, start_ctl=start_ctl, user_home=self.tmp,
                          relay_factory=lambda **a: RelayClient(backoff=(0.2, 0.4, 0.8), **a), **kw)
+        if office_debounce is not None:
+            conn.reporter.sender.cloud_debounce = office_debounce
         conn.approvals.notify_fn = self.notified.append      # no real desktop notifications from tests
         conn.start()
         assert conn.relay.connected.wait(10), conn.relay.last_error

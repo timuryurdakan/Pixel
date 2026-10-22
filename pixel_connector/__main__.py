@@ -32,6 +32,20 @@ from . import localhttp
 from .approvals import ctl_request
 
 OUT = print
+_LINE_LOCK = threading.Lock()
+
+
+def log_line(msg: str, stream=None) -> None:
+    """One whole line per write, under a lock, flushed (H37). `print()` writes the text and the newline in two calls;
+    the relay thread (stderr) and the main thread (stdout) share one journal stream under systemd, so their pieces
+    interleaved into lines like "Röle: connectingPixel Office bağlayıcı … çalışıyor"."""
+    with _LINE_LOCK:
+        out = stream if stream is not None else sys.stderr
+        try:
+            out.write(msg + "\n")
+            out.flush()
+        except (OSError, ValueError):
+            pass
 
 
 def _home(args) -> str:
@@ -222,7 +236,7 @@ def cmd_run(args) -> int:
             print("Hata: " + e, file=sys.stderr)
         return 2
     lock = InstanceLock(os.path.join(home, CFG.LOCK_FILE))
-    if not wait_for_lock(lock, total=LOCK_WAIT_S, log=lambda m: print(m, file=sys.stderr, flush=True)):
+    if not wait_for_lock(lock, total=LOCK_WAIT_S, log=log_line):
         return _err("bağlayıcı zaten çalışıyor (run.lock %.0f sn içinde boşalmadı)." % LOCK_WAIT_S)
     from .app import Connector
     stop = threading.Event()
@@ -234,20 +248,20 @@ def cmd_run(args) -> int:
             signal.signal(s, _sig)
         except (ValueError, OSError):
             pass
-    conn = Connector(home, cfg, log=lambda m: print(m, file=sys.stderr, flush=True))
+    conn = Connector(home, cfg, log=log_line)
     try:
         conn.start()
     except OSError as e:                # no stop(): it would report this device's agents offline to the office
         lock.release()
         return _err("bağlayıcı başlatılamadı: %s (denetim portu %s meşgul olabilir)." % (term_safe(e),
                                                                                        cfg.data["approvalPort"]))
-    OUT("Pixel Office bağlayıcı %s çalışıyor. Cihaz: %s (%s)" % (version_string(), cfg.data["deviceName"],
-                                                                conn.key.device_id), flush=True)
+    log_line("Pixel Office bağlayıcı %s çalışıyor. Cihaz: %s (%s)" % (version_string(), cfg.data["deviceName"],
+                                                                     conn.key.device_id), sys.stdout)
     try:
         while not stop.wait(1.0):          # relay status changes are logged by the relay client itself (E5)
             pass
     finally:
-        OUT("Kapatılıyor…", flush=True)
+        log_line("Kapatılıyor…", sys.stdout)
         conn.stop()
         lock.release()
     return 0

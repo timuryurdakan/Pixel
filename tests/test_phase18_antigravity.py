@@ -756,7 +756,7 @@ class _Sink:
                 pass
         self.srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
         self.srv.daemon_threads = True
-        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        threading.Thread(target=self.srv.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
         self.url = "http://127.0.0.1:%d" % self.srv.server_address[1]
 
     def close(self):
