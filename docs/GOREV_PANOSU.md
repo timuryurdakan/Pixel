@@ -53,7 +53,7 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | C3 | Aşama 20: `v2.md` raporundaki paketler (1–8 bitti, 2026-10-22) | Claude | ✅ |
 | A6 | v4 mimari belgesini düzelt ve projeye al (şimdi yapılabilir) | Antigravity | ✅ Teslim edildi |
 | A7 | Claude'un kalan Aşama 20 paketlerini devral (yalnızca kullanıcı isterse) | Antigravity | ⬜ |
-| A8 | v4-A: ofis duvarında Görev Tahtası (**şimdi başlayabilir**: C3 ✅; push'u Antigravity yapar) | Antigravity | ⬜ |
+| A8 | v4-A: ofis duvarında Görev Tahtası (**şimdi başlayabilir**: C3 ✅; push yok, Claude birleştirir) | Antigravity | ⬜ |
 | A9 | v4-B: masadan masaya devir (A8 sonrası) | Antigravity | ⬜ |
 | A10 | v4-C: iş akışı motoru ve ilk şablon (A9 sonrası) | Antigravity | ⬜ |
 | A11 | Aşama 20 / Paket 6: bulut temizliği (**şimdi**, C3'ten bağımsız; push yok, Claude birleştirir) | Antigravity | ✅ Teslim edildi |

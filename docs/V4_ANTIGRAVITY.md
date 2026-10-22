@@ -14,13 +14,13 @@ token'ı biterse yarım kalan işlerin nasıl devralınacağını ve **push'un n
 | Durum | Ne yapılır |
 |---|---|
 | Panoda **C3** satırı ⬜ ya da 🔄 (Claude hâlâ Aşama 20 paketleri üzerinde) | Yalnızca **A6**, **A11** ve **A12** yapılabilir (kendi dalında, push yok). Diğer görevlere başlanmaz. |
-| Panoda **C3 ✅** (Claude paketleri bitirdi) | A8 → A9 → A10 sırayla. Her görev bitince §2'deki yolla push. |
+| Panoda **C3 ✅** (Claude paketleri bitirdi) | A8 → A9 → A10 sırayla. Push yok (Claude birleştirir), kullanıcı aksini söylemedikçe. |
 | Kullanıcı "Claude'un token'ı bitti, devral" derse | Önce **A7** (Claude'un kalan paketleri), sonra A8 → A10. |
 
 Görevler **sırayla** yapılır: biri bitmeden (testler geçmeden, push yapılmadan) diğerine başlanmaz.
 
 **Şu anki durum (2026-10-22): C3 ✅** — Aşama 20 bitti (Paket 1–8; A11 ve A12 birleştirildi). **A8 şimdi başlayabilir.**
-Bundan sonra Antigravity kendi işini §2'deki yolla kendisi push'lar (Claude birleştirmesi beklenmez). Başlamadan önce
+**Kullanıcı kararı (2026-10-22):** Claude aynı anda `main`'de çalıştığı sürece Antigravity **push yapmaz**; her görevi kendi dalına commit'ler, birleştirmeyi Claude yapar, push'u kullanıcı yapar. §2 yalnızca kullanıcı "push'u sen yap" dediğinde geçerlidir. Başlamadan önce
 dalına güncel `main`'i al (`git fetch origin && git merge origin/main`; kapanış commit'ini kullanıcı push'lar); A12'den sonra `main`'e Paket 8a ve Aşama 20
 kapanışı (bağlayıcı 3.2.3) geldi.
 
