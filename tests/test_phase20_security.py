@@ -81,7 +81,10 @@ class EditToExecDeny(unittest.TestCase):
     def test_editing_profiles_allow_edit_tools_yet_carry_the_deny_rules(self):
         for prof in ("edit", "dev"):
             a = CL.build_argv("/opt/claude", prof, PROFILES, SID, True, "opus", 10, 1.0, (2, 1, 300), bare=True)
-            self.assertIn("Write", a[a.index("--allowedTools") + 1:a.index("--disallowedTools")])
+            allow = a[a.index("--allowedTools") + 1:a.index("--disallowedTools")]
+            self.assertIn("Edit(./**)", allow)                  # H39: edits only inside the workspace (cwd)
+            for bare in ("Edit", "Write", "NotebookEdit", "MultiEdit"):
+                self.assertNotIn(bare, allow)
             self.assertIn("Edit(**/.git)", a[a.index("--disallowedTools") + 1:])
 
     def test_workspace_relative_rules_have_an_absolute_twin(self):

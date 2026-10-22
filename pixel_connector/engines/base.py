@@ -23,7 +23,8 @@ class TaskContext:
 
     def __init__(self, task: str, agent: dict, prompt: str, cwd: Optional[str], model: Optional[str],
                  profile: str = "edit", fresh: bool = False, max_budget_usd: Optional[float] = None,
-                 save_agent: Optional[Callable[[dict], None]] = None, history_path: Optional[str] = None) -> None:
+                 save_agent: Optional[Callable[[dict], None]] = None, history_path: Optional[str] = None,
+                 workspace_name: Optional[str] = None) -> None:
         self.task = task
         self.agent = agent
         self.prompt = prompt
@@ -34,6 +35,7 @@ class TaskContext:
         self.max_budget_usd = max_budget_usd
         self.save_agent = save_agent or (lambda a: None)
         self.history_path = history_path
+        self.workspace_name = workspace_name      # display name of the workspace (Claude's boundary prompt, H39)
 
 
 class Running:

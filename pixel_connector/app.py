@@ -398,7 +398,8 @@ class Connector:
         key = a["key"]
         ctx = TaskContext(run.id, copy.deepcopy(a), run.prompt, cwd, a.get("model"), a.get("profile") or "edit",
                           run.fresh, max_budget, history_path=hist,
-                          save_agent=lambda rec: self.agents.save_session(key, rec, epoch))
+                          save_agent=lambda rec: self.agents.save_session(key, rec, epoch),
+                          workspace_name=self._ws_name(a))
         self.office(a, "thinking", None, None, run.id)
         return eng.start(ctx, run)
 
@@ -613,15 +614,27 @@ class Connector:
         return {"type": "agent.updated", "agent": self.agent_public(a)}
 
     def h_agent_delete(self, peer, msg) -> dict:
+        # E11: governed like agent creation (`remote.agentDelete`, default on; the local CLI/ctl path is not).
+        if not self.cfg["remote"]["agentDelete"]:
+            raise Reply("not_allowed", "remote agent deletion disabled")
         a = self.agents.get(msg.get("agent"))
+        self._delete_agent(a, peer)
+        self.audit.write("agent.delete", bid=peer.bid, agent=a["key"])
+        return {"type": "agent.deleted", "agent": a["key"]}
+
+    def _delete_agent(self, a: dict, by: Optional[Peer] = None) -> None:
+        """Cancel the agent's tasks, forget it and its history, take the character out of the office and tell every
+        other paired tab (`agent.deleted` without `re`; the requesting tab gets the reply)."""
         for r in list(self.scheduler.runs.values()):
             if r.agent_key == a["key"]:
                 self.scheduler.cancel(r.id)
         self.agents.delete(a["key"])
         clear_history(os.path.join(self.home, "history", a["key"] + ".jsonl"))
         self.reporter.offline(a, self._ws_name(a))
-        self.audit.write("agent.delete", bid=peer.bid, agent=a["key"])
-        return {"type": "agent.deleted", "agent": a["key"]}
+        for p in self.router.all_peers():
+            p.watching.discard(a["key"])
+            if p is not by:
+                self._send_peer(p, {"type": "agent.deleted", "agent": a["key"]})
 
     def h_agent_reset(self, peer, msg) -> dict:
         a = self.agents.reset_session(msg.get("agent"))
@@ -868,12 +881,7 @@ class Connector:
                 a = self.agents.get(b.get("agent"))
             except AgentError:
                 return 404, {"error": "unknown_agent"}
-            for r in list(self.scheduler.runs.values()):
-                if r.agent_key == a["key"]:
-                    self.scheduler.cancel(r.id)
-            self.agents.delete(a["key"])
-            clear_history(os.path.join(self.home, "history", a["key"] + ".jsonl"))       # same as the remote handler
-            self.reporter.offline(a, self._ws_name(a))
+            self._delete_agent(a)                                                # same as the remote handler
             self.audit.write("agent.delete", agent=a["key"], by="local")
             return 200, {"deleted": a["key"]}
 

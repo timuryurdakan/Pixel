@@ -289,7 +289,8 @@ class Scenario:
     def claude_agent(self, t):
         A = self.A
         F.set_plan(self.fake_claude_dir, [{"fixture": "claude_stream_slow.jsonl", "delay": 0.05},
-                                          {"fixture": "claude_stream_success_tools.jsonl", "delay": 0.05}])
+                                          {"fixture": "claude_stream_success_tools.jsonl", "delay": 0.05},
+                                          {"fixture": "claude_stream_denied_flood.jsonl"}])
         A.click("#btn-newagent")
         A.wait("document.getElementById('dlg-agent').open && !!document.querySelector('#agent-engines input[value=claude]:not(:disabled)')", 15)
         A.eval("document.querySelector('#agent-engines input[value=claude]').click()")
@@ -317,6 +318,20 @@ class Scenario:
         t.assertTrue(A.eval("!!document.querySelector('.ctl-out .part-tool.ok')"), A.text(".ctl-out"))
         t.assertIn("API eşdeğeri tahmini", A.text(".ctl-out"))
         t.assertIn("Claude", A.text("#agent-control .ctl-usage"))          # subscription limit honesty line
+        # v2.md H39: where files go, and four denied tools → one collapsed warning line instead of four red rows
+        t.assertRegex(A.text("#agent-control .ctl-hint"), r"^Klasör: .+ · İzin: Düzenleyebilir · Yalnızca bu klasörde çalışır$")
+        A.type("#agent-control .ctl-ta", "Masaüstüne dosya yaz")
+        A.click("#agent-control .ctl-send")
+        A.wait("document.querySelectorAll('.ctl-out .out-end').length >= 3", 40)
+        last = "[...document.querySelectorAll('.ctl-out .out-task')].pop()"
+        t.assertEqual(A.eval(last + ".querySelectorAll('details.part-denied').length"), 1)
+        t.assertEqual(A.eval(last + ".querySelectorAll('.out-body > .part-tool').length"), 0)
+        summ = A.eval(last + ".querySelector('details.part-denied summary').textContent")
+        t.assertIn("(4 deneme)", summ)
+        t.assertIn("Write → ~/Desktop/not.txt", summ)
+        t.assertIn("klasöründe çalışabilir", summ)
+        t.assertTrue(A.eval("!document.querySelector('#agent-control .ctl-delete').hidden"))
+        A.eval("document.querySelector('#agent-control details.part-denied').scrollIntoView({block: 'center'})")
         self.shot(A, "ui_desktop_prompt.png")
 
     # ---- unpaired second browser: sees the characters, no prompt box ----------------------------------
@@ -354,6 +369,13 @@ class Scenario:
         t.assertLessEqual(box["bottom"], box["h"] + 1, box)
         t.assertGreater(box["top"], box["h"] * 0.4, box)                     # sticky at the bottom
         t.assertTrue(no_hscroll(P), "horizontal scroll in the agent sheet at %d px" % w)
+        P.wait("!document.querySelector('#agent-control .ctl-delete').hidden", 15, what="delete button (agent list loaded)")
+        dsz = P.eval("(() => { const r = document.querySelector('#agent-control .ctl-del').getBoundingClientRect(); return [r.width, r.height]; })()")
+        t.assertGreaterEqual(dsz[1], 44, "E11 delete button touch target at %d px" % w)
+        P.click("#agent-control .ctl-del")
+        t.assertTrue(no_hscroll(P), "horizontal scroll with the delete question open at %d px" % w)
+        t.assertGreaterEqual(P.eval("document.querySelector('#agent-control .ctl-del-yes').getBoundingClientRect().height"), 44)
+        P.click("#agent-control .ctl-del-no")
         if w == 390:
             self.shot(P, "ui_phone_agent.png")
         P.click("#sheet-back")

@@ -464,7 +464,8 @@ def validate(raw: Any, home: Optional[str] = None, which=shutil.which) -> Tuple[
         limits[k] = _num(lim.get(k), DEFAULT_LIMITS[k], lo, hi, integer=True)
     d["limits"] = limits
     rm = raw.get("remote") if isinstance(raw.get("remote"), dict) else {}
-    d["remote"] = {"agentCreate": _bool(rm.get("agentCreate"), True), "budgetEdit": _bool(rm.get("budgetEdit"), True)}
+    d["remote"] = {"agentCreate": _bool(rm.get("agentCreate"), True), "agentDelete": _bool(rm.get("agentDelete"), True),
+                   "budgetEdit": _bool(rm.get("budgetEdit"), True)}
     au = raw.get("audit") if isinstance(raw.get("audit"), dict) else {}
     d["audit"] = {"storePrompts": _bool(au.get("storePrompts"), False)}
     d["approvalPort"] = _num(raw.get("approvalPort"), 8766, 0, 65535, integer=True)
@@ -723,7 +724,7 @@ def initial_config(server: str, room: str, key: str, owner: str, device_name: Op
         "budgets": [],
         "limits": {k: DEFAULT_LIMITS[k] for k in ("maxConcurrent", "taskTimeoutS", "maxPromptBytes",
                                                    "tasksPerMinute", "tasksPerHour", "chunkMs", "retainDays")},
-        "remote": {"agentCreate": True, "budgetEdit": True},
+        "remote": {"agentCreate": True, "agentDelete": True, "budgetEdit": True},
         "audit": {"storePrompts": False},
         "approvalPort": 8766,
     }

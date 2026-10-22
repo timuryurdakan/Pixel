@@ -165,8 +165,44 @@ export function endText(m) {
   return END_TEXT[st] || 'Bitti';
 }
 
+const FILE_TOOLS = new Set(['Read', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit']);
+const MAX_DENY_TARGETS = 3;
+
+/**
+ * v2.md H39: a home path → "~/…" so the user name never shows (connectors from 3.2.4 already send "~/…"; older ones
+ * send absolute paths).
+ */
+export function shortPath(text) {
+  return String(text || '').replace(/(?:\/home\/|\/Users\/|\b[A-Za-z]:[\\/]Users[\\/])[^/\\\s]+/g, '~');
+}
+
+/** "Write → ~/Desktop/a.txt" for file tools, else just the tool name (commands can be long). */
+function denyTarget(name, summary) {
+  const n = String(name || '?').slice(0, 40);
+  if (!FILE_TOOLS.has(n) || !summary) return n;
+  const p = shortPath(summary);
+  return `${n} → ${p.length > 60 ? '…' + p.slice(-59) : p}`;
+}
+
+/**
+ * The line for a group of permission denials (v2.md H39). scope: {folder, profile} of the agent (may be null).
+ * → "⚠ İzin dışı işlem engellendi (3 deneme): Write → ~/Desktop/a.txt · Bash · Bu ajan yalnızca «X» klasöründe …"
+ */
+export function denialText(count, targets, scope) {
+  const uniq = [...new Set(targets)];
+  const shown = uniq.slice(0, MAX_DENY_TARGETS).join(' · ') + (uniq.length > MAX_DENY_TARGETS ? ' · …' : '');
+  const head = count > 1 ? `⚠ İzin dışı işlem engellendi (${count} deneme)` : '⚠ İzin dışı işlem engellendi';
+  let why = 'Bu ajanın izinleri bu işlemi kapsamıyor.';
+  if (scope && scope.profile === 'readonly') {
+    why = scope.folder ? `Bu ajan yalnızca «${scope.folder}» klasöründe ve yalnızca okuma yapabilir.` : 'Bu ajan yalnızca okuma yapabilir.';
+  } else if (scope && scope.folder) {
+    why = `Bu ajan yalnızca «${scope.folder}» klasöründe çalışabilir.`;
+  }
+  return `${head}${shown ? ': ' + shown : ''} · ${why}`;
+}
+
 /** One task's output block (prompt echo, parts, end line). */
-class TaskBlock {
+export class TaskBlock {
   constructor(task, prompt, note) {
     this.task = task;
     this.el = el('div', 'out-task');
@@ -185,6 +221,8 @@ class TaskBlock {
     this.tools = [];
     this.sawText = false;
     this.ended = false;
+    this.scope = null;             // {folder, profile} for the denial line (set by the panel)
+    this.denyGroup = null;         // open group of consecutive denials (H39)
   }
 
   _md() {
@@ -203,6 +241,7 @@ class TaskBlock {
     switch (p.k) {
       case 'text':
         this.sawText = true;
+        this.denyGroup = null;
         this._md().append(v);
         break;
       case 'thinking': {
@@ -225,38 +264,25 @@ class TaskBlock {
         const st = el('span', 'tool-st', ' …');
         row.appendChild(st);
         this.body.appendChild(row);
-        this.tools.push({ name: p.name, row, st, done: false });
+        this.tools.push({ name: p.name, row, st, done: false, v });
         break;
       }
       case 'tool_done': {
-        const t = [...this.tools].reverse().find((x) => !x.done && x.name === p.name) || [...this.tools].reverse().find((x) => !x.done);
+        const rev = [...this.tools].reverse();
+        let t = rev.find((x) => !x.done && x.name === p.name);
+        // The result of a denied call follows its denial: never mark another (pending) row with it.
+        if (!t && !rev.some((x) => x.denied && x.name === p.name)) t = rev.find((x) => !x.done);
         if (t) {
           t.done = true;
           t.st.textContent = p.ok ? ' ✓' : ' ✗';
           t.row.classList.add(p.ok ? 'ok' : 'bad');
         }
+        if (p.ok) this.denyGroup = null;
         break;
       }
-      case 'denied': {
-        this._break();
-        let t = [...this.tools].reverse().find((x) => x.name === p.name && !x.denied);
-        if (!t) {
-          const row = el('div', 'part-tool');
-          row.appendChild(el('span', 'tool-k', 'Araç: '));
-          row.appendChild(el('b', null, String(p.name || '?').slice(0, 60)));
-          const st = el('span', 'tool-st');
-          row.appendChild(st);
-          this.body.appendChild(row);
-          t = { name: p.name, row, st };
-          this.tools.push(t);
-        }
-        t.done = true;
-        t.denied = true;
-        t.st.textContent = ' ✗ İzin reddedildi';
-        t.row.classList.add('bad');
-        if (v) t.row.title = v;
+      case 'denied':
+        this._denied(p, v);
         break;
-      }
       case 'retry': {
         this._break();
         const wait = Number.isFinite(p.waitMs) ? `, ${Math.round(p.waitMs / 1000)} sn sonra` : '';
@@ -270,6 +296,45 @@ class TaskBlock {
       default:
         break;
     }
+  }
+
+  /**
+   * v2.md H39: consecutive permission denials collapse into ONE line (a <details>: the summary says what was blocked
+   * and why, the denied tool rows stay inside for the curious). Text or a successful tool closes the group.
+   */
+  _denied(p, v) {
+    this._break();
+    let t = [...this.tools].reverse().find((x) => x.name === p.name && !x.denied);
+    if (t) {
+      t.row.remove();
+    } else {
+      const row = el('div', 'part-tool');
+      row.appendChild(el('span', 'tool-k', 'Araç: '));
+      row.appendChild(el('b', null, String(p.name || '?').slice(0, 60)));
+      const st = el('span', 'tool-st');
+      row.appendChild(st);
+      t = { name: p.name, row, st, v: '' };
+      this.tools.push(t);
+    }
+    t.done = true;
+    t.denied = true;
+    t.st.textContent = ' ✗ İzin reddedildi';
+    t.row.classList.add('bad');
+    if (v) t.row.title = v;
+    let g = this.denyGroup;
+    if (!g) {
+      const det = el('details', 'part-denied');
+      const sum = el('summary', 'part-denied-sum');
+      const list = el('div', 'part-denied-list');
+      det.append(sum, list);
+      this.body.appendChild(det);
+      g = { det, sum, list, count: 0, targets: [] };
+      this.denyGroup = g;
+    }
+    g.count += 1;
+    g.targets.push(denyTarget(p.name, t.v));
+    g.list.appendChild(t.row);
+    g.sum.textContent = denialText(g.count, g.targets, this.scope);
   }
 
   result(text, truncated) {
@@ -294,6 +359,14 @@ class TaskBlock {
     }
     this.el.appendChild(e);
   }
+}
+
+/** {folder, profile} of a device agent (agent.list JSON) for the denial line, or null. */
+export function agentScope(da) {
+  if (!da) return null;
+  const ws = da.workspace;
+  const folder = ws && ws.name ? ws.name + (ws.sub ? '/' + ws.sub : '') : null;
+  return { folder, profile: da.profile || null };
 }
 
 /** Per office agent (device + key) view state; survives switching between agents. */
@@ -526,10 +599,72 @@ export class PromptPanel {
     recent.addEventListener('toggle', () => { if (recent.open) this._loadRecent(); });
     this.els.recent = recent;
 
-    root.append(form, outWrap, recent, usage);
+    root.append(form, outWrap, recent, usage, this._deleteBox());
     s.appendChild(root);
     this._grow();
     v.out.scrollTop = v.out.scrollHeight;
+  }
+
+  /** E11: "Ajanı sil" with an inline confirmation (no window.confirm: it can be blocked in installed apps). */
+  _deleteBox() {
+    const box = el('div', 'ctl-delete');
+    const del = el('button', 'btn small ghost ctl-del', 'Ajanı sil');
+    del.type = 'button';
+    const why = el('span', 'ctl-del-why muted small');
+    const ask = el('div', 'ctl-del-ask');
+    ask.hidden = true;
+    ask.setAttribute('role', 'group');
+    const q = el('span', 'ctl-del-q small');
+    const yes = el('button', 'btn small danger-btn ctl-del-yes', 'Evet, sil');
+    yes.type = 'button';
+    const no = el('button', 'btn small ctl-del-no', 'Vazgeç');
+    no.type = 'button';
+    ask.append(q, yes, no);
+    box.append(del, why, ask);
+    del.addEventListener('click', () => {
+      const da = this._devAgent();
+      q.textContent = `«${da ? da.name : 'Bu ajan'}» silinsin mi? Karakter ofisten çıkar, sohbet geçmişi silinir.`;
+      del.hidden = true;
+      ask.hidden = false;
+      no.focus();
+    });
+    no.addEventListener('click', () => { ask.hidden = true; del.hidden = false; del.focus(); });
+    yes.addEventListener('click', () => this.deleteAgent());
+    Object.assign(this.els, { delBox: box, del, delWhy: why, delAsk: ask, delYes: yes });
+    return box;
+  }
+
+  /** agent.delete (E11). Not offered while a task of this agent runs (stop it first). */
+  async deleteAgent() {
+    const v = this.view;
+    if (!v || this.mode !== 'ready' || v.running || v.deleting) return;
+    v.deleting = true;
+    this._update();
+    try {
+      await this.hub.deleteAgent(v.deviceId, v.key);
+      v.deleted = true;
+      v.message = { text: 'Ajan silindi. Karakter birazdan ofisten çıkar.' };
+      this.toast('Ajan silindi');
+    } catch (e) {
+      this.toast(e instanceof ControlError ? e.text : 'Silinemedi', { error: true });
+    } finally {
+      v.deleting = false;
+      if (this.view === v) {
+        if (this.els && this.els.delAsk) { this.els.delAsk.hidden = true; this.els.del.hidden = false; }
+        this._update();
+      }
+    }
+  }
+
+  _updateDelete(v, d, da) {
+    const { delBox, del, delWhy, delYes } = this.els;
+    if (!delBox) return;
+    const allowed = !(d && d.info && d.info.remote && d.info.remote.agentDelete === false);
+    delBox.hidden = this.mode !== 'ready' || !da || v.deleted || !allowed;
+    const busy = v.running || !!(da && da.task);
+    del.disabled = busy || !!v.deleting;
+    delYes.disabled = busy || !!v.deleting;
+    delWhy.textContent = busy ? 'Görev çalışırken silinemez; önce durdurun.' : '';
   }
 
   _grow() {
@@ -554,8 +689,8 @@ export class PromptPanel {
     const ready = this.mode === 'ready';
     const engine = da ? da.engine : null;
     const { ta, send, stop } = this.els;
-    ta.disabled = !ready;
-    send.disabled = !ready || v.state === 'sending';
+    ta.disabled = !ready || !!v.deleted;
+    send.disabled = !ready || v.state === 'sending' || !!v.deleted;
     stop.hidden = !v.running || !v.task;
     stop.disabled = v.state === 'stopping';
     stop.textContent = v.state === 'stopping' ? 'Durduruluyor…' : 'Durdur';
@@ -575,7 +710,12 @@ export class PromptPanel {
     else if (this.mode === 'connecting') hint = 'Cihaza güvenli bağlantı kuruluyor…';
     else if (this.mode === 'error') hint = 'Cihazla güvenli bağlantı kurulamadı. Yeniden eşleştirmeyi deneyin (Cihazlar).';
     else if (engine === 'ollama' || engine === 'openai') hint = 'Yerel model: sohbet eder, dosyalara dokunmaz.';
-    else if (engine === 'claude' && da && da.workspace && da.workspace.name) hint = `Klasör: ${da.workspace.name}${da.workspace.sub ? '/' + da.workspace.sub : ''}`;
+    else if (engine === 'claude' && da) {
+      // H39: where files go and what the agent may do, so out-of-folder requests don't surprise anyone.
+      const sc = agentScope(da);
+      const p = PROFILE_TEXT[da.profile] || PROFILE_TEXT.edit;
+      hint = sc.folder ? `Klasör: ${sc.folder} · İzin: ${p.label} · Yalnızca bu klasörde çalışır` : `İzin: ${p.label}`;
+    }
     this.els.hint.textContent = hint;
     this.els.hint.classList.toggle('warn', this.mode !== 'ready');
     // status message
@@ -595,9 +735,9 @@ export class PromptPanel {
       : v.live ? lt.text : '';
     this.els.live.title = lt.title;
     this.els.outWrap.classList.toggle('empty', !v.blocks.size);
+    this._updateDelete(v, d, da);
     this._renderUsage();
     this._syncHeadStop();
-    void d;
   }
 
   _tickClock() {
@@ -864,6 +1004,7 @@ export class PromptPanel {
     const stick = shown && this._atBottom(v.out);
     if (m.type === 'task.chunk') {
       const b = v.block(m.task, null, v.blocks.has(m.task) ? null : 'Başka bir tarayıcıdan ya da cihazdan başlatılan görev');
+      b.scope = agentScope(this.hub.agentInfo({ device: dev, agent: m.agent }));
       if (v.task !== m.task || !v.running) {
         v.task = m.task;
         v.endLine = null;

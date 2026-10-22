@@ -77,7 +77,12 @@ SECRET_READ_DENY = ["Read(~/.claude.json)", "Read(~/.config/gh/**)", "Read(~/.ne
                     "Read(~/.azure/**)", "Read(~/.local/share/keyrings/**)", "Read(~/Library/Keychains/**)",
                     "Read(~/.mozilla/**)", "Read(~/.config/google-chrome/**)", "Read(~/.config/chromium/**)"]
 BUILTIN_DENY = BUILTIN_DENY + EXEC_SENSITIVE_DENY + SECRET_READ_DENY
-EDIT_TOOLS = ["Edit", "Write", "NotebookEdit"]
+# v2.md H39 (security): a bare `Edit`/`Write`/`NotebookEdit` allow rule lets Claude Code write *anywhere* the deny
+# list doesn't cover (reproduced 2026-10-22 with 2.1.306: an `edit` agent in ~/PixelOfficeIsler wrote
+# ~/Desktop/yeni_dosya.txt). The allow rule is therefore scoped to the working directory (= the resolved workspace,
+# the process cwd); `Edit(...)` rules cover every built-in file-editing tool (Edit, Write, NotebookEdit). Writes outside
+# it are not allowed and `dontAsk` denies them; reads outside cwd are denied by default as well.
+EDIT_ALLOW = ["Edit(./**)"]
 FORBIDDEN_ARGS = ("--dangerously-skip-permissions", "--allow-dangerously-skip-permissions", "bypassPermissions")
 RESUME_MISSING_RE = re.compile(r"no conversation found|session[^\n]{0,40}not found|not found[^\n]{0,40}session", re.I)
 AUTH_MAP = {"claude.ai": "subscription", "oauth_token": "subscription", "api_key": "api_key",
@@ -147,9 +152,52 @@ def child_env(base: Optional[Dict[str, str]] = None, drop: Iterable[str] = ()) -
     return env
 
 
+BOUNDARY_PROFILE_TEXT = {
+    "readonly": ("Bu ajanın profili «Sadece okuma»: hiçbir dosya oluşturamaz, düzenleyemez ya da silemezsin; "
+                 "kullanıcı bunu isterse ajanın izin profilinin değiştirilmesi gerektiğini söyle.",
+                 "This agent is read-only: you cannot create, edit or delete any file; if asked, say the agent's "
+                 "permission profile has to be changed."),
+    "edit": ("Bu klasörde dosya okuyup yazabilirsin; kabuk komutu çalıştıramazsın.",
+             "You can read and write files in this folder; you cannot run shell commands."),
+    "dev": ("Bu klasörde dosya okuyup yazabilirsin; yalnızca cihazda izin verilen komutları çalıştırabilirsin.",
+            "You can read and write files in this folder and run only the commands allowed on the device."),
+    "auto": ("Bu klasörde çalışırsın.", "You work in this folder."),
+}
+_CTRL_RE = re.compile(r"[\x00-\x1f\x7f\u2028\u2029\u202a-\u202e\u2066-\u2069]")
+
+
+# On Windows Claude Code may be an npm `claude.cmd` shim, whose arguments cmd.exe parses again: no double quotes,
+# percent signs, carets or exclamation marks (variable expansion / quoting) and no line breaks in this argument.
+_CMD_UNSAFE_RE = re.compile(r'["%^!]')
+
+
+def _clean_label(s, n: int) -> str:
+    return short(_CMD_UNSAFE_RE.sub("", _CTRL_RE.sub(" ", str(s or ""))), n)
+
+
+def boundary_prompt(profile: str, folder_name: Optional[str], cwd: Optional[str], home: Optional[str] = None) -> str:
+    """H39: appended system prompt that tells Claude its working folder and its limits up front, so an out-of-folder
+    request (e.g. "create a file on the Desktop") is answered with an explanation instead of a string of denied tool
+    attempts. Contains only the folder's display name and its `~/…` path (no secrets, no user name)."""
+    where = (home_relative(cwd, home) or os.path.basename(cwd.rstrip("\\/")) or cwd) if cwd else ""
+    name = _clean_label(folder_name or os.path.basename((cwd or "").rstrip("\\/")) or "?", 60)
+    where = _clean_label(where, 120)
+    tr, en = BOUNDARY_PROFILE_TEXT.get(profile, BOUNDARY_PROFILE_TEXT["edit"])
+    return ("[Pixel Office] Çalışma klasörün: «%s» (%s). Yalnızca bu klasörün içinde çalışabilirsin. %s "
+            "Kullanıcı bu klasörün dışında bir şey isterse (ör. Masaüstü) hiçbir araçla deneme ve reddedilen bir "
+            "işlemi başka araçlarla tekrar deneme; kısaca bu sınırı açıkla ve izin vermek için bilgisayarda "
+            "`pixel-connector workspace add ~/Desktop` (ilgili klasörle) komutunu çalıştırıp o klasörde yeni bir ajan "
+            "oluşturabileceğini söyle. "
+            "[Pixel Office] Your working folder: «%s» (%s). You can only work inside it. %s If the user asks for "
+            "anything outside it (e.g. the Desktop), do not attempt it with any tool and never retry a denied action "
+            "with other tools; briefly explain the limit and that they can allow a folder by running "
+            "`pixel-connector workspace add ~/Desktop` (with that folder) on the computer and creating an agent there."
+            % (name, where, tr, name, where, en))
+
+
 def build_argv(path: str, profile: str, profiles: dict, session_id: str, resume: bool, model: Optional[str],
                max_turns: int, max_budget_usd: Optional[float], version: Optional[Tuple[int, int, int]],
-               bare: bool = False) -> List[str]:
+               bare: bool = False, system_prompt: Optional[str] = None) -> List[str]:
     """argv for one run. Raises ValueError for an unknown/disabled profile."""
     if profile not in ("readonly", "edit", "dev", "auto"):
         raise ValueError("unknown profile")
@@ -164,7 +212,7 @@ def build_argv(path: str, profile: str, profiles: dict, session_id: str, resume:
         argv += ["--permission-prompts", "none"]
     allow: List[str] = []
     if profile in ("edit", "dev"):
-        allow += EDIT_TOOLS
+        allow += EDIT_ALLOW
     if profile == "dev":
         allow += list(profiles.get("dev", {}).get("allow") or [])
     if allow:
@@ -177,6 +225,8 @@ def build_argv(path: str, profile: str, profiles: dict, session_id: str, resume:
     argv += ["--max-turns", str(int(max_turns))]
     if max_budget_usd is not None:
         argv += ["--max-budget-usd", "%.2f" % max_budget_usd]
+    if system_prompt:
+        argv += ["--append-system-prompt", system_prompt]
     if bare:
         argv.append("--bare")
     for a in argv:
@@ -185,8 +235,23 @@ def build_argv(path: str, profile: str, profiles: dict, session_id: str, resume:
     return argv
 
 
-def tool_summary(name: str, inp, cwd: Optional[str]) -> str:
-    """Short, device-computed description of a tool call (≤ 200 chars, E2E only)."""
+def home_relative(path: str, home: Optional[str] = None) -> Optional[str]:
+    """`~/rest` for a path inside the home directory, else None (H39: no user name in what the browser shows)."""
+    home = home or os.path.expanduser("~")
+    try:
+        rel = os.path.relpath(path, home)
+    except ValueError:                  # other drive (Windows)
+        return None
+    if rel == ".":
+        return "~"
+    if rel.startswith("..") or os.path.isabs(rel):
+        return None
+    return "~" + os.sep + rel
+
+
+def tool_summary(name: str, inp, cwd: Optional[str], home: Optional[str] = None) -> str:
+    """Short, device-computed description of a tool call (≤ 200 chars, E2E only). File paths: relative to the
+    workspace; outside it `~/…` when under the home directory (H39), else as given."""
     if not isinstance(inp, dict):
         return ""
     v = ""
@@ -195,9 +260,9 @@ def tool_summary(name: str, inp, cwd: Optional[str]) -> str:
         if isinstance(p, str) and cwd and os.path.isabs(p):
             try:
                 rel = os.path.relpath(p, cwd)
-                p = rel if not rel.startswith("..") else p
+                p = rel if not rel.startswith("..") else (home_relative(p, home) or p)
             except ValueError:
-                pass
+                p = home_relative(p, home) or p
         v = p
     elif name in ("Grep", "Glob"):
         v = inp.get("pattern") or ""
@@ -490,7 +555,8 @@ class ClaudeRun(Running):
             return None
         model = self.ctx.model or cfg.get("defaultModel")
         argv = build_argv(cfg["path"], self.ctx.profile, eng.profiles, agent["claudeSession"], resume, model,
-                          cfg.get("maxTurns", 50), self.ctx.max_budget_usd, version, bool(cfg.get("bare")))
+                          cfg.get("maxTurns", 50), self.ctx.max_budget_usd, version, bool(cfg.get("bare")),
+                          system_prompt=boundary_prompt(self.ctx.profile, self.ctx.workspace_name, self.ctx.cwd))
         self.argv_used.append(argv)
         kwargs = {}
         if sys.platform == "win32":

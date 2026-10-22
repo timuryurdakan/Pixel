@@ -325,7 +325,7 @@ içine kurar, `~/.pixel-office/bin/pixel-connector` kısayolunu ve ayar dosyası
 Ekrana yazdığı özeti bu sürümün özetiyle karşılaştırın:
 
 ```
-pixel-connector.pyz SHA-256: f0edc6ec0a61bb946ca49c1bafd4d645d67c35baa35d961c7ad6d26da1b85ed8
+pixel-connector.pyz SHA-256: 4597c591c3f80099f5cdb6535101af657cdc81d54a63588171ce794657b6bcf3
 ```
 
 Windows (PowerShell): komut kutusundaki **Windows** sekmesini kullanın (`irm …/install.ps1 -OutFile install.ps1`, sonra
@@ -361,6 +361,16 @@ sayfası bunu söyler ve çalıştırılacak komutu gösterir. Elle düzenlemek 
   {"id": "pixel", "name": "Pixel", "path": "~/Desktop/Pixel", "children": false}
 ]
 ```
+
+**Ajanlar yalnızca kendi klasörlerinde çalışır.** Bir Claude ajanı yalnızca oluşturulurken seçilen klasörün içinde dosya
+okuyup yazabilir (bağlayıcı 3.2.4'ten itibaren düzenleme izni de bu klasörle sınırlı; "Sadece okuma" profilinde hiç
+yazamaz). Görev kutusunun altında "Klasör: … · İzin: …" yazar. Ajandan klasör dışında bir şey isterseniz (ör.
+"masaüstünde dosya oluştur") ajan bunu denemez, sınırı açıklar; yine de denenen ve engellenen işlemler çıktıda tek bir
+"⚠ İzin dışı işlem engellendi" satırında toplanır. Masaüstünde çalışmasını istiyorsanız o bilgisayarda
+`pixel-connector workspace add ~/Desktop --name "Masaüstü"` (Türkçe sistemlerde klasör `~/Masaüstü` olabilir) çalıştırıp
+bağlayıcıyı yeniden başlatın, sonra o klasörle **Yeni ajan** oluşturun. Ajanı silmek için görev kutusundaki **Ajanı sil**
+ya da Cihazlar sayfasındaki **Sil** (görev çalışırken devre dışı; `connector.json → remote.agentDelete: false` ile
+uzaktan silme kapatılabilir).
 
 `children: true` o klasörün alt klasörlerini de seçilebilir yapar. Elle düzenledikten sonra `pixel-connector config-check`,
 ardından `systemctl --user restart pixel-connector`. Claude Code yalnızca VS Code eklentisindeyse terminal sürümünü kurup bir kez

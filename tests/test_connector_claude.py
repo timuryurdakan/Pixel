@@ -69,11 +69,11 @@ class ArgvTests(unittest.TestCase):
         self.assertNotIn("--allowedTools", ro)
         ed = self.argv("edit")
         i = ed.index("--allowedTools")
-        self.assertEqual(ed[i + 1:i + 4], ["Edit", "Write", "NotebookEdit"])
+        self.assertEqual(ed[i + 1:ed.index("--disallowedTools")], ["Edit(./**)"])       # H39: workspace only
         self.assertIn("Read(./secrets/**)", ed)
         dv = self.argv("dev")
         i = dv.index("--allowedTools")
-        self.assertEqual(dv[i + 1:i + 6], ["Edit", "Write", "NotebookEdit", "Bash(npm test *)", "Bash(git status *)"])
+        self.assertEqual(dv[i + 1:dv.index("--disallowedTools")], ["Edit(./**)", "Bash(npm test *)", "Bash(git status *)"])
         with self.assertRaises(ValueError):
             self.argv("auto")
         au = self.argv("auto", dict(PROFILES, auto={"enabled": True}))
@@ -135,6 +135,9 @@ class ArgvTests(unittest.TestCase):
         s = CL.tool_summary
         self.assertEqual(s("Read", {"file_path": "/w/src/app.py"}, "/w"), "src/app.py")
         self.assertEqual(s("Edit", {"file_path": "/etc/passwd"}, "/w"), "/etc/passwd")
+        # H39: outside the workspace but under home → ~-relative (no user name in the browser)
+        self.assertEqual(s("Write", {"file_path": "/home/ali/Desktop/a.txt"}, "/home/ali/PixelOfficeIsler", "/home/ali"),
+                         os.path.join("~", "Desktop", "a.txt"))
         self.assertEqual(s("Grep", {"pattern": "TODO"}, "/w"), "TODO")
         self.assertEqual(len(s("Bash", {"command": "x" * 500}, "/w")), 120)
         self.assertEqual(s("WebFetch", {"url": "https://docs.example.com/a?b=c"}, None), "docs.example.com")

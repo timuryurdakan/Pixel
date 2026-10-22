@@ -940,3 +940,19 @@ input.pair-code { font: bold 20px/1.2 var(--font) !important; letter-spacing: 2p
   .toolbar::-webkit-scrollbar { display: none; }
   .toolbar .btn { flex: 0 0 auto; min-height: 44px; white-space: nowrap; }
 }
+
+/* ---- v2.md H39 + E11 (2026-10-22, Claude): grouped permission denials, agent delete in the prompt panel ---- */
+.part-denied { margin: 4px 0; padding: 4px 8px; font-size: 11.5px; color: #ffe0b2; background: #3a2c1a;
+  border-left: 3px solid var(--warn); }
+.part-denied > summary { cursor: pointer; overflow-wrap: anywhere; line-height: 1.4; }
+.part-denied-list { margin-top: 4px; padding-left: 6px; }
+.part-denied-list .part-tool { overflow-wrap: anywhere; }
+.ctl-delete { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.ctl-delete[hidden], .ctl-del-ask[hidden], .ctl-del[hidden] { display: none; }
+.ctl-del-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; }
+.ctl-del-q { flex: 1 1 100%; overflow-wrap: anywhere; }
+.ctl-del-why { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .part-denied > summary { padding: 10px 0; }
+  .ctl .ctl-delete { order: 4; }                 /* below usage, above the sticky compose box */
+}

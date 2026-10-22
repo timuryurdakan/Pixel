@@ -336,6 +336,7 @@ export class DeviceHub {
     }
     if (msg.type === 'error') return;          // late error for a request that already timed out
     if (msg.type === 'device.info') this._setInfo(d, msg);
+    if (msg.type === 'agent.deleted' && typeof msg.agent === 'string' && d.agents.delete(msg.agent)) this._changed();
     this._emit('event', d.id, msg);
   }
 
@@ -448,6 +449,17 @@ export class DeviceHub {
   putAgent(deviceId, agent) {
     const d = this.devices.get(deviceId);
     if (d && agent && typeof agent.key === 'string') { d.agents.set(agent.key, agent); this._changed(); }
+  }
+
+  /** agent.delete (E11): the device cancels the agent's tasks, forgets it and tells the other paired tabs. */
+  async deleteAgent(deviceId, key) {
+    const r = await this.request(deviceId, { type: 'agent.delete', agent: key });
+    const d = this.devices.get(deviceId);
+    if (d) {
+      d.watching.delete(key);
+      if (d.agents.delete(key)) this._changed();
+    }
+    return r;
   }
 
   /** agent.watch {on} (§11.2): remembered, so it is re-sent after a reconnect. */

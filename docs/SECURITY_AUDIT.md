@@ -228,3 +228,16 @@ Off by default; only `pixel-connector remote-approvals on` (local CLI, writes `c
 | **Hook spoofing** (a local process calls `/ctl/approvals/tool` or answers) | `/ctl` needs the control token from `~/.pixel-office/connector/control.json` (0600) — exactly what the CLI uses; Host check against DNS rebinding; at most 16 pending requests; a 401 closes the connection | Any process running as the same OS user can read the token and post fake cards or approve them (same as the CLI, V3.md T14). Connector-run agents can't read it (`Read(~/.pixel-office/**)` denied) — unless the user approves such a read from the phone |
 | **Information leak** | Summary only: command ≤ 200 chars, file basename, URL host; MCP tool input never sent; text cleaned of control/zero-width/bidi characters; rendered with `textContent` (XSS test); audit stores a 12-hex hash, not the text; the office still gets only `waiting_for_user` | The command text is visible to every paired browser of the owner (by design) |
 | **Fail-open** | Feature off, old async hook entry, connector down, timeout, withdrawal, malformed reply, exception → no output, Claude Code shows its own dialog; the hook never allows by itself | — |
+
+## 10. H39 — Edit allow rule was not limited to the workspace (2026-10-22)
+
+| ID | v2.md | Severity | Component | Finding | Status | Fix / test |
+|---|---|---|---|---|---|---|
+| S22-01 | H39 | **High** (workspace boundary) | `pixel_connector/engines/claude.py` `build_argv` | The `edit` and `dev` profiles passed bare `--allowedTools Edit Write NotebookEdit`. Without a path specifier the rule matches every path, so a connector Claude agent could create or overwrite any file the deny list did not name (shell start-up files are denied; documents, the Desktop, other projects were not). Found while reproducing a user report: with Claude Code 2.1.306, `edit` profile, cwd `PixelOfficeIsler` (temp copy), the prompt "masaüstünde bir txt dosyası oluştur" made Claude write an empty `~/Desktop/yeni_dosya.txt` (removed right after). | **fixed** (3.2.4) | Allow rule `Edit(./**)` (cwd = the resolved workspace; `Edit(...)` covers Edit/Write/NotebookEdit, as the existing deny rules already rely on). The same real run with the scoped rule: Bash and Read on the Desktop denied, nothing written. Plus a boundary system prompt (`--append-system-prompt`, no secrets) so the agent does not try. Tests: `tests/test_h39_e11_boundary_delete.py` (`EditScopeTests`: no unscoped allow rule in any profile), `test_phase20_security`, `test_connector_claude`. |
+
+Not verified with a live run: a write **inside** the workspace with `Edit(./**)` on 2.1.306 (the second real run only tested
+that the Desktop is refused; further real runs on this machine were stopped so nothing touches the real home directory).
+Check once after updating: give an `edit` agent "bu klasörde deneme.txt oluştur". If Claude Code reports it denied, the rule
+form needs adjusting (e.g. the absolute `Edit(//<workspace>/**)`).
+`dev` profile commands (`profiles.dev.allow`, e.g. `Bash(npm test *)`) can still write wherever the command writes; that is
+the profile's documented trade-off.

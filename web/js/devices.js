@@ -444,7 +444,9 @@ export class DevicesPage {
       const meta = el('span', 'muted small', ` ${where.join(' · ')}`);
       const today = a.today && Number.isFinite(a.today.tokens) ? el('span', 'muted small', ` · bugün ${fmtCompact(a.today.tokens)} token`) : null;
       const del = btn('Sil', 'btn small ghost', () => this._deleteAgent(id, a));
-      del.disabled = !d.ready;
+      del.disabled = !d.ready || !!a.task;
+      if (a.task) del.title = 'Görev çalışırken silinemez; önce durdurun.';
+      if (d.info && d.info.remote && d.info.remote.agentDelete === false) del.hidden = true;
       li.append(b, meta);
       if (today) li.appendChild(today);
       li.appendChild(del);
@@ -456,9 +458,7 @@ export class DevicesPage {
   async _deleteAgent(id, a) {
     if (!confirmBox(`"${a.name}" ajanı silinsin mi? Karakter ofisten çıkar, sohbet geçmişi silinir.`)) return;
     try {
-      await this.hub.request(id, { type: 'agent.delete', agent: a.key });
-      const d = this.hub.device(id);
-      if (d) d.agents.delete(a.key);
+      await this.hub.deleteAgent(id, a.key);
       this.toast('Ajan silindi');
       this.render();
     } catch (e) { this.toast(e instanceof ControlError ? e.text : 'Silinemedi', { error: true }); }
