@@ -168,7 +168,7 @@ Severity: **High** = a realistic path to code execution on the user's machine or
      prints `404`.
 2. **Update the connector on this computer** so the new Claude deny rules (S16-01) take effect. Re-run the Linux install
    command from Cihazlar → Cihaz ekle. Compare the printed SHA-256 with the one in README
-   (`18a4148d7cc2362ea00c7225fe4996170f60738a753a1d6088c5040c979020d9`). Then run `pixel-connector doctor`. Do the same on
+   (`18a4148d7cc2362ea00c7225fe4996170f60738a753a1d6088c5040c979020d9` (geçmiş)). Then run `pixel-connector doctor`. Do the same on
    every other computer that runs the connector.
 3. If you open the **v1 local server** (`server.py`) under a host name other than an IP, `localhost` or the computer name
    (e.g. a Tailscale name), start it with `PIXEL_OFFICE_ALLOWED_HOSTS=<name>`.
