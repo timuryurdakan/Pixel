@@ -18,7 +18,7 @@ export const ANIMS = {
 };
 
 export const TILE_NAMES = ['floor', 'floor_alt', 'rug', 'wall', 'window', 'door'];
-export const FURNITURE_NAMES = ['desk', 'desk_on', 'chair', 'bookshelf', 'plant', 'coffee_counter', 'water_cooler', 'bed'];
+export const FURNITURE_NAMES = ['desk', 'desk_on', 'chair', 'bookshelf', 'plant', 'coffee_counter', 'water_cooler', 'bed', 'board'];
 export const BUBBLE_KINDS = ['zzz', 'dots', 'alert', 'steam', 'question', 'coffee', 'speech', 'heart', 'happy'];
 export const TOOL_ICON_KINDS = ['terminal', 'eye', 'pencil', 'magnifier', 'globe', 'people', 'checklist', 'gear'];
 
@@ -862,6 +862,33 @@ const BED = [
   'KKKKKKKKKKKKKKKK',
 ];
 
+const BOARD = [
+  'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK',
+  'KyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyK',
+  'KdKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKdK',
+  'KdeeeeeeeeeegnnnnnnnnnngoooooooooogvvvvvvvvvvvdK',
+  'KdWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWWdK',
+  'KdWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWWdK',
+  'KdWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWWdK',
+  'KdWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWWdK',
+  'KdWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWWdK',
+  'KdWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWWdK',
+  'KdWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWWdK',
+  'KdWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWWdK',
+  'KdWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWWdK',
+  'KdWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWWdK',
+  'KdWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWWdK',
+  'KdWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWWdK',
+  'KdWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWWdK',
+  'KdWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWWdK',
+  'KdWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWWdK',
+  'KdWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWWdK',
+  'KdWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWgWWWWWWWWWWWdK',
+  'KdaaaaaaaaaagaaaaaaaaaagaaaaaaaaaagaaaaaaaaaaadK',
+  'KdyyyyyyyyyyyrrKKeenneeKKyyyyyyyyyyyyyyyyyyyyydK',
+  'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK',
+];
+
 // ---------------------------------------------------------------------------
 // Bubbles (2 frames each) & tool icons
 // ---------------------------------------------------------------------------
@@ -1193,6 +1220,7 @@ const FURNITURE = {
   coffee_counter: def(48, 24, PAL, () => hcat(COUNTER_LEFT, COUNTER_MID, COUNTER_RIGHT)),
   water_cooler: def(16, 24, PAL, () => WATER_COOLER),
   bed: def(16, 32, PAL, () => BED),
+  board: def(48, 24, PAL, () => BOARD),
 };
 
 const zzz = (rows) => outlined(rows, 'K');
@@ -1492,6 +1520,7 @@ export function validateSprites() {
     floor: [16, 16], floor_alt: [16, 16], rug: [16, 16], wall: [16, 16], window: [16, 16], door: [16, 16],
     desk: [32, 24], desk_on: [32, 24], chair: [16, 16], bookshelf: [16, 24], plant: [16, 24],
     coffee_counter: [48, 24], water_cooler: [16, 24], bed: [16, 32],
+    board: [48, 24],
   };
   for (const n of TILE_NAMES) if (!TILES[n]) errors.push(`missing tile ${n}`);
   for (const n of FURNITURE_NAMES) if (!FURNITURE[n]) errors.push(`missing furniture ${n}`);

@@ -30,7 +30,10 @@ const WALKABLE = new Set(['.', '=', 'D']);
  * the cat instead of over it.
  */
 export const CAT_TILE = Object.freeze({ x: 20, y: 6 });
-const isDecorTile = (x, y) => x === CAT_TILE.x && y === CAT_TILE.y;
+export const BOARD_TILE = Object.freeze({ x: 13, y: 1, w: 48, h: 24 });
+export const BOARD_TILES = Object.freeze([{ x: 13, y: 1 }, { x: 14, y: 1 }, { x: 15, y: 1 }]);
+const isBoardTile = (x, y) => y === 1 && x >= 13 && x <= 15;
+const isDecorTile = (x, y) => (x === CAT_TILE.x && y === CAT_TILE.y) || isBoardTile(x, y);
 const SPOT_TILES = new Set(['h', 'c', 'b']);
 
 /** Spot kind → facing when settled. */
@@ -129,6 +132,15 @@ export class Office {
         }
       }
     }
+    // Task Board (v4 A8): 3-tile whiteboard mounted on the top wall at x=13..15, y=1.
+    this.furniture.push({
+      kind: 'board',
+      x: BOARD_TILE.x,
+      y: BOARD_TILE.y,
+      w: BOARD_TILE.w,
+      h: BOARD_TILE.h,
+      sortY: blockSort(BOARD_TILE.y),
+    });
   }
 
   /**

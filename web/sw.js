@@ -18,7 +18,7 @@ const SHELL = [
   '/js/main.js', '/js/office.js', '/js/pathfinding.js', '/js/agents.js', '/js/renderer.js', '/js/ui.js',
   '/js/sprites.js', '/js/fx.js', '/js/audio.js', '/js/transport.js', '/js/cloud.js', '/js/pip.js',
   '/js/relay.js', '/js/e2e.js', '/js/idb.js', '/js/control.js', '/js/prompt.js', '/js/devices.js', '/js/usage.js',
-  '/js/approvals.js',
+  '/js/approvals.js', '/js/board.js',
   '/rehber.html', '/css/guide.css', '/js/guide.js',
   '/manifest.webmanifest',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png', '/icons/apple-touch-icon.png',

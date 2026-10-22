@@ -4,12 +4,13 @@
 
 import { Office } from './office.js';
 import { CharacterManager } from './agents.js';
-import { Renderer, CAT_ID } from './renderer.js';
+import { Renderer, CAT_ID, BOARD_ID } from './renderer.js';
 import { UI, summaryText } from './ui.js';
 import { SseTransport, PollingTransport } from './transport.js';
 import { MiniWindow } from './pip.js';
 import * as cloud from './cloud.js';
 import { sound } from './audio.js';
+import { TaskBoard, categorizeTasks } from './board.js';
 
 export const STEP = 1 / 60;   // fixed timestep (s)
 export const MAX_STEPS = 5;   // per animation frame (excess is dropped)
@@ -37,6 +38,7 @@ const agents = new Map();
 const overrides = new Map();
 /** v3 device control (V3.md §11): set up only for a cloud room with the write key and a configured relay. */
 let v3 = null;              // {hub, panel, devices, wizard, newAgent, pendingSelect, setTab}
+let board = null;           // TaskBoard (Kanban whiteboard - A8)
 
 cloud.captureInstallPrompt();
 
@@ -52,6 +54,19 @@ function refreshUI() {
   const strip = document.getElementById('mini-strip');
   if (strip) strip.textContent = summaryText(list);
   if (v3) v3Sync();
+  updateBoard(list);
+}
+
+function updateBoard(list = sortedAgents()) {
+  const isPaired = !!(v3 && v3.hub && v3.hub.pairedCount > 0);
+  const boardData = categorizeTasks({
+    agents: list,
+    views: v3 && v3.panel ? v3.panel.views : null,
+    approvals: v3 && v3.approvals ? v3.approvals : null,
+    isPaired,
+  });
+  if (renderer) renderer.boardData = boardData;
+  if (board) board.render(boardData);
 }
 
 /**
@@ -402,6 +417,13 @@ function bootCommon() {
       renderer.cat.wakeTime = gameTime;
       return;
     }
+    if (picked === BOARD_ID) {
+      if (!viewMini && !document.body.classList.contains('mini') && board) {
+        updateBoard();
+        board.open();
+      }
+      return;
+    }
     select(picked);
     if (picked) {
       sound.playHop();
@@ -418,12 +440,30 @@ function bootCommon() {
 
   setupSoundButton();
 
+  const boardDlg = document.getElementById('dlg-board');
+  if (boardDlg) {
+    board = new TaskBoard({
+      dialog: boardDlg,
+      onSelectAgent: (id) => select(id, { blip: true }),
+      sound,
+      isPaired: () => !!(v3 && v3.hub && v3.hub.pairedCount > 0),
+    });
+  }
+  const btnBoard = document.getElementById('btn-board');
+  if (btnBoard && board) {
+    btnBoard.addEventListener('click', () => {
+      updateBoard();
+      board.open();
+    });
+  }
+
   if (viewMini) document.body.classList.add('mini');
   fitCanvas();
   if (typeof ResizeObserver === 'function') new ResizeObserver(() => { if (!(mini && mini.window)) fitCanvas(); }).observe(document.getElementById('stage'));
   window.addEventListener('resize', () => { if (!(mini && mini.window)) fitCanvas(); });
 
   window.pixelOffice = { office, manager, renderer, ui, sound, agents, errors, overrides,
+    get board() { return board; },
     get transport() { return transport; }, get backend() { return backend; }, get room() { return room; },
     get mini() { return mini; } };
   scheduleFrame();
