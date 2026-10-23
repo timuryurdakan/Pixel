@@ -3,7 +3,8 @@
     <claude> -p --output-format stream-json --verbose --include-partial-messages
              --permission-mode <dontAsk|auto> [--permission-prompts none]
              [--allowedTools …] --disallowedTools …  (--session-id <uuid> | --resume <uuid>)
-             [--model <m>] --max-turns <n> [--max-budget-usd <x>] [--bare]
+             --setting-sources <project|…> [--model <m>] --max-turns <n> [--max-budget-usd <x>]
+             [--append-system-prompt <boundary>] [--bare]
 
 The prompt goes to stdin (never argv). No shell. `bypassPermissions` / `--dangerously-skip-permissions` have no code
 path here: `build_argv` asserts their absence and tests grep this file. cwd = the resolved workspace; the child env is
@@ -27,6 +28,7 @@ import time
 import uuid
 from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
+from ..config import DEFAULT_SETTING_SOURCES, SETTING_SOURCES
 from .base import Cached, Running, TaskContext, empty_usage, short
 
 MIN_PERMISSION_PROMPTS = (2, 1, 259)
@@ -195,12 +197,29 @@ def boundary_prompt(profile: str, folder_name: Optional[str], cwd: Optional[str]
             % (name, where, tr, name, where, en))
 
 
+# S23-01 (SECURITY_AUDIT.md §11): Claude Code *merges* permission rules (and hooks, additionalDirectories,
+# enableAllProjectMcpServers) from every settings source, so a user's own ~/.claude/settings.json ("Bash(npm test *)",
+# a bare "Edit") or a workspace's gitignored .claude/settings.local.json (accumulated "always allow" answers) widened
+# every profile: readonly/edit got a shell, H39 was undone. Only the versioned project settings are loaded by default
+# (an untrusted repo is T11 anyway); `engines.claude.settingSources` opts back in, e.g. for an apiKeyHelper or `env`
+# in the user settings. Canonical order; never empty (an empty argv element is fragile through claude.cmd).
+# SETTING_SOURCES / DEFAULT_SETTING_SOURCES live in config.py (validation of connector.json uses them too).
+def setting_sources_arg(sources) -> str:
+    """S23-01: `--setting-sources` value from an allow-listed, non-empty list. Raises ValueError otherwise."""
+    if isinstance(sources, str) or not isinstance(sources, (list, tuple)) or not sources \
+            or any(s not in SETTING_SOURCES for s in sources):
+        raise ValueError("bad setting sources")
+    return ",".join(s for s in SETTING_SOURCES if s in sources)
+
+
 def build_argv(path: str, profile: str, profiles: dict, session_id: str, resume: bool, model: Optional[str],
                max_turns: int, max_budget_usd: Optional[float], version: Optional[Tuple[int, int, int]],
-               bare: bool = False, system_prompt: Optional[str] = None) -> List[str]:
-    """argv for one run. Raises ValueError for an unknown/disabled profile."""
+               bare: bool = False, system_prompt: Optional[str] = None,
+               setting_sources: Iterable[str] = DEFAULT_SETTING_SOURCES) -> List[str]:
+    """argv for one run. Raises ValueError for an unknown/disabled profile or bad setting sources."""
     if profile not in ("readonly", "edit", "dev", "auto"):
         raise ValueError("unknown profile")
+    sources = setting_sources_arg(setting_sources)
     argv = [path, "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages"]
     if profile == "auto":
         if not profiles.get("auto", {}).get("enabled"):
@@ -219,6 +238,7 @@ def build_argv(path: str, profile: str, profiles: dict, session_id: str, resume:
         argv += ["--allowedTools"] + allow
     deny = BUILTIN_DENY + list(profiles.get(profile, {}).get("deny") or [])
     argv += ["--disallowedTools"] + deny
+    argv += ["--setting-sources", sources]
     argv += ["--resume" if resume else "--session-id", session_id]
     if model:
         argv += ["--model", model]
@@ -556,7 +576,8 @@ class ClaudeRun(Running):
         model = self.ctx.model or cfg.get("defaultModel")
         argv = build_argv(cfg["path"], self.ctx.profile, eng.profiles, agent["claudeSession"], resume, model,
                           cfg.get("maxTurns", 50), self.ctx.max_budget_usd, version, bool(cfg.get("bare")),
-                          system_prompt=boundary_prompt(self.ctx.profile, self.ctx.workspace_name, self.ctx.cwd))
+                          system_prompt=boundary_prompt(self.ctx.profile, self.ctx.workspace_name, self.ctx.cwd),
+                          setting_sources=cfg.get("settingSources") or DEFAULT_SETTING_SOURCES)
         self.argv_used.append(argv)
         kwargs = {}
         if sys.platform == "win32":

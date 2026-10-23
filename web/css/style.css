@@ -907,6 +907,7 @@ input.pair-code { font: bold 20px/1.2 var(--font) !important; letter-spacing: 2p
 .apv-actions .btn { flex: 1; min-height: 40px; }
 .btn.danger { background: #7a2b30; }
 .btn.danger:hover { background: var(--bad); }
+.apv-cut { margin: 0; color: var(--warn); }
 .apv-msg { margin: 0; min-height: 1em; color: var(--muted); }
 .apv-msg:empty { display: none; }
 #btn-devices[data-count]::after, .tabbar [data-tab="devices"][data-count]::after {

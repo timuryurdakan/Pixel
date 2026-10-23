@@ -325,7 +325,7 @@ içine kurar, `~/.pixel-office/bin/pixel-connector` kısayolunu ve ayar dosyası
 Ekrana yazdığı özeti bu sürümün özetiyle karşılaştırın:
 
 ```
-pixel-connector.pyz SHA-256: 4597c591c3f80099f5cdb6535101af657cdc81d54a63588171ce794657b6bcf3
+pixel-connector.pyz SHA-256: a039f66952bb1aea7a1317de9991cceb629c58b8bb4b4c5730e3215b5b7d8a1b
 ```
 
 Windows (PowerShell): komut kutusundaki **Windows** sekmesini kullanın (`irm …/install.ps1 -OutFile install.ps1`, sonra
@@ -371,6 +371,11 @@ yazamaz). Görev kutusunun altında "Klasör: … · İzin: …" yazar. Ajandan 
 bağlayıcıyı yeniden başlatın, sonra o klasörle **Yeni ajan** oluşturun. Ajanı silmek için görev kutusundaki **Ajanı sil**
 ya da Cihazlar sayfasındaki **Sil** (görev çalışırken devre dışı; `connector.json → remote.agentDelete: false` ile
 uzaktan silme kapatılabilir).
+
+Bağlayıcı 3.2.5'ten itibaren Claude ajanları kendi `~/.claude/settings.json` ve klasörün `.claude/settings.local.json`
+dosyanızdaki izinleri (ör. "her zaman izin ver" ile eklenen komutlar) **almaz**; profil yalnızca bağlayıcının verdiği
+kurallarla sınırlıdır. Kullanıcı ayarlarınız gerekiyorsa (ör. `apiKeyHelper`) `"engines": {"claude": {"settingSources":
+["user", "project"]}}` yazın; o dosyadaki izin kuralları da her profile eklenir.
 
 `children: true` o klasörün alt klasörlerini de seçilebilir yapar. Elle düzenledikten sonra `pixel-connector config-check`,
 ardından `systemctl --user restart pixel-connector`. Claude Code yalnızca VS Code eklentisindeyse terminal sürümünü kurup bir kez

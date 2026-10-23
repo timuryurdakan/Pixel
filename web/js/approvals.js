@@ -51,6 +51,9 @@ export function normalizeApproval(a) {
   return out;
 }
 
+/** S23-02: the hook and the connector end a cut summary with "…"; such a command was never shown in full. */
+export function summaryWasCut(summary) { return typeof summary === 'string' && summary.endsWith('…'); }
+
 /** "4:05" / "0:09" */
 export function countdownText(ms) {
   const s = Math.max(0, Math.ceil(ms / 1000));
@@ -144,6 +147,11 @@ export class ApprovalCenter {
     head.appendChild(time);
     card.appendChild(head);
     if (a.summary) card.appendChild(el('code', 'apv-summary', a.summary));
+    if (summaryWasCut(a.summary)) {
+      const cut = el('p', 'apv-cut small', 'Komut kısaltıldı: sonunu görmeden onaylamayın. Tamamı bilgisayardaki Claude Code penceresinde.');
+      cut.setAttribute('role', 'note');
+      card.appendChild(cut);
+    }
     a.questions.forEach((q, qi) => card.appendChild(this._question(it, q, qi)));
     const actions = el('div', 'apv-actions');
     const ok = el('button', 'btn accent', a.ask === 'question' ? 'Gönder' : 'Onayla');

@@ -586,32 +586,50 @@ class Connector:
             return {"type": "agent.created", "agent": self.agent_public(a)}
 
         if self.cfg["confirm"]["agentCreate"]:
-            def done(res: str) -> None:
-                self.audit.write("confirm", action="agent.create", result=res, bid=peer.bid)
-                if res == "ok":
-                    try:
-                        self.reply(peer, msg, create())
-                    except AgentError as e:
-                        self.reply(peer, msg, {"type": "error", "code": e.code, "message": str(e)})
-                else:
-                    self.reply(peer, msg, {"type": "error", "code": "confirm_denied" if res == "denied"
-                                           else "confirm_timeout", "message": "not confirmed"})
-            self.approvals.request("agentCreate", "Yeni ajan: %s" % str(msg.get("name"))[:24], None,
-                                   str(msg.get("name"))[:24], done)
+            self._confirm_then(peer, msg, "agent.create", "Yeni ajan: %s" % str(msg.get("name"))[:24],
+                               str(msg.get("name"))[:24], create, (AgentError,))
             return None
         return create()
 
-    def h_agent_update(self, peer, msg) -> dict:
+    def h_agent_update(self, peer, msg) -> Optional[dict]:
         fields = {k: msg[k] for k in ("name", "model", "profile", "budget") if k in msg}
         if fields.get("profile") == "auto" and not self.cfg["profiles"]["auto"]["enabled"]:
             raise Reply("not_allowed", "auto profile disabled on this device")
         if "budget" in fields and not self.cfg["remote"]["budgetEdit"]:
             raise Reply("not_allowed", "remote budget editing disabled")
-        a = self.agents.update(msg.get("agent"), fields)
-        self.audit.write("agent.update", bid=peer.bid, agent=a["key"], fields=sorted(fields))
-        if "name" in fields:
-            self.office(a, self._agent_state.get(a["key"], "idle"), None, None, None)
-        return {"type": "agent.updated", "agent": self.agent_public(a)}
+        if "profile" in fields and fields["profile"] not in PROFILE_LABELS:
+            raise Reply("bad_request", "profile")
+        cur = self.agents.get(msg.get("agent"))
+
+        def update() -> dict:
+            a = self.agents.update(cur["key"], fields)
+            self.audit.write("agent.update", bid=peer.bid, agent=a["key"], fields=sorted(fields))
+            if "name" in fields:
+                self.office(a, self._agent_state.get(a["key"], "idle"), None, None, None)
+            return {"type": "agent.updated", "agent": self.agent_public(a)}
+
+        # S23-03: changing the profile gives an agent the powers of a new one, so it needs the same local
+        # confirmation as agent creation (otherwise a confirmed readonly agent could be raised to dev remotely).
+        if self.cfg["confirm"]["agentCreate"] and "profile" in fields and fields["profile"] != cur.get("profile"):
+            self._confirm_then(peer, msg, "agent.update", "Profil değişikliği: %s → %s" % (
+                str(cur["name"])[:24], PROFILE_LABELS.get(fields["profile"], "?")), str(cur["name"])[:24], update,
+                (AgentError,))
+            return None
+        return update()
+
+    def _confirm_then(self, peer, msg, action: str, title: str, agent_name: Optional[str], act, errors) -> None:
+        """Ask the local confirmation (kind agentCreate) and reply with `act()` once it is approved."""
+        def done(res: str) -> None:
+            self.audit.write("confirm", action=action, result=res, bid=peer.bid)
+            if res != "ok":
+                self.reply(peer, msg, {"type": "error", "code": "confirm_denied" if res == "denied"
+                                       else "confirm_timeout", "message": "not confirmed"})
+                return
+            try:
+                self.reply(peer, msg, act())
+            except errors as e:
+                self.reply(peer, msg, {"type": "error", "code": e.code, "message": str(e)[:200]})
+        self.approvals.request("agentCreate", title, None, agent_name, done)
 
     def h_agent_delete(self, peer, msg) -> dict:
         # E11: governed like agent creation (`remote.agentDelete`, default on; the local CLI/ctl path is not).

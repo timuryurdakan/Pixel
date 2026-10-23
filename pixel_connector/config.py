@@ -45,8 +45,12 @@ DEFAULT_LIMITS = {"maxConcurrent": 2, "taskTimeoutS": 3600, "maxPromptBytes": 32
                   "tasksPerHour": 60, "chunkMs": 250, "retainDays": 30, "runtimePerMinute": 10,
                   "agentCreatePerHour": 10, "maxAgents": 12, "handshakesPerHour": 20}
 DEFAULT_CONFIRM = {"task": "never", "agentCreate": False, "runtime": False, "peerRevoke": False, "timeoutS": 120}
+# S23-01: Claude Code settings sources a connector run may load (engines/claude.py setting_sources_arg).
+SETTING_SOURCES = ("user", "project", "local")
+DEFAULT_SETTING_SOURCES = ("project",)
 DEFAULT_CLAUDE = {"path": None, "enabled": True, "bare": False, "showThinking": False, "maxTurns": 50,
-                  "maxBudgetUsdPerTask": 2.0, "defaultModel": None, "cancelGraceS": 5.0, "cancelTermS": 10.0}
+                  "maxBudgetUsdPerTask": 2.0, "defaultModel": None, "cancelGraceS": 5.0, "cancelTermS": 10.0,
+                  "settingSources": list(DEFAULT_SETTING_SOURCES)}
 # Phase 19: answering Claude Code permission requests from paired devices. Off unless the user runs
 # `pixel-connector remote-approvals on` (local CLI only). The wait stays below the hook's 300 s command timeout.
 DEFAULT_REMOTE_APPROVALS = {"enabled": False, "timeoutS": 240}
@@ -314,6 +318,16 @@ def validate(raw: Any, home: Optional[str] = None, which=shutil.which) -> Tuple[
     c["maxBudgetUsdPerTask"] = _num(c_raw.get("maxBudgetUsdPerTask"), 2.0, 0.01, 1000.0)
     c["cancelGraceS"] = _num(c_raw.get("cancelGraceS"), 5.0, 0.05, 60.0)
     c["cancelTermS"] = _num(c_raw.get("cancelTermS"), 10.0, 0.05, 60.0)
+    # S23-01: which Claude Code settings files a connector run loads (their allow rules widen the profile).
+    ss = c_raw.get("settingSources")
+    c["settingSources"] = list(DEFAULT_SETTING_SOURCES)
+    if ss is not None:
+        if (not isinstance(ss, list) or not ss or len(set(map(repr, ss))) != len(ss)
+                or any(x not in SETTING_SOURCES for x in ss)):
+            errors.append("engines.claude.settingSources: a non-empty list of distinct values from %s"
+                          % ", ".join(SETTING_SOURCES))
+        else:
+            c["settingSources"] = [x for x in SETTING_SOURCES if x in ss]
     dm = c_raw.get("defaultModel")
     if dm is not None and (not isinstance(dm, str) or not MODEL_RE.match(dm)):
         errors.append("engines.claude.defaultModel: invalid model name")
@@ -713,7 +727,8 @@ def initial_config(server: str, room: str, key: str, owner: str, device_name: Op
         "deviceName": device_name or _default_device_name(),
         "workspaces": [],
         "engines": {"claude": {"path": claude_path, "enabled": True, "bare": False, "showThinking": False,
-                               "maxTurns": 50, "maxBudgetUsdPerTask": 2.0, "defaultModel": None},
+                               "maxTurns": 50, "maxBudgetUsdPerTask": 2.0, "defaultModel": None,
+                               "settingSources": list(DEFAULT_SETTING_SOURCES)},
                     "ollama": {"url": "http://127.0.0.1:11434", "enabled": True, "keepAlive": "10m",
                                "historyMessages": 40},
                     "openai": []},

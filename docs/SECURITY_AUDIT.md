@@ -233,11 +233,93 @@ Off by default; only `pixel-connector remote-approvals on` (local CLI, writes `c
 
 | ID | v2.md | Severity | Component | Finding | Status | Fix / test |
 |---|---|---|---|---|---|---|
-| S22-01 | H39 | **High** (workspace boundary) | `pixel_connector/engines/claude.py` `build_argv` | The `edit` and `dev` profiles passed bare `--allowedTools Edit Write NotebookEdit`. Without a path specifier the rule matches every path, so a connector Claude agent could create or overwrite any file the deny list did not name (shell start-up files are denied; documents, the Desktop, other projects were not). Found while reproducing a user report: with Claude Code 2.1.306, `edit` profile, cwd `PixelOfficeIsler` (temp copy), the prompt "masaüstünde bir txt dosyası oluştur" made Claude write an empty `~/Desktop/yeni_dosya.txt` (removed right after). | **fixed** (3.2.4) | Allow rule `Edit(./**)` (cwd = the resolved workspace; `Edit(...)` covers Edit/Write/NotebookEdit, as the existing deny rules already rely on). The same real run with the scoped rule: Bash and Read on the Desktop denied, nothing written. Plus a boundary system prompt (`--append-system-prompt`, no secrets) so the agent does not try. Tests: `tests/test_h39_e11_boundary_delete.py` (`EditScopeTests`: no unscoped allow rule in any profile), `test_phase20_security`, `test_connector_claude`. |
+| S22-01 | H39 | **High** (workspace boundary) | `pixel_connector/engines/claude.py` `build_argv` | The `edit` and `dev` profiles passed bare `--allowedTools Edit Write NotebookEdit`. Without a path specifier the rule matches every path, so a connector Claude agent could create or overwrite any file the deny list did not name (shell start-up files are denied; documents, the Desktop, other projects were not). Found while reproducing a user report: with Claude Code 2.1.306, `edit` profile, cwd `PixelOfficeIsler` (temp copy), the prompt "masaüstünde bir txt dosyası oluştur" made Claude write an empty `~/Desktop/yeni_dosya.txt` (removed right after). | **fixed** (3.2.4) — gerçek Claude ile doğrulandı (2026-10-22: klasör içine yazma çalışıyor, masaüstüne yazma reddedildi) | Allow rule `Edit(./**)` (cwd = the resolved workspace; `Edit(...)` covers Edit/Write/NotebookEdit, as the existing deny rules already rely on). The same real run with the scoped rule: Bash and Read on the Desktop denied, nothing written. Plus a boundary system prompt (`--append-system-prompt`, no secrets) so the agent does not try. Tests: `tests/test_h39_e11_boundary_delete.py` (`EditScopeTests`: no unscoped allow rule in any profile), `test_phase20_security`, `test_connector_claude`. |
 
-Not verified with a live run: a write **inside** the workspace with `Edit(./**)` on 2.1.306 (the second real run only tested
-that the Desktop is refused; further real runs on this machine were stopped so nothing touches the real home directory).
-Check once after updating: give an `edit` agent "bu klasörde deneme.txt oluştur". If Claude Code reports it denied, the rule
-form needs adjusting (e.g. the absolute `Edit(//<workspace>/**)`).
+Doğrulama (2026-10-22, kullanıcı, gerçek Claude Code): `edit` ajanı çalışma klasörünün **içine** dosya yazabildi,
+masaüstüne yazma isteği reddedildi. `Edit(./**)` biçimi doğru çalışıyor; mutlak `Edit(//<workspace>/**)` biçimine gerek yok.
 `dev` profile commands (`profiles.dev.allow`, e.g. `Bash(npm test *)`) can still write wherever the command writes; that is
 the profile's documented trade-off.
+
+## 11. Son güvenlik taraması (2026-10-23)
+
+Proje "tamamlandı" ilan edilmeden önceki son, bağımsız uygulama güvenliği incelemesi. Taban: `main` `12403e9`
+(A8 Görev Tahtası birleştirmesi dahil). Sonuç: **2 Orta, 3 Düşük (biri devreden), 4 Bilgi**. Orta ve kolay düzeltilebilen
+Düşük bulguların hepsi **düzeltildi, her biri için önce başarısız olduğu görülen bir regresyon testi var**
+(`tests/test_phase23_security.py`, `tests/js/approvals_cut.test.js`). Bağlayıcı **3.2.5** olarak yeniden derlendi
+(`pixel-connector.pyz` SHA-256 `a039f66952bb1aea7a1317de9991cceb629c58b8bb4b4c5730e3215b5b7d8a1b`), web `po-v3.0.13`.
+
+### 11.1 Kapsam ve yöntem
+
+| Alan | Yapılan |
+|---|---|
+| Bağlayıcı yetki ve kum havuzu | `engines/claude.py` argv'si (dört profil), `Edit(./**)`, deny listeleri, ortam izin listesi, `--append-system-prompt` metninin temizlenmesi, cwd'nin her zaman çözülmüş çalışma klasörü olduğu (`resolve_workspace` → `popen(cwd=…)`), `workspaces.resolve` (realpath, `..`, sembolik bağ, ata/deny kuralları), `--add-dir` (kullanılmıyor), H38 yol yenileme güven kuralı (`trusted_binary`, çalışma klasörleri hariç), ajan oluşturma/güncelleme/silme yetkileri ve onayları, bütçe, denetim kaydı içeriği. Kurulu Claude Code 2.1.306 ikili dosyasında `--setting-sources` seçeneği ve geçerli değerleri **yalnızca dizgi araması** ile doğrulandı (Claude çalıştırılmadı). |
+| Uzaktan onay | Tek kullanımlık kimlik, süre, ilk cevap kazanır, yanlış eş, `/onay` (çerez, CSRF, Host), `/ctl` belirteci, kancanın güvenli başarısızlığı (asla kendiliğinden izin vermez), `AskUserQuestion` cevaplarının özgün girdiye karşı yeniden doğrulanması, özet temizliği (kontrol/bidi/sıfır genişlik), kısaltma. |
+| E2E, eşleştirme, röle | Bilet kapsamı/süresi, cihaz bileti (Aşama 15 A1), çerçeve sınırları, Origin listesi (yeni özel alan adı), connector tarafında röle URL doğrulaması (`wss://` zorunlu), TLS doğrulaması, CSP `connect-src` tek ana makine. |
+| Bulut API | Doğrulama, hız sınırları, oda/anahtar işleme, hata sızıntısı, eski `residents` kalıntıları (yok). |
+| Web | Tüm `innerHTML`/`href`/`postMessage` kullanımları (yeni `board.js`, `approvals.js`, `prompt.js` gruplu retler, `devices.js` dahil), CSP uyumu, servis çalışanı önbelleği ve güncelleme mesajı, localStorage, tıklama hırsızlığı. |
+| Tedarik zinciri | Kurulum betikleri (yalnızca https, SHA doğrulaması, `main()` sarmalı), `.pyz`'nin git'te izlenen dosyalardan yeniden üretilebilir derlenmesi (`--check`), tüm geçmişte (56 commit, 4,6 MB yama) gizli bilgi taraması: `ghp_`/`github_pat_`/`gho_`, `AKIA`, `sk-ant-`, Slack, Upstash `AX…`, JWT biçimi, özel anahtar başlıkları, `KV_REST_API_TOKEN`/`RELAY_SECRET`/`PIXEL_SECRET`/`PIXEL_CREATE_TOKEN`/`VERCEL_TOKEN`/`CLOUDFLARE_API_TOKEN` atamaları, `#key=` ve `--key` ile gerçek anahtarlar, 26 karakterlik oda kimlikleri, 32 karakterlik yazma anahtarı biçimi, ev dizini yolları. `.gitignore`. |
+| Kanca istemcileri | Gönderilen alanlar (gizlilik), loopback'te vekil sunucu atlaması, Windows kilidi, Antigravity izleyicisi. |
+| Canlı (salt okunur) | `GET /` başlıkları, `/api/config`, `/api/health`, röle `/health`, `/sw.js` sürümü, `/connector/SHA256SUMS`. Oda oluşturulmadı, deneme yanılma ve yük yok. |
+| Testler | Başta ve sonda `python3 -m unittest discover -s tests`: **750 → 759 test, OK (1 atlandı: `pwsh` yok)**; `tools/build_connector.py --check` geçiyor. |
+
+### 11.2 Bulgular
+
+| ID | Önem | Alan | Bulgu | Durum | Düzeltme / test |
+|---|---|---|---|---|---|
+| S23-01 | **Orta** (profil sınırı kullanıcının kendi ayarlarına bağlıydı) | `engines/claude.py`, `config.py` | Claude Code izin kurallarını (ve kancaları, `additionalDirectories`, `enableAllProjectMcpServers`) **tüm** ayar dosyalarından birleştirir. Kullanıcının `~/.claude/settings.json` dosyasındaki `"Bash(npm test *)"` ya da çıplak `"Edit"` gibi kurallar ve çalışma klasöründeki git'e girmeyen `.claude/settings.local.json` ("her zaman izin ver" cevapları) bağlayıcının çalıştırdığı **her** ajana ekleniyordu: "Sadece okuma"/"Düzenleyebilir" profiline kabuk açılabiliyor, H39 (S22-01) geri alınabiliyordu. | **düzeltildi** (3.2.5) | Varsayılan `--setting-sources project` (yalnızca sürüm kontrolündeki proje ayarları; güvenilmeyen depo zaten T11). `engines.claude.settingSources` (boş olmayan, tekrarsız `user`/`project`/`local` alt kümesi; geçersizse hata ve varsayılan) ile isteğe bağlı geri açılır (ör. `apiKeyHelper`). Testler: `SettingSourcesTests` (dört profil, sıra, geçersiz değerler argv'ye ulaşmaz, yapılandırma doğrulaması, `initial_config`), `EngineWiringTests` (çalışan bağlayıcı → sahte `claude` argv'si). |
+| S23-02 | **Orta** (görülmeyen komut telefondan onaylanabiliyordu) | `web/hook/pixel_hook.py`, `web/js/approvals.js` | `PermissionRequest` kancası uzun bir Bash komutunu 200 karakterde **sessizce** kesiyordu; bağlayıcıya ≤ 200 karakter ulaştığı için o da "…" eklemiyordu. Dolgu ile uzatılmış bir komutun (`npm test -- … ; curl … \| sh`) telefonda yalnızca zararsız görünen başı, kesildiğine dair hiçbir işaret olmadan görünüyordu. | **düzeltildi** | Kanca kesilen özeti "…" ile bitirir; onay kartı "Komut kısaltıldı: sonunu görmeden onaylamayın…" uyarısını gösterir (`summaryWasCut`). Testler: `ApprovalSummaryTruncationTests`, `tests/js/approvals_cut.test.js`. Kanca dosyası `.pyz` içinde değil: kancayı kuranların kurulum betiğini yeniden çalıştırması gerekir (kullanıcı eylemi 2). |
+| S23-03 | Düşük (kullanıcının açtığı onay atlanabiliyordu) | `pixel_connector/app.py` `h_agent_update` | `confirm.agentCreate: true` iken yeni ajan yerel onay istiyordu, ama var olan bir ajanın profili `agent.update` ile onaysız yükseltilebiliyordu (onaylanmış "Sadece okuma" ajanı → "Geliştirici"). | **düzeltildi** | Profil değişikliği aynı yerel onayı ister (`Profil değişikliği: <ad> → <profil>`); yalnızca ad/model değişikliği ve aynı profil sormaz; geçersiz profil önce reddedilir. Ortak yardımcı `_confirm_then` (oluşturma da onu kullanır). Test: `ProfileChangeConfirmTests`. |
+| S23-04 | Düşük | çalışma klasörleri | Çalışma klasörünün **içinde önceden var olan**, dışarıyı gösteren bir sembolik bağ: `Edit(./**)` kuralının bağın yolunu mu hedefini mi eşlediği Claude Code'un davranışıdır ve canlı denenmedi. `edit` profili bağ oluşturamaz (kabuk yok); `dev` komutları oluşturabilir. | **kabul** | Belgelendi. Öneri: çalışma klasörlerine dışarıyı gösteren bağ koymayın; `workspaces.resolve` alt klasör seçiminde bağları zaten çözer ve dışarı çıkanı reddeder. |
+| S23-05 | Bilgi | onay kartı | Read/Edit/Write isteklerinde yalnızca dosya **adı** gösterilir (gizlilik tasarımı, §9); dosyanın konumu telefonda görünmez. | **kabul** | Tasarım gereği. Emin olunmayan istek reddedilmeli; Claude Code penceresi tam yolu gösterir. |
+| S23-06 | Bilgi (kullanıcı eylemi) | canlı site | Canlı site depodan geride: `sw.js` `po-v3.0.10`, `/connector/SHA256SUMS` eski `.pyz` (`f0edc6ec…`). 3.2.4 (H39) ve 3.2.5 düzeltmeleri push ve bağlayıcı güncellemesine kadar etkin değil. Başlıklar (CSP tek röle adresi, HSTS, `Permissions-Policy`, `nosniff`, `no-referrer`) doğru. | **kullanıcı** | Kullanıcı eylemi 1. |
+| S23-07 | Düşük (devreden S16-08) | `relay/` | Röle derlemesi için kilit dosyası hâlâ yok. | **kullanıcı** | §6 eylem 4 (Node gerekir; bu ortamda indirme yapılmadı). |
+| S23-08 | Bilgi (devreden Aşama 15 A1) | röle biletleri | Yazma anahtarı olan biri `device` bileti alıp bir cihazın röle yuvasını devralabilir (hizmet engelleme). E2E sayesinde okuma ve komut enjeksiyonu yok. | **kabul** | v4: cihaz bileti için cihaz anahtarına sahiplik kanıtı. |
+| S23-09 | Bilgi | `relay/wrangler.jsonc` | `workers_dev: true`: röle `*.workers.dev` adresinde de açık; özel alan adına konacak bir WAF hız kuralı orayı kapsamaz. Tarayıcı CSP'si ve `/api/config` yalnızca özel alan adını kullanıyor. | **kullanıcı** (isteğe bağlı) | Hiçbir istemcinin `workers.dev` kullanmadığından emin olunca `workers_dev: false` (altyapı dosyası, kullanıcı onayıyla). |
+
+### 11.3 Bulgusuz doğrulananlar
+
+- **cwd ve klasör sınırı.** Claude ajanı çalışma klasörü olmadan oluşturulamaz ve başlatılamaz; her görevde klasör yeniden
+  çözülür (realpath, `..` yok, alt klasör kökün altında kalmalı, ata/deny kuralları) ve süreç `cwd` olarak onunla başlar.
+  `--add-dir` hiç verilmez. Okuma, Claude Code'un varsayılanıyla cwd ile sınırlı; yazma `Edit(./**)` ile (S22-01, gerçek
+  çalıştırmayla doğrulandı). WebFetch/WebSearch ve MCP araçları `dontAsk` altında izin kuralı olmadan reddedilir.
+- **Sistem istemi.** `boundary_prompt` yalnızca klasörün görünen adını (≤ 60) ve `~/…` yolunu (≤ 120) içerir; kontrol,
+  satır sonu, bidi karakterleri ve `cmd.exe` için tehlikeli `" % ^ !` temizlenir; gizli bilgi ve kullanıcı adı yok.
+- **Ortam, deny listeleri, git pinleri, H38.** S20-01/02 ve H38 değişmeden yerinde; otomatik bulunan `claude` yalnızca
+  kullanıcı/root'a ait, başkasının yazamadığı yoldan ve çalışma klasörü dışından alınır.
+- **Ajan silme (E11).** `remote.agentDelete` ile yönetilir, görevleri iptal eder, geç gelen oturum yazımını düşürür
+  (`save_session` dönemi), denetimde istem yok.
+- **Denetim kaydı.** İstemler SHA-256 + uzunluk (`storePrompts` kapalı), onay özetleri 12 haneli özet; model çıktısı yok.
+- **Uzaktan onay.** §9 tehdit modeli yeniden kontrol edildi: kanca bağlayıcı kapalı/zaman aşımı/bozuk cevap/istisna
+  durumunda çıktı vermez; `PIXEL_OFFICE_DISABLE=1` olan bağlayıcı ajanlarında kanca hiçbir şey yapmaz; cevaplar hem
+  bağlayıcıda hem kancada özgün girdiye karşı denetlenir; `/onay` soruyu yalnızca reddedebilir.
+- **Röle ve E2E.** Aşama 15/16 incelemesinden beri protokol değişmedi. Origin listesi yalnızca üretim adresleri;
+  bağlayıcı yalnızca `wss://` (yerelde `ws://127.0.0.1`) röle adresi kabul eder ve TLS'i doğrular.
+- **Bulut API.** Aşama 16 ve A11'den beri değişmedi; `residents` uç noktası ve kodu tamamen kaldırılmış.
+- **Web.** `ui.js` dışında `innerHTML` yok (orada her değer `esc()`/sayı/izin listesi); Görev Tahtası, onay kartları,
+  gruplu retler ve cihaz sayfası yalnızca `textContent` kullanır. `postMessage` yalnızca sitenin kendi servis çalışanından
+  (sürüm dizgisi regex ile denetlenir). CSP satır içi betik izni vermez; `frame-ancestors 'none'`.
+- **Gizli bilgi taraması.** Temiz; döndürülecek sır yok. Geçmişteki tek kişisel iz §3'tekilerle aynı (S16-12/13).
+- **Sürüm paketi.** `.pyz` yalnızca `pixel_connector/*`, `__main__.py`, `pixel_agent.py` içerir, yerel yol yok,
+  `--check` bayt bayt aynı.
+
+### 11.4 Kullanıcı eylemleri
+
+1. **Push** (Vercel otomatik dağıtır). Sonra `curl -s https://www.pixeloffice.com.tr/sw.js | grep VERSION` →
+   `po-v3.0.13`; `/connector/SHA256SUMS` → `a039f669…`.
+2. **Bağlayıcıyı güncelleyin** (her bilgisayar, arkadaşınızınki dahil): Cihazlar → Cihaz ekle → kurulum komutu; yazılan
+   SHA-256'yı README ile karşılaştırın; `pixel-connector doctor`. Uzaktan onay kullanan bilgisayarlarda **kanca kurulumunu
+   da yeniden çalıştırın** (S23-02, `pixel_hook.py`).
+3. Kullanıcı ayarlarınızda Claude Code için gerekli bir şey varsa (`apiKeyHelper`, `env`), `connector.json` →
+   `"engines": {"claude": {"settingSources": ["user", "project"]}}`; bunun o dosyadaki izin kurallarını da her profile
+   eklediğini bilerek.
+4. Devreden: röle kilit dosyası (§6 eylem 4), GitHub gizli bilgi taraması + push koruması (§6 eylem 6), kullanım
+   uyarıları; isteğe bağlı `workers_dev: false` (S23-09) ve özel alan adında Cloudflare WAF hız kuralı (S16-15).
+
+**Döndürülmesi gereken sır yok.**
+
+### 11.5 Değişen dosyalar
+
+`pixel_connector/{engines/claude.py,config.py,app.py,__init__.py}` (3.2.5; `web/connector/pixel-connector.pyz`,
+`SHA256SUMS`, README özeti), `web/hook/pixel_hook.py`, `web/js/approvals.js`, `web/css/style.css`, `web/sw.js` +
+`web/js/cloud.js` (`po-v3.0.13`), `docs/V3.md` (§8.1.1), `README.md`, `tests/test_phase23_security.py` (yeni),
+`tests/js/approvals_cut.test.js` (yeni), `tests/test_phase20_connector.py` + `tests/test_e2e_protocol.py` (sürüm 3.2.5).

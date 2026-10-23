@@ -862,7 +862,12 @@ def tool_summary(tool: str, inp: object) -> str:
         v = inp.get("query")
     elif tool in ("Agent", "Task"):
         v = inp.get("description")
-    return _clean(v, SUMMARY_MAX) if isinstance(v, str) else ""
+    if not isinstance(v, str):
+        return ""
+    # S23-02: a cut must be visible. A silent cut showed a harmless-looking prefix on the phone while the rest of the
+    # command (e.g. "; curl … | sh" after padding) was never seen; "…" makes the card warn (approvals.js).
+    full = _clean(v, len(v))
+    return full if len(full) <= SUMMARY_MAX else full[:SUMMARY_MAX - 1].rstrip() + "…"
 
 
 def match_key(tool: object, inp: object) -> str:
