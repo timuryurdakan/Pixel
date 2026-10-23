@@ -956,3 +956,147 @@ input.pair-code { font: bold 20px/1.2 var(--font) !important; letter-spacing: 2p
   .part-denied > summary { padding: 10px 0; }
   .ctl .ctl-delete { order: 4; }                 /* below usage, above the sticky compose box */
 }
+/* ---------- sr-only utility ---------- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- A8: Task Board (Kanban Whiteboard) ---------- */
+.board-dialog {
+  max-width: 880px;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.board-columns {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+  align-items: start;
+}
+.board-col {
+  background: rgba(16, 20, 24, 0.65);
+  border: var(--px) solid var(--line);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 160px;
+}
+.col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: var(--px) solid var(--line);
+}
+.col-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.col-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.col-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.col-count {
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 6px;
+  border-radius: 8px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.col-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.card-empty {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+  text-align: center;
+  padding: 14px 4px;
+}
+.board-card {
+  background: var(--panel);
+  border: var(--px) solid var(--line);
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.1s;
+  user-select: none;
+}
+.board-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.board-card:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.board-card.is-approval {
+  border-left: 3px solid var(--warn);
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+.card-agent-name {
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-status {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.card-detail {
+  font-size: 10px;
+  color: #8da4b8;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .board-columns {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 480px) {
+  .board-columns {
+    grid-template-columns: 1fr;
+  }
+}
+

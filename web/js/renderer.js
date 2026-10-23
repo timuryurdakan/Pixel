@@ -4,9 +4,11 @@
 import { getCharacterFrame, getTileSprite, getFurnitureSprite, getBubbleSprite, getToolIcon, getCatFrame, CHAR_W, CHAR_H } from './sprites.js';
 import { TILE, SCALE, CAT_TILE } from './office.js';
 import { ParticleSystem, LightingEngine, AgentReactions, STEP_DUST_PER_S, CODE_SPARKLE_PER_S } from './fx.js';
+import { drawBoardOverlay, BOARD_X, BOARD_Y, BOARD_W, BOARD_H } from './board.js';
 
 const DESK_ON_STATES = new Set(['working', 'thinking']);
 export const CAT_ID = 'mascot-cat';
+export const BOARD_ID = 'board';
 export const LABEL_MAX = 18;
 
 /**
@@ -135,7 +137,8 @@ export class Renderer {
    * @param {import('./agents.js').Character[]} characters
    * @param {{selectedId:string|null, hoverId:string|null, time:number}} opts
    */
-  render(characters, { selectedId = null, hoverId = null, time = 0 } = {}) {
+  render(characters, { selectedId = null, hoverId = null, time = 0, boardData = null } = {}) {
+    if (boardData !== null) this.boardData = boardData;
     const dt = this._lastTime ? Math.min(0.1, Math.max(0, time - this._lastTime)) : 0.016;
     this._lastTime = time;
     this.particles.update(dt);
@@ -170,6 +173,9 @@ export class Renderer {
         draw: () => {
           if (isDeskActive) this.lighting.drawMonitorGlow(ctx, f.x, f.y);
           ctx.drawImage(img, dx, dy);
+          if (f.kind === 'board' && this.boardData) {
+            drawBoardOverlay(ctx, dx, dy, this.boardData);
+          }
         },
       });
     }
@@ -310,6 +316,16 @@ export class Renderer {
     if (best) return best.id;
     const cat = this.cat;
     if (wx >= cat.x && wx < cat.x + cat.w && wy >= cat.y && wy < cat.y + cat.h) return cat.id;
+    if (wx >= BOARD_X && wx < BOARD_X + BOARD_W && wy >= BOARD_Y && wy < BOARD_Y + BOARD_H) return BOARD_ID;
     return null;
   }
+
+  pickBoard(canvasX, canvasY) {
+    const rect = this.canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return false;
+    const wx = (canvasX * this.worldW) / rect.width;
+    const wy = (canvasY * this.worldH) / rect.height;
+    return wx >= BOARD_X && wx < BOARD_X + BOARD_W && wy >= BOARD_Y && wy < BOARD_Y + BOARD_H;
+  }
 }
+
