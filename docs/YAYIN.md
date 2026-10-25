@@ -37,7 +37,7 @@ Sırayla yapın. Node.js kurmanız **gerekmez**. Ekrandaki düğme adları zaman
      | Project name / Worker name | `pixel-relay` |
      | Production branch | `main` |
      | Root directory (Advanced settings) | `relay` |
-     | Build command | `npm install --no-audit --no-fund && npm test` |
+     | Build command | `npm ci --no-audit --no-fund && npm test` |
      | Deploy command | `npx wrangler deploy` |
      | Build watch paths → Include | `relay/*` |
 

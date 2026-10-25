@@ -272,7 +272,7 @@ Düşük bulguların hepsi **düzeltildi, her biri için önce başarısız oldu
 | S23-04 | Düşük | çalışma klasörleri | Çalışma klasörünün **içinde önceden var olan**, dışarıyı gösteren bir sembolik bağ: `Edit(./**)` kuralının bağın yolunu mu hedefini mi eşlediği Claude Code'un davranışıdır ve canlı denenmedi. `edit` profili bağ oluşturamaz (kabuk yok); `dev` komutları oluşturabilir. | **kabul** | Belgelendi. Öneri: çalışma klasörlerine dışarıyı gösteren bağ koymayın; `workspaces.resolve` alt klasör seçiminde bağları zaten çözer ve dışarı çıkanı reddeder. |
 | S23-05 | Bilgi | onay kartı | Read/Edit/Write isteklerinde yalnızca dosya **adı** gösterilir (gizlilik tasarımı, §9); dosyanın konumu telefonda görünmez. | **kabul** | Tasarım gereği. Emin olunmayan istek reddedilmeli; Claude Code penceresi tam yolu gösterir. |
 | S23-06 | Bilgi (kullanıcı eylemi) | canlı site | Canlı site depodan geride: `sw.js` `po-v3.0.10`, `/connector/SHA256SUMS` eski `.pyz` (`f0edc6ec…`). 3.2.4 (H39) ve 3.2.5 düzeltmeleri push ve bağlayıcı güncellemesine kadar etkin değil. Başlıklar (CSP tek röle adresi, HSTS, `Permissions-Policy`, `nosniff`, `no-referrer`) doğru. | **kullanıcı** | Kullanıcı eylemi 1. |
-| S23-07 | Düşük (devreden S16-08) | `relay/` | Röle derlemesi için kilit dosyası hâlâ yok. | **kullanıcı** | §6 eylem 4 (Node gerekir; bu ortamda indirme yapılmadı). |
+| S23-07 | Düşük (devreden S16-08) | `relay/` | Röle derlemesi için kilit dosyası hâlâ yok. | **düzeltildi** (2026-10-26) | `relay/package-lock.json` eklendi, derleme komutu `npm ci`; bkz. §11.4. |
 | S23-08 | Bilgi (devreden Aşama 15 A1) | röle biletleri | Yazma anahtarı olan biri `device` bileti alıp bir cihazın röle yuvasını devralabilir (hizmet engelleme). E2E sayesinde okuma ve komut enjeksiyonu yok. | **kabul** | v4: cihaz bileti için cihaz anahtarına sahiplik kanıtı. |
 | S23-09 | Bilgi | `relay/wrangler.jsonc` | `workers_dev: true`: röle `*.workers.dev` adresinde de açık; özel alan adına konacak bir WAF hız kuralı orayı kapsamaz. Tarayıcı CSP'si ve `/api/config` yalnızca özel alan adını kullanıyor. | **kullanıcı** (isteğe bağlı) | Hiçbir istemcinin `workers.dev` kullanmadığından emin olunca `workers_dev: false` (altyapı dosyası, kullanıcı onayıyla). |
 
@@ -323,3 +323,22 @@ Düşük bulguların hepsi **düzeltildi, her biri için önce başarısız oldu
 `SHA256SUMS`, README özeti), `web/hook/pixel_hook.py`, `web/js/approvals.js`, `web/css/style.css`, `web/sw.js` +
 `web/js/cloud.js` (`po-v3.0.13`), `docs/V3.md` (§8.1.1), `README.md`, `tests/test_phase23_security.py` (yeni),
 `tests/js/approvals_cut.test.js` (yeni), `tests/test_phase20_connector.py` + `tests/test_e2e_protocol.py` (sürüm 3.2.5).
+
+### 11.4 Kapanış kontrolleri (2026-10-26)
+
+- **Bu bilgisayar güncellendi.** Bağlayıcı canlı siteden indirildi, SHA-256 `a039f669…` canlı `SHA256SUMS` ve depo ile
+  aynı; servis 3.2.5 ile çalışıyor, röle `live`, `doctor` her satırda ✓ (H38 eskiyen Claude Code yolunu kendisi
+  yeniledi). Kanca dosyaları (`pixel_hook.py`, `pixel_agent.py`, `pixel_antigravity.py`) canlı sürümle değiştirildi;
+  `~/.claude/settings.json` kanca kayıtları yeni sürümle birebir aynı olduğu için kurulum yeniden çalıştırılmadı.
+- **Klasör sınırı gerçek Claude ile (2.1.310, `edit` profili, `--setting-sources project`).** Klasör içine yazma
+  çalıştı. Sistem istemi varken ajan dışarı yazmayı denemedi; sistem istemi olmadan zorlandığında Write ve Bash
+  `dontAsk` altında reddedildi, dosya oluşmadı.
+- **S23-07 / S16-08 kapandı.** `relay/package-lock.json` resmî Node 22.23.4 (SHA-256 doğrulandı) ile
+  `npm install --package-lock-only --ignore-scripts` kullanılarak üretildi: 92 paket, `wrangler` 4.145.0. Röle testleri
+  26/26. Cloudflare derleme komutu `npm ci --no-audit --no-fund && npm test` olmalı (`docs/YAYIN.md`).
+- **S26-01 (Düşük, yalnızca derleme aracı).** `npm audit`: `wrangler` 4.145.0'ın getirdiği `undici` 7.0.0–7.30.0'da 4
+  yüksek önemde açık (GHSA-4qv8-2p9j-2685, GHSA-f72v-6w45-q472, GHSA-xjj6-f33q-929c): EventSource ve içerik kodlaması
+  ile hizmet engelleme, SRI atlatma. `undici` yalnızca Cloudflare'in derleme makinesinde `wrangler` tarafından
+  kullanılır, yayımlanan Worker'a girmez; sömürü `wrangler`'ın konuştuğu sunucunun kötü niyetli olmasını gerektirir.
+  Düzelten ilk sürüm `wrangler` 4.152.0 (2026-10-22) henüz iki haftalık değil; 4.150.0 ve 4.151.0 hâlâ etkileniyor.
+  **Durum: ertelendi.** 2026-11-05'ten sonra `wrangler` 4.152.0+'ya yükseltilip kilit yeniden üretilecek.
