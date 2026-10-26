@@ -84,6 +84,11 @@ ve halı. Sağ alt oda zaten duvarlı ve kapılı olduğu için Patron Odası'na
 
 ### 3.2 Önerilen harita (boyut aynı: 22 × 14)
 
+> **Geçersiz (2026-10-26):** Kullanıcı Patron Odası'nı **sağ üst köşede** istedi; kitaplıklar ve saksılar kaldırılıp
+> kahve tezgâhı, su sebili ve Görev Tahtası üst duvarın sol/orta kısmına taşınacak, dinlenme odası yerinde kalacak.
+> Bağlayıcı karar: §10/1. Aşağıdaki sağ alt çizim yalnızca tarihçedir; P4/P5 yeni haritayı §10/1'e göre çizer ve bu
+> bölüme işler.
+
 ```
      x: 0         1         2
         0123456789012345678901
@@ -350,7 +355,10 @@ tavanları, eşleşme kaldırılınca durma, bellekte tutulma (bağlayıcı duru
 | T13 | **Arayüzde XSS** | Plan, rapor, rol adları yalnızca `textContent`; sınıf adları doğrulanmış durumlardan; CSP değişmez. |
 | T14 | **Hizmet engelleme (çok `boss.ask`)** | Tek etkin iş (`busy`), tarayıcı görev hız sınırı (`tasksPerMinute`) `boss.ask`'e de uygulanır. |
 
-### 5.2 Varsayılan tavanlar (karar §10/4 ile değişebilir)
+### 5.2 Varsayılan tavanlar
+
+> **Güncel değerler §10/4'tedir** (1,00 $ / 4 iş emri / 1 düzeltme turu / 45 dk / 100 tur; bilgisayarda en fazla
+> 3,00 $). Aşağıdaki tablo ilk taslaktır.
 
 | Tavan | Varsayılan | Sınır (kullanıcı yalnızca düşürebilir) |
 |---|---|---|
@@ -556,7 +564,35 @@ ama kullanıcı "biri bitmeden diğeri başlamasın" dediği için sıralı tutu
 
 ---
 
-## 10. Kullanıcıya sorulacak açık kararlar
+## 10. Kullanıcı kararları (2026-10-26) — bu bölüm aşağıdaki seçeneklerin ve belgedeki önerilerin önüne geçer
+
+1. **Oda yeri: sağ ÜST köşe** (kullanıcının kendi tarifi; §3.2'deki sağ alt öneri **geçersiz**). Masaların
+   karşısındaki üst duvar sırasındaki (y 1) kitaplıklar (K) ve saksılar (P) **kaldırılır**; kahve tezgâhı (kCk), kahve
+   noktaları, su sebili (Q) ve Görev Tahtası (A8) **oraya, sol/orta üst duvara** taşınır. Sağ üst köşe (şu anki kahve
+   köşesi + halı alanı) duvarlı, kapılı Patron Odası olur. **Dinlenme odası (sağ alt, yataklar) yerinde kalır.** Harita
+   boyutu 22 × 14 kalır. Kesin kareleri P5 belirler ve yol bulma testleriyle doğrular; Görev Tahtası yürünmez kalır,
+   kedi yeni bir boş kareye taşınır. Patron yüzü aşağı (izleyiciye) bakar; kapı ve teslim noktalarını P5 buna göre seçer.
+2. **Yürütme: en fazla 2 uzman aynı anda.** Dosya alanları (`files`) çakışan iş emirleri ve `after` bağımlılıkları
+   sırayla; aynı anda yalnızca çakışmayan en fazla 2 iş emri. Bir çakışma belirsizse (ör. joker desen) sırayla.
+3. **Test uzmanı testleri çalıştırabilir, onayla.** Test rolü `dev` profiliyle, ama yalnızca rolün kendi dar izin
+   listesindeki test komutlarıyla (ör. `Bash(python3 -m unittest *)`, `Bash(npm test *)`, `Bash(pytest *)`; cihazın
+   genel `profiles.dev.allow` listesi bu role eklenmez) çalışır ve **her test iş emri başlamadan önce kullanıcı onayı
+   ister** (yerel onay / eşleşmiş tarayıcıda onay kartı), `confirm.task` ayarından bağımsız. Onay reddi/zaman aşımı →
+   o iş emri atlanır (fail-closed), rapor bunu söyler.
+4. **Tavanlar: "maddi zarar olmasın" → koordinatör seçti (temkinli):**
+   - Çalışma tavanı **1,00 $** (tarayıcı yalnızca düşürebilir; üst sınırı yalnızca bilgisayardaki `connector.json`
+     yükseltebilir, en fazla 3,00 $).
+   - En fazla **4 iş emri**, **1 düzeltme turu** (en fazla 2 iş emri), toplam **45 dk**, toplam **100 tur**; planlama
+     görevi 0,20 $ / 10 tur.
+   - Plan onayında tahmini maliyet ve tavan yan yana gösterilir; tavan aşılırsa iş durur (mevcut A10 davranışı).
+   - Kullanıcı Claude aboneliğiyle giriş yapıyor (`doctor`: subscription): dolar tutarı ek ücret değil, abonelik
+     kullanım kotasından düşen eşdeğer maliyettir. Bağlayıcı, API anahtarı ya da ek kullanım (extra usage) faturası
+     açacak hiçbir ayarı değiştirmez; README'de "API anahtarıyla kullanıyorsanız bu tutarlar gerçek ücrettir" uyarısı
+     yer alır.
+5. **Patron hafızası: A** (koordinatör seçti, kullanıcı tavan dışında kararı koordinatöre bıraktı): her çalışma klasörü
+   için sürekli Claude oturumu + panelde "Hafızayı sıfırla".
+
+### Eski seçenekler (tarihçe için)
 
 1. **Patron odası nerede olsun?**
    - A) Sağ alttaki dinlenme odası Patron Odası olur, yataklar sağ üstteki halıya taşınır. **(Öneri:** oda zaten
