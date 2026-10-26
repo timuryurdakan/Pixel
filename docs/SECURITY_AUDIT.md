@@ -341,7 +341,12 @@ Düşük bulguların hepsi **düzeltildi, her biri için önce başarısız oldu
   ile hizmet engelleme, SRI atlatma. `undici` yalnızca Cloudflare'in derleme makinesinde `wrangler` tarafından
   kullanılır, yayımlanan Worker'a girmez; sömürü `wrangler`'ın konuştuğu sunucunun kötü niyetli olmasını gerektirir.
   Düzelten ilk sürüm `wrangler` 4.152.0 (2026-10-22) henüz iki haftalık değil; 4.150.0 ve 4.151.0 hâlâ etkileniyor.
-  **Durum: ertelendi.** 2026-11-05'ten sonra `wrangler` 4.152.0+'ya yükseltilip kilit yeniden üretilecek.
+  **Durum: düzeltildi (2026-10-26, kullanıcı onayıyla).** `wrangler` 4.145.0'da bırakıldı; `relay/package.json`
+  `overrides` ile `undici` 7.30.1'e (2026-10-15) ve aynı gün görülen `sharp` < 0.35.5 / `librsvg` açığı
+  (GHSA-wq5f-xc86-pv6w, yine yalnızca `miniflare` üzerinden gelen geliştirme bağımlılığı) için `sharp` 0.35.5'e
+  (2026-09-27) sabitlendi. `npm audit`: 0 açık. Geçici kopyada `npm ci`, röle testleri 26/26 ve
+  `wrangler deploy --dry-run` (21,6 KiB Worker) geçti. `wrangler` ileride yükseltilince `overrides` kaldırılıp
+  `npm audit` yeniden çalıştırılmalı.
 
 ## 12. v4 güvenlik incelemesi (2026-10-26)
 
