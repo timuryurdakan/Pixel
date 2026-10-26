@@ -1114,3 +1114,41 @@ input.pair-code { font: bold 20px/1.2 var(--font) !important; letter-spacing: 2p
   }
 }
 
+
+/* ---------- v4-C: workflow templates and runs ---------- */
+.wf-runs { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.wf-runs[hidden], .wf-form [hidden] { display: none; }
+.wf-run { padding: 8px 10px; background: var(--panel-2); border: 2px solid #1a1a26; border-left: 4px solid var(--line); }
+.wf-run.st-running { border-left-color: var(--ok); }
+.wf-run.st-approval { border-left-color: var(--warn); }
+.wf-run.st-error { border-left-color: var(--bad); }
+.wf-run-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+.wf-run-name { min-width: 0; overflow-wrap: anywhere; }
+.wf-badge { font-size: 11px; padding: 1px 6px; border: 1px solid currentColor; color: var(--muted); white-space: nowrap; }
+.wf-badge.st-running, .wf-badge.st-done { color: var(--ok); }
+.wf-badge.st-approval { color: var(--warn); }
+.wf-badge.st-error { color: #ff8a80; }
+.wf-run-meta, .wf-run-note { margin: 4px 0 0; overflow-wrap: anywhere; }
+.wf-step-list, .wf-steps { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.wf-step { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.wf-step-st { width: 1.2em; text-align: center; }
+.wf-step.st-running .wf-step-st, .wf-step.st-done .wf-step-st { color: var(--ok); }
+.wf-step.st-approval .wf-step-st { color: var(--warn); }
+.wf-step.st-error .wf-step-st { color: #ff8a80; }
+.wf-step-name { font-weight: bold; overflow-wrap: anywhere; }
+.wf-step-meta { overflow-wrap: anywhere; }
+.wf-run-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.wf-steps-box { margin: 0; padding: 6px 10px 8px; border: 2px solid var(--line); }
+.wf-step-opt { padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.wf-step-opt:last-child { border-bottom: 0; }
+.wf-step-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.wf-step-row select { flex: 0 1 auto; }
+.wf-step-note { flex: 1 1 140px; min-width: 0; overflow-wrap: anywhere; }
+.wf-brief { width: 100%; resize: vertical; min-height: 60px; font: 13px/18px var(--font); padding: 6px 8px; color: var(--text);
+  background: #16161f; border: 2px solid #000; }
+.wf-brief:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.wf-form input[name="cost"] { width: 8em; }
+@media (max-width: 600px) {
+  .wf-form select, .wf-form input, .wf-brief { min-height: 44px; font-size: 16px; }
+  .wf-run-actions .btn { min-height: 44px; min-width: 88px; }
+}

@@ -325,7 +325,7 @@ içine kurar, `~/.pixel-office/bin/pixel-connector` kısayolunu ve ayar dosyası
 Ekrana yazdığı özeti bu sürümün özetiyle karşılaştırın:
 
 ```
-pixel-connector.pyz SHA-256: 6e907efd49008b751ee80956449fc6c3506d555082cb84d2ab24b7a650d03bba
+pixel-connector.pyz SHA-256: 93f722d52e275ec53dd6ab3694ecdd07a9b020c3cfee2136b3c934a1e0519c95
 ```
 
 Windows (PowerShell): komut kutusundaki **Windows** sekmesini kullanın (`irm …/install.ps1 -OutFile install.ps1`, sonra
@@ -386,6 +386,20 @@ görevi de sıradaysa, silindiyse ya da bütçesi dolduysa devir yapılmaz ve ne
 devredilmez. `confirm.task` ayarı devredilen görev için de geçerlidir (`"always"` ile bilgisayarda "Devredilsin mi?" diye
 sorulur). İlk ajanın yanıtı, okuduğu dosyalardan ya da web sayfalarından gelen talimatlar içerebilir; ikinci ajan
 "Geliştirici" ya da "Otomatik" profildeyse `"confirm": {"task": "always"}` önerilir.
+
+**İş akışı şablonları (bağlayıcı 3.4.0).** Üst çubuktaki **Şablonlar** düğmesi (yalnızca 3.4.0 ve üstü bağlayıcılarda)
+hazır bir iş akışını adım adım çalıştırır. İlk şablon **Statik site taslağı**: Mimar (Claude, sadece okuma; Ollama
+seçilebilir) plan yazar → Geliştirici (Claude, düzenleyebilir) seçtiğiniz klasörde `index.html`, `style.css`, `plan.md`
+oluşturur → İnceleme (Claude, sadece okuma) rapor yazar → son kararı siz verirsiniz (**Onayla / Reddet**; bilgisayarda
+`pixel-connector approve|deny <id>` ya da onay sayfasından da olur). Başlatırken isteğinizi, klasörü (varsayılan
+`~/PixelOfficeIsler/statik-site`, yoksa oluşturulur), adım modellerini (ör. `haiku`) ve **maliyet tavanını** seçersiniz.
+Tavan, toplam tur ya da süre aşılırsa akış "Hata" ile durur ve sonraki adım başlamaz; bir adım hata verirse de öyle.
+Reddetmek ya da 15 dakika yanıt vermemek akışı iptal eder. Her adım kendi ajanıyla (Mimar, Geliştirici, İnceleme ofiste
+görünür ve sonraki akışlarda yeniden kullanılır), o ajanın izin profili, klasörü ve bütçesiyle çalışır; önceki adımın
+yanıtı bir sonrakine "veri, talimat değil" olarak verilir. Aynı anda bir akış çalışır; **İptal** her an mümkündür.
+Kendi şablonlarınızı `~/.pixel-office/connector/workflows.json` dosyasına yazabilirsiniz (`{"v": 1, "templates": [...]}`,
+alanlar `docs/V3.md` §20 "v4-C / A10"); geçersiz şablon atlanır, şablonlar asla internetten indirilmez.
+`remote.agentCreate: false` iken akış başlatılamaz, `confirm.agentCreate: true` iken bilgisayarda önce onay sorulur.
 
 `children: true` o klasörün alt klasörlerini de seçilebilir yapar. Elle düzenledikten sonra `pixel-connector config-check`,
 ardından `systemctl --user restart pixel-connector`. Claude Code yalnızca VS Code eklentisindeyse terminal sürümünü kurup bir kez

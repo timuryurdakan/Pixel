@@ -92,6 +92,7 @@ def open_room(page, base, room, key=None):
 
 
 HANDOFF_NOTE_UI = "Devir notu UI-9b3e"   # v4-B: must never reach the relay in clear text
+WORKFLOW_BRIEF_UI = "Kafe sitesi UI-4c1a"  # v4-C: the user's request, never in a relay frame in clear text
 
 
 def no_hscroll(page):
@@ -137,8 +138,9 @@ class Scenario:
         ("second_tab", ("ollama_agent",)),
         ("budget", ("ollama_agent",)),
         ("claude_agent", ("pairing",)),
+        ("workflow", ("claude_agent",)),
         ("unpaired_browser", ("ollama_agent", "claude_agent")),
-        ("phone_layout", ("runtimes", "claude_agent")),
+        ("phone_layout", ("runtimes", "claude_agent", "workflow")),
         ("unpair", ("pairing",)),
     )
 
@@ -355,6 +357,52 @@ class Scenario:
                what="handed-off task finished")
         t.assertEqual(A.errors, [])
 
+    # ---- v4-C (A10): "Şablonlar" → the static site template, steps on the board, the walk, approve ------------
+    def workflow(self, t):
+        A = self.A
+        # step 1 streams for ~12 s, so the three new characters are in the office before step 2 starts (the A9 walk)
+        F.set_plan(self.fake_claude_dir, [{"fixture": "claude_stream_slow.jsonl", "delay": 0.06},
+                                          {"fixture": "claude_stream_resume.jsonl"},
+                                          {"fixture": "claude_stream_resume.jsonl"}])
+        A.wait("!document.getElementById('btn-workflows').hidden", 15, what="Şablonlar button")
+        A.click("#btn-workflows")
+        A.wait("document.getElementById('dlg-workflows').open && document.querySelectorAll('#wf-steps li').length === 4", 15,
+               what="template steps")
+        t.assertEqual(A.eval("document.querySelector('#dlg-workflows [name=template]').value"), "statik-site")
+        t.assertEqual(A.eval("document.querySelector('#dlg-workflows [name=sub]').value"), "statik-site")
+        t.assertEqual(A.eval("document.querySelector('#dlg-workflows [name=engine-mimar]').value"), "claude")
+        t.assertTrue(no_hscroll(A), "horizontal scroll with the workflow dialog open at 1280 px")
+        A.eval("document.querySelector('#dlg-workflows [name=model-mimar]').value = 'haiku'")
+        A.type("#dlg-workflows [name=brief]", WORKFLOW_BRIEF_UI)
+        A.eval("document.querySelector('#dlg-workflows [name=cost]').value = '0.5'")
+        A.click("#dlg-workflows [name=start]")
+        A.wait("!!document.querySelector('#wf-runs .wf-run')", 20, what="run card")
+        A.wait("['Mimar', 'Geliştirici', 'İnceleme'].every(n => [...window.pixelOffice.agents.values()].some(a => a.control && a.name === n))",
+               30, what="step agents in the office")
+        A.wait("[...window.pixelOffice.manager.characters.values()].some(c => !!c.errand || c.paperUntil > c.time)", 40,
+               what="step-to-step walk")
+        A.wait("!!document.querySelector('#wf-runs .wf-approve')", 60, what="checkpoint")
+        t.assertIn("Onay bekliyor", A.text("#wf-runs .wf-run"))
+        t.assertTrue(A.eval("window.pixelOffice.renderer.boardData.waiting.some(c => c.isApproval && c.agentName === 'Siz')"))
+        t.assertTrue(A.eval("[...window.pixelOffice.v3.panel.views.values()].some(v => [...v.blocks.values()].some(b =>"
+                            " /İş akışı: Statik site taslağı · İnceleme/.test(b.el.textContent)))"))
+        folder = os.path.join(os.path.dirname(self.fake_claude_dir), "dev", "projects", "pixel", "statik-site")
+        t.assertTrue(os.path.isdir(folder), folder)
+        cs = F.calls(self.fake_claude_dir)
+        t.assertEqual(len(cs), 3)
+        t.assertEqual(cs[0]["argv"][cs[0]["argv"].index("--model") + 1], "haiku")
+        t.assertEqual(cs[0]["argv"][cs[0]["argv"].index("--max-budget-usd") + 1], "0.50")
+        t.assertIn(WORKFLOW_BRIEF_UI, cs[0]["stdin"])
+        t.assertEqual(cs[1]["cwd"], os.path.realpath(folder))
+        self.shot(A, "ui_workflow.png")
+        A.click("#wf-runs .wf-approve")
+        A.wait("/Bitti/.test(document.querySelector('#wf-runs .wf-run .wf-badge').textContent)", 20, what="run done")
+        t.assertFalse(A.eval("window.pixelOffice.renderer.boardData.waiting.some(c => c.isApproval && c.agentName === 'Siz')"))
+        t.assertFalse(A.eval("!!document.querySelector('#dlg-workflows img')"))
+        A.click("#dlg-workflows [data-wf-close]")
+        A.wait("!document.getElementById('dlg-workflows').open")
+        t.assertEqual(A.errors, [])
+
     # ---- unpaired second browser: sees the characters, no prompt box ----------------------------------
     def unpaired_browser(self, t):
         with self.chrome_factory() as chrome2:
@@ -413,6 +461,20 @@ class Scenario:
         t.assertGreaterEqual(sz[1], 44)
         if w == 390:
             self.shot(P, "ui_phone_devices.png")
+        # v4-C: the workflow dialog fits the phone and its controls are touch-sized
+        P.wait("!document.getElementById('btn-workflows').hidden", 20, what="Şablonlar button on the phone")
+        P.eval("document.getElementById('btn-workflows').click()")
+        P.wait("document.getElementById('dlg-workflows').open && document.querySelectorAll('#wf-steps li').length === 4", 20)
+        t.assertTrue(no_hscroll(P), "horizontal scroll with the workflow dialog open at %d px" % w)
+        overflow = P.eval("(() => { const d = document.getElementById('dlg-workflows'); return d.scrollWidth - d.clientWidth; })()")
+        t.assertLessEqual(overflow, 1, "workflow dialog wider than the screen at %d px" % w)
+        for sel in ("#dlg-workflows [name=start]", "#dlg-workflows [name=template]", "#dlg-workflows [name=model-mimar]",
+                    "#dlg-workflows [name=brief]"):
+            t.assertGreaterEqual(P.eval("document.querySelector(%s).getBoundingClientRect().height" % json.dumps(sel)), 44,
+                                 "%s at %d px" % (sel, w))
+        if w == 390:
+            self.shot(P, "ui_phone_workflow.png")
+        P.eval("document.getElementById('dlg-workflows').close()")
         t.assertEqual(P.errors, [], "console errors at %d px" % w)
 
     # ---- unpair -----------------------------------------------------------------------------------------
@@ -466,8 +528,9 @@ class V3UiTests(unittest.TestCase):
                            "status": {"http": url + "/api/version"}, "start": ["true"], "stop": ["true"],
                            "models": ["qwen2.5-coder:7b"]},
                           {"id": "dummy", "name": "Deneme", "start": ["true"], "stop": ["false"]}],
-                # the flow sends 8 tasks from one browser within a minute (A9 handoff added two); default is 6/min
-                limits={"tasksPerMinute": 20})
+                # the flow sends 12 tasks from one browser within a minute (A9 handoff added two, the A10 workflow
+                # four: its start and three steps); default is 6/min
+                limits={"tasksPerMinute": 30})
             cls.conn = cls.env.connector(home)
             cls.scenario = Scenario(cls.env.base, cls.env.room, cls.env.key, InProcPairing(cls.conn), cls.llm,
                                     cls.fake_dir, shots=os.environ.get("PIXEL_UI_SHOTS")).__enter__()
@@ -514,6 +577,9 @@ class V3UiTests(unittest.TestCase):
     def test_06_claude_agent(self):
         self._step("claude_agent")
 
+    def test_06b_workflow(self):
+        self._step("workflow")
+
     def test_07_unpaired_browser(self):
         self._step("unpaired_browser")
 
@@ -536,6 +602,10 @@ class V3UiTests(unittest.TestCase):
         self.assertFalse(any(HANDOFF_NOTE_UI in f for f in self.env.relay_frames))       # v4-B handoff note
         if "claude_agent" in self.passed:
             self.assertIn("task.handoff", evs)
+        self.assertFalse(any(WORKFLOW_BRIEF_UI in f for f in self.env.relay_frames))      # v4-C request text
+        if "workflow" in self.passed:
+            self.assertEqual([e for e in evs if e.startswith("workflow.")][-1], "workflow.end")
+            self.assertFalse(any(WORKFLOW_BRIEF_UI in json.dumps(r, ensure_ascii=False) for r in self.conn.audit.read()))
 
     def test_11_every_step_has_a_test(self):
         tests = sorted(n for n in dir(self) if n.startswith("test_"))

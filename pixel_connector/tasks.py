@@ -115,7 +115,8 @@ def fit_result(msg: dict, field: str = "result", limit: int = MAX_INNER) -> dict
 
 class TaskRun:
     def __init__(self, sched: "Scheduler", task: str, agent: dict, prompt: str, fresh: bool, peer, label: str,
-                 handoff: Optional[dict] = None, origin: Optional[str] = None) -> None:
+                 handoff: Optional[dict] = None, origin: Optional[str] = None,
+                 on_end: Optional[Callable[[dict], None]] = None, cost_cap: Optional[float] = None) -> None:
         self.s = sched
         self.id = task
         self.agent = agent
@@ -135,6 +136,8 @@ class TaskRun:
         self.engine_name = agent["engine"]
         self.handoff = handoff                # {agent, note}: start B's task after a success (v4-B)
         self.origin = origin                  # task id of A when this run is B's handoff task (never hands off again)
+        self.on_end = on_end                  # v4-C: called with the task.end message (workflow step)
+        self.cost_cap = cost_cap              # v4-C: at most this much USD for a Claude run (the workflow's remainder)
         self._lock = threading.Lock()
         self.send_lock = threading.Lock()     # chunk and end messages leave in order
         self._parts: List[dict] = []
@@ -258,9 +261,11 @@ class Scheduler:
     # -- submit --------------------------------------------------------------------------------------
     def submit(self, agent: dict, prompt: str, fresh: bool, peer, label: str, need_confirm: bool,
                handoff: Optional[dict] = None, origin: Optional[str] = None,
-               confirm_title: Optional[str] = None) -> dict:
+               confirm_title: Optional[str] = None, on_end: Optional[Callable[[dict], None]] = None,
+               cost_cap: Optional[float] = None) -> dict:
         """Validate and enqueue. → task.ack fields; raises TaskError(code). A handoff run (`origin` set) never carries
-        a handoff itself: the chain is at most A → B."""
+        a handoff itself: the chain is at most A → B. `on_end(task.end)` runs once the task ended (also when that happens
+        inside this call, e.g. the engine failed to start); it is never called while the scheduler lock is held."""
         if origin is not None:
             handoff = None
         key = agent["key"]
@@ -271,7 +276,7 @@ class Scheduler:
                 raise TaskError("busy", "agent busy")
             if not self.check_rate("task:" + bid, self.limits["tasksPerMinute"], self.limits["tasksPerHour"]):
                 raise TaskError("rate_limited", "too many tasks")
-            run = TaskRun(self, new_task_id(), agent, prompt, fresh, peer, label, handoff, origin)
+            run = TaskRun(self, new_task_id(), agent, prompt, fresh, peer, label, handoff, origin, on_end, cost_cap)
             self.app.precheck(run)              # workspace + budget + engine (raises TaskError)
             self.runs[run.id] = run
             self.by_agent.setdefault(key, []).append(run)
@@ -394,6 +399,13 @@ class Scheduler:
             self._pump()
         if run.handoff is not None and status == "success":
             self.app.task_handoff(run, result)
+        if run.on_end is not None:
+            try:
+                run.on_end(msg)
+            except Exception as e:
+                log = getattr(self.app, "log", None)
+                if log is not None:
+                    log("on_end error %s: %s" % (run.id, type(e).__name__))
 
     # -- background ----------------------------------------------------------------------------------
     def tick(self) -> None:

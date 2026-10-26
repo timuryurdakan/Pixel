@@ -1158,23 +1158,47 @@ export class PromptPanel {
     if (!started) {
       this.toast(failText, { error: true });
     } else {
-      const vb = this._viewFor(dev, m.to, true);
-      const b = vb.block(m.next, null, `«${nameOf(m.from)}» ajanından devredilen görev`);
-      if (!b.ended) {
-        vb.task = m.next;
-        vb.live = null;
-        vb.endLine = null;
-        vb.state = m.confirm === 'pending' ? 'confirm' : m.queued ? 'queued' : 'running';
-        vb.startedAt = Date.now();
-        if (vb !== this.view && !vb.autoWatch) {
-          vb.autoWatch = true;
-          this.hub.watch(dev, m.to, true);
-        }
-        this.onActivity(true);
-      }
+      this.trackTask(dev, m.to, m.next, `«${nameOf(m.from)}» ajanından devredilen görev`,
+        m.confirm === 'pending' ? 'confirm' : m.queued ? 'queued' : 'running');
       if (this.onHandoff) this.onHandoff(dev, m);
     }
     if (this.view && this.view.deviceId === dev) this._update();
+  }
+
+  /**
+   * Follow a task this tab did not start (a handoff's B task, a workflow step): the agent gets a view with a block for
+   * it, so its output and the Task Board follow; an agent that is not selected is watched until that task ends.
+   */
+  trackTask(dev, key, task, note, state = 'running') {
+    const v = this._viewFor(dev, key, true);
+    const b = v.block(task, null, note);
+    if (!b.ended) {
+      v.task = task;
+      v.live = null;
+      v.endLine = null;
+      v.state = state;
+      v.startedAt = Date.now();
+      if (v !== this.view && !v.autoWatch) {
+        v.autoWatch = true;
+        this.hub.watch(dev, key, true);
+      }
+      this.onActivity(true);
+    }
+    if (this.view && this.view.deviceId === dev) this._update();
+    return v;
+  }
+
+  /** A followed task is known to be over (e.g. from `workflow.state`) although its task.end never reached this tab. */
+  settleTask(dev, key, task) {
+    const v = this._viewFor(dev, key, false);
+    if (!v || v.task !== task || !v.running) return;
+    v.state = 'idle';
+    if (v.autoWatch && v !== this.view) {
+      v.autoWatch = false;
+      this.hub.watch(dev, key, false);
+    }
+    this.onActivity(this._anyRunning());
+    if (this.view === v) this._update();
   }
 
   _costAuthFor(dev) {

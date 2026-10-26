@@ -45,6 +45,8 @@ export const ERROR_TEXT = {
   relay_csp: 'Röle adresi sitenin güvenlik politikasında (CSP) yok. Yönetici vercel.json dosyasındaki röle adresini düzeltmeli (README: "Röle adresini ayarlama").',
   not_paired: 'Bu tarayıcı cihazla eşleşmemiş.',
   unknown_approval: 'Bu istek başka yerden cevaplandı ya da süresi doldu.',
+  unknown_template: 'Şablon cihazda bulunamadı.',
+  unknown_workflow: 'İş akışı bulunamadı ya da zaten bitti.',
 };
 
 /** Turkish text for an error code (unknown codes → generic text, never the raw device message). */

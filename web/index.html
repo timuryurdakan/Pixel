@@ -25,6 +25,7 @@
       <button type="button" id="btn-setup" class="btn accent" data-cloud hidden title="Claude Code ya da başka bir ajanı bu odaya bağla">Ajan bağla</button>
       <button type="button" id="btn-devices" class="btn" hidden title="Eşleşmiş cihazlar, çalışma ortamları ve cihaz ekleme">Cihazlar</button>
       <button type="button" id="btn-newagent" class="btn" hidden title="Eşleşmiş bir cihazda yeni ajan oluştur">Yeni ajan</button>
+      <button type="button" id="btn-workflows" class="btn" hidden title="Hazır iş akışı şablonları: adım adım çalışan ajanlar, sonunda sizin onayınız">Şablonlar</button>
       <button type="button" id="btn-board" class="btn" title="Ofis görev tahtası (Kanban)">Görevler</button>
       <button type="button" id="btn-mini" class="btn" hidden title="Her zaman üstte duran küçük pencere. Ekranın sağ altına sürükleyin.">Mini pencere</button>
       <button type="button" id="btn-install" class="btn" hidden title="Pixel Ofis'i masaüstü uygulaması olarak yükle">Uygulamayı yükle</button>
@@ -142,6 +143,26 @@
     </fieldset>
     <p id="agent-error" class="form-error" role="alert" hidden></p>
     <div class="dlg-actions"><button type="button" class="btn ghost" data-agent-cancel>Vazgeç</button><button type="submit" name="create" class="btn accent">Oluştur</button></div>
+  </form>
+</dialog>
+
+<!-- v4-C: workflow templates and runs (V3.md §20 "v4-C / A10") -->
+<dialog id="dlg-workflows" class="dlg wide" aria-labelledby="dlg-wf-title">
+  <form method="dialog" class="dlg-head"><h2 id="dlg-wf-title">Şablonlar</h2><button class="close" value="close" aria-label="Kapat">✕</button></form>
+  <section id="wf-runs" class="wf-runs" aria-live="polite" aria-label="İş akışları" hidden></section>
+  <form id="wf-form" class="agent-form wf-form" autocomplete="off">
+    <h3>Yeni iş akışı</h3>
+    <label>Cihaz <select name="device"></select></label>
+    <label>Şablon <select name="template"></select></label>
+    <p id="wf-desc" class="muted small"></p>
+    <fieldset class="wf-steps-box"><legend>Adımlar</legend><ol id="wf-steps" class="wf-steps"></ol></fieldset>
+    <label id="wf-brief-row">Ne istiyorsunuz? <textarea name="brief" class="wf-brief" rows="3" spellcheck="false" placeholder="ör. Mahalle kafesi için tek sayfalık tanıtım sitesi: menü, adres, çalışma saatleri"></textarea></label>
+    <label>Çalışma klasörü <select name="workspace"></select></label>
+    <label id="wf-sub-row">Alt klasör (yoksa oluşturulur) <input name="sub" maxlength="200" placeholder="ör. statik-site"></label>
+    <label>Maliyet tavanı ($, tahmini) <input name="cost" type="number" min="0.01" max="20" step="0.01" inputmode="decimal"></label>
+    <p id="wf-limits" class="muted small"></p>
+    <p id="wf-error" class="form-error" role="alert" hidden></p>
+    <div class="dlg-actions"><button type="button" class="btn ghost" data-wf-close>Kapat</button><button type="submit" name="start" class="btn accent">Başlat</button></div>
   </form>
 </dialog>
 

@@ -55,7 +55,7 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | A7 | Claude'un kalan Aşama 20 paketlerini devral (yalnızca kullanıcı isterse) | Antigravity | ⬜ |
 | A8 | v4-A: ofis duvarında Görev Tahtası | Antigravity | 🔀 Birleştirildi |
 | A9 | v4-B: masadan masaya devir (A8 sonrası) | Claude (2026-10-26, kullanıcı: "geç ve bitir") | ✅ |
-| A10 | v4-C: iş akışı motoru ve ilk şablon (A9 sonrası) | Claude (2026-10-26, kullanıcı: "geç ve bitir") | 🔄 |
+| A10 | v4-C: iş akışı motoru ve ilk şablon (A9 sonrası) | Claude (2026-10-26, kullanıcı: "geç ve bitir") | ✅ |
 | A11 | Aşama 20 / Paket 6: bulut temizliği (**şimdi**, C3'ten bağımsız; push yok, Claude birleştirir) | Antigravity | ✅ Teslim edildi |
 | A12 | Aşama 20 / Paket 8b: belgeler (D1–D4, F5–F6, E7) | Antigravity | ✅ Teslim edildi |
 
@@ -239,3 +239,18 @@ görüntüleri, bilinen sorunlar.
   B meşgulse (çalışan + sıradaki) devir `busy` ile yapılmaz, yalnızca çalışan varsa sıraya girer; çıktı sınırı 16 KB +
   `maxPromptBytes`, not 4 KB. `python3 -m unittest discover -s tests`: 773 test, OK (1 atlandı); `build_connector.py --check`
   güncel. `renderer.js` değişmedi (yeni balon mevcut yoldan çiziliyor). Gerçek Claude/Ollama ile denenmedi.
+- **2026-10-26, Claude (A10, v4-C: İş akışı motoru ve ilk şablon):** Teslim edildi, commit/push yok (koordinatör
+  denetleyip commit'leyecek). Yeni: `pixel_connector/workflows.py` (derleme yalnızca git'in bildiği dosyaları aldığı
+  için `git add -N` ile "eklenecek" işaretlendi; içerik sahnelenmedi), `web/js/workflows.js`,
+  `tests/test_v4_workflows.py`, `tests/js/workflows.test.js`. Değişen: `pixel_connector/{app.py,tasks.py (on_end,
+  cost_cap),workspaces.py (ensure_sub),approvals.py (istek başına zaman aşımı),audit.py,__init__.py}` (3.4.0),
+  `web/connector/*` (`93f722d5…`), `web/js/{main.js,prompt.js (trackTask/settleTask, A9 bunu kullanıyor),board.js,
+  control.js (hata metinleri),devices.js (CLAUDE_MODELS dışa aktarıldı)}`, `web/index.html`, `web/css/style.css`,
+  `web/sw.js` + `cloud.js` (`po-v4.0.0`, SHELL'e `workflows.js`), `docs/V3.md` (§3.4, §6.7, §20 "v4-C / A10"),
+  `README.md`, `PROJECT.md`, günlük; `tests/test_v3_ui.py`'ye "workflow" adımı (test ortamında `tasksPerMinute` 30),
+  sürüm testleri 3.4.0. Kararlar: red → İptal (`denied`), zaman aşımı → reddedilmiş sayılır (`approval_timeout`);
+  aynı anda tek akış; adım ajanları yeniden kullanılır; `remote.agentCreate`/`confirm.agentCreate` başlatmaya uygulanır;
+  akışlar bellekte (bağlayıcı kapanınca iptal). Güvenlik çekirdeğine dokunulmadı. `python3 -m unittest discover -s
+  tests`: 803 test, OK (1 atlandı); `build_connector.py --check` güncel. Gerçek Claude/Ollama ile denenmedi.
+  **Koordinatör (2026-10-26):** gerçek Claude (haiku, tavan 0,50 $) ile şablon uçtan uca geçti: 0,025 $, ~1,6 dk,
+  `~/PixelOfficeIsler/kafe-deneme/` içinde 4 dosya, klasör dışına yazma yok. Birleştirildi.

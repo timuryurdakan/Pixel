@@ -63,6 +63,7 @@ function updateBoard(list = sortedAgents()) {
     agents: list,
     views: v3 && v3.panel ? v3.panel.views : null,
     approvals: v3 && v3.approvals ? v3.approvals : null,
+    workflows: v3 && v3.workflows ? v3.workflows.active() : null,
     isPaired,
   });
   if (renderer) renderer.boardData = boardData;
@@ -97,6 +98,8 @@ function v3Sync() {
   document.getElementById('sheet-name').textContent = a ? a.name : '';
   const anyReady = [...v3.hub.devices.values()].some((d) => d.ready);
   document.getElementById('btn-newagent').hidden = !anyReady;
+  // v4-C: "Şablonlar" only for a connected device whose connector understands workflows (older ones: hidden)
+  document.getElementById('btn-workflows').hidden = !(v3.supportsWorkflows && [...v3.hub.devices.values()].some(v3.supportsWorkflows));
 }
 
 /** v4-B handoff on a paired device: A walks to B's desk with a sheet of paper (bubbles only with reduced motion). */
@@ -580,8 +583,9 @@ function bootCloud(config) {
 // --- v3: device control (V3.md §11) ---------------------------------------------------------------------
 async function setupV3(roomId, key) {
   const [{ DeviceHub }, { PromptPanel }, { DevicesPage, PairWizard, NewAgentDialog }, { fmtCompact: fmtTok },
-    { ApprovalCenter }] = await Promise.all([
-    import('./control.js'), import('./prompt.js'), import('./devices.js'), import('./usage.js'), import('./approvals.js')]);
+    { ApprovalCenter }, { WorkflowStore, WorkflowDialog, supportsWorkflows }] = await Promise.all([
+    import('./control.js'), import('./prompt.js'), import('./devices.js'), import('./usage.js'), import('./approvals.js'),
+    import('./workflows.js')]);
   const $ = (id) => document.getElementById(id);
   const hub = new DeviceHub({ roomId, writeKey: key,
     isVisible: () => document.visibilityState !== 'hidden' || !!(mini && mini.window) });
@@ -636,7 +640,18 @@ async function setupV3(roomId, key) {
       if (!running && transport && transport.boost) transport.boost({ ms: 30000 });
       boosted = running;
     } });
-  v3 = { hub, panel, devices, wizard, newAgent, approvals, pendingSelect: null, setTab };
+  // v4-C workflows: every step task is followed like a handed-off task (output, Task Board), and the step-to-step
+  // change replays the A9 desk walk.
+  const workflows = new WorkflowStore({ hub,
+    onRun: (dev, ch, run) => {
+      for (const s of ch.started) panel.trackTask(dev, s.agent, s.task, `İş akışı: ${run.name} · ${s.role}`);
+      for (const s of ch.ended) panel.settleTask(dev, s.agent, s.task);
+      if (ch.walk) animateHandoff(dev, ch.walk);
+      else updateBoard();
+    } });
+  const wfDialog = new WorkflowDialog({ dialog: $('dlg-workflows'), hub, store: workflows, toast });
+  workflows.onChange(() => updateBoard());
+  v3 = { hub, panel, devices, wizard, newAgent, approvals, workflows, wfDialog, supportsWorkflows, pendingSelect: null, setTab };
   window.pixelOffice.v3 = v3;
 
   ui.ctlInfo = (a) => {
@@ -653,6 +668,7 @@ async function setupV3(roomId, key) {
   $('btn-devices').hidden = false;
   $('btn-devices').addEventListener('click', () => (devices.isOpen ? devices.close() : devices.open()));
   $('btn-newagent').addEventListener('click', () => newAgent.open());
+  $('btn-workflows').addEventListener('click', () => wfDialog.open());
   $('tabbar').hidden = false;
   for (const b of document.querySelectorAll('#tabbar [data-tab]')) {
     b.addEventListener('click', () => { if (selectedId) select(null); setTab(b.dataset.tab); });

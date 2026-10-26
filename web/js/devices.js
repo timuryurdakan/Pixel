@@ -753,7 +753,7 @@ export class PairWizard {
 // =====================================================================================================
 // New agent dialog (§11.4)
 // =====================================================================================================
-const CLAUDE_MODELS = [['', 'Varsayılan'], ['sonnet', 'sonnet'], ['opus', 'opus'], ['haiku', 'haiku']];
+export const CLAUDE_MODELS = [['', 'Varsayılan'], ['sonnet', 'sonnet'], ['opus', 'opus'], ['haiku', 'haiku']];
 
 export class NewAgentDialog {
   constructor({ dialog, hub, toast, onCreated }) {

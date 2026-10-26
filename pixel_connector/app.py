@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import math
 import os
 import platform
 import queue
@@ -36,6 +37,7 @@ from .runtimes import RuntimeError_, Runtimes
 from .session import Peer, Router
 from .tasks import Scheduler, TaskError, TaskRun, fit_result, handoff_prompt, parse_handoff, prompt_sha
 from .usage import Budgets, Ledger, tz_name
+from .workflows import WorkflowEngine, WorkflowError
 from .workspaces import WorkspaceDenied, Workspaces
 
 REQ_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}\Z")
@@ -46,9 +48,9 @@ APPROVAL_RESULT = {"ok": "allow", "denied": "deny", "timeout": "expired", "withd
 APPROVAL_AUDIT = {"ok": "approval.approve", "denied": "approval.deny", "timeout": "approval.expire",
                   "withdrawn": "approval.withdraw"}
 APPROVAL_POLL_S = 0.5       # how often a waiting /ctl/approvals/tool call checks that its hook is still there
-FEATURES = ["handoff"]      # device.info.features: optional protocol parts this connector understands (v4-B)
+FEATURES = ["handoff", "workflows"]   # device.info.features: optional protocol parts (v4-B handoff, v4-C workflows)
 SLOW_TYPES = {"peer.hello", "runtime.list", "runtime.start", "runtime.stop", "model.load", "model.unload",
-              "workspace.list", "agent.create", "peer.revoke"}
+              "workspace.list", "agent.create", "peer.revoke", "workflow.list", "workflow.start"}
 
 
 class Reply(Exception):
@@ -127,6 +129,7 @@ class Connector:
                              self.cfg["deviceName"], clock, self.cfg["limits"]["handshakesPerHour"],
                              on_peer_closed=lambda p: None)
         self.scheduler = Scheduler(self, self.cfg["limits"], clock)
+        self.workflows = WorkflowEngine(self, clock)
         self.reporter = OfficeReporter(self.cfg["server"], self.cfg["room"], self.cfg["key"], self.cfg["owner"],
                                        self.key.device_id, sender=office_sender, clock=clock)
         factory = relay_factory or (lambda **kw: RelayClient(**kw))
@@ -161,6 +164,7 @@ class Connector:
 
     def stop(self) -> None:
         self._stop.set()
+        self.workflows.stop()
         runs = list(self.scheduler.runs.values())
         for run in runs:
             self.scheduler.cancel(run.id)
@@ -206,7 +210,7 @@ class Connector:
 
     def _ticker(self) -> None:
         while not self._stop.wait(1.0):
-            for fn in (self.router.tick, self.approvals.tick, self.scheduler.tick):
+            for fn in (self.router.tick, self.approvals.tick, self.scheduler.tick, self.workflows.tick):
                 try:
                     fn()
                 except Exception:
@@ -277,7 +281,7 @@ class Connector:
                 self.reply(peer, msg, out)
         except Reply as e:
             self.reply(peer, msg, {"type": "error", "code": e.code, "message": str(e)[:200]})
-        except (AgentError, TaskError, RuntimeError_) as e:
+        except (AgentError, TaskError, RuntimeError_, WorkflowError) as e:
             self.reply(peer, msg, {"type": "error", "code": e.code, "message": str(e)[:200]})
         except WorkspaceDenied as e:
             self.audit.write("denied", bid=peer.bid, reason="workspace: %s" % e)
@@ -384,6 +388,11 @@ class Connector:
             ok, max_budget = self.budgets.check_task(a["key"], "claude", self.cfg["engines"]["claude"]["maxBudgetUsdPerTask"])
             if not ok:
                 raise TaskError("budget_exceeded", "budget exceeded")
+            if run.cost_cap is not None:                     # v4-C: a workflow step gets the run's remaining cost
+                cap = math.floor(min(run.cost_cap, max_budget if max_budget is not None else run.cost_cap) * 100 + 1e-9) / 100.0
+                if cap < 0.01:
+                    raise TaskError("budget_exceeded", "workflow cost cap reached")
+                max_budget = cap
             self._ensure_claude_path()
             if not self.cfg["engines"]["claude"]["enabled"] or not self.cfg["engines"]["claude"]["path"]:
                 raise TaskError("engine_unavailable", "Claude Code not configured")
@@ -765,6 +774,34 @@ class Connector:
                "endedAt": row["ended_ms"]}
         out = fit_result(out, "result", 40 * 1024)
         return fit_result(out, "prompt")
+
+    # -- handlers: workflows (v4-C) --------------------------------------------------------------
+    def h_workflow_list(self, peer, msg) -> dict:
+        return self.workflows.list_msg()
+
+    def h_workflow_start(self, peer, msg) -> Optional[dict]:
+        """Templates come from this computer only; the request picks one and fills folder, brief, models and the cost
+        cap. Step agents are created like `agent.create`, so `confirm.agentCreate` asks on the computer first."""
+        if not self.scheduler.check_rate("task:" + peer.bid, self.cfg["limits"]["tasksPerMinute"],
+                                         self.cfg["limits"]["tasksPerHour"]):
+            raise Reply("rate_limited", "too many tasks")
+        plan = self.workflows.prepare(peer, msg)
+        if self.cfg["confirm"]["agentCreate"]:
+            self._confirm_then(peer, msg, "workflow.start", "İş akışı: %s" % plan["template"]["name"][:40], None,
+                               lambda: self.workflows.launch(plan), (WorkflowError, AgentError, TaskError))
+            return None
+        return self.workflows.launch(plan)
+
+    def h_workflow_cancel(self, peer, msg) -> dict:
+        return self.workflows.cancel(msg.get("run"), by=peer.bid)
+
+    def h_workflow_answer(self, peer, msg) -> dict:
+        """The human checkpoint of a run, answered from a paired browser (the computer can answer it with
+        `pixel-connector approve|deny` or on /onay). It only gates steps the same user already started."""
+        decision = msg.get("decision")
+        if decision not in ("approve", "deny"):
+            raise Reply("bad_request", "decision")
+        return self.workflows.answer(msg.get("run"), decision == "approve", by=peer.bid)
 
     # -- handlers: runtimes ----------------------------------------------------------------------
     def h_runtime_list(self, peer, msg) -> dict:

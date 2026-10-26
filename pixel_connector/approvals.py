@@ -223,11 +223,13 @@ class Approvals:
         self.pending: Dict[str, Pending] = {}
 
     def request(self, kind: str, title: str, preview: Optional[str], agent_name: Optional[str],
-                on_done: Callable[[str], None]) -> Pending:
-        """on_done(result) with result ∈ ok | denied | timeout, called exactly once (from a resolver thread)."""
+                on_done: Callable[[str], None], timeout_s: Optional[float] = None) -> Pending:
+        """on_done(result) with result ∈ ok | denied | timeout, called exactly once (from a resolver thread).
+        `timeout_s` overrides `confirm.timeoutS` (v4-C workflow checkpoints have their own)."""
         now = self.clock()
         pid = "p" + secrets.token_hex(4)
-        p = Pending(pid, kind, title, preview, agent_name, on_done, now + self.timeout_s, now)
+        p = Pending(pid, kind, title, preview, agent_name, on_done,
+                    now + (self.timeout_s if timeout_s is None else timeout_s), now)
         with self._lock:
             self.pending[pid] = p
         try:

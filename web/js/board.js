@@ -13,6 +13,13 @@ export const COLUMNS = [
   { id: 'done', label: 'Bitti', color: '#8e5cc4', lightColor: '#eddff7' },
 ];
 
+/** v4-C workflow step state → board column and card title. */
+const WORKFLOW_COLUMN = { waiting: 'queued', running: 'working', approval: 'waiting' };
+const WORKFLOW_TITLE = {
+  waiting: 'İş akışı: sırada', running: 'İş akışı: çalışıyor', approval: 'Onayınız bekleniyor',
+  done: 'İş akışı: bitti', error: 'İş akışı: hata', cancelled: 'İş akışı: iptal',
+};
+
 function el(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -61,8 +68,9 @@ export function stateLabel(state, tool = '') {
  * When `isPaired` is false (viewer / unauthenticated mode):
  * - NO task prompt, command, or approval summary text is ever exposed.
  * - Only public agent names and public state labels appear.
+ * - Workflow steps (v4-C, `workflows` = [{device, run}] of active runs) are only used when paired.
  */
-export function categorizeTasks({ agents = [], views = null, approvals = null, isPaired = false } = {}) {
+export function categorizeTasks({ agents = [], views = null, approvals = null, isPaired = false, workflows = null } = {}) {
   const result = {
     queued: [],
     working: [],
@@ -116,6 +124,31 @@ export function categorizeTasks({ agents = [], views = null, approvals = null, i
       } else {
         result.working.push(item);
       }
+    }
+  }
+
+  // 2b. v4-C workflow steps (paired only): waiting → Sırada, the human checkpoint → Onay bekliyor, finished → Bitti. A
+  //     running step is the task view above when this tab follows it, else a Çalışıyor card here.
+  if (isPaired && Array.isArray(workflows)) {
+    const viewTasks = new Set();
+    for (const v of views ? views.values() : []) if (v && v.running && v.task) viewTasks.add(v.task);
+    for (const { device, run } of workflows) {
+      if (!run || !Array.isArray(run.steps)) continue;
+      run.steps.forEach((s, i) => {
+        if (s.state === 'running' && s.task && viewTasks.has(s.task)) return;
+        const ag = s.agent ? agents.find((x) => x && x.control && x.control.agent === s.agent
+          && (!device || x.control.device === device)) : null;
+        if (ag) seenAgentIds.add(ag.id);
+        const col = WORKFLOW_COLUMN[s.state] || 'done';
+        result[col].push({
+          id: `wf-${run.id}-${s.id}`,
+          agentId: ag ? ag.id : null,
+          agentName: s.type === 'approval' ? 'Siz' : (ag ? ag.name : s.role || 'Ajan'),
+          title: WORKFLOW_TITLE[s.state] || 'İş akışı',
+          detail: `${run.name || 'İş akışı'} · ${i + 1}/${run.steps.length}: ${s.role || s.id}`,
+          isApproval: s.state === 'approval',
+        });
+      });
     }
   }
 

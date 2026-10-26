@@ -198,6 +198,30 @@ class Workspaces:
             raise WorkspaceDenied("not a directory")
         return cand
 
+    def ensure_sub(self, wid, sub=None) -> str:
+        """Like resolve(), but creates a missing sub-path first (v4-C workflows write into a new folder). Every component
+        is created below the resolved workspace with mode 0700 and must be a plain directory, never a symlink, so a
+        planted link cannot redirect the creation; the result is checked again by resolve(). Raises WorkspaceDenied."""
+        base = self.resolve(wid)
+        s = validate_sub(sub)
+        if s is None:
+            return base
+        if not self.get(wid).get("children"):
+            raise WorkspaceDenied("sub folders not allowed here")
+        cur = base
+        for part in s.split("/"):
+            cur = os.path.join(cur, part)
+            try:
+                os.mkdir(cur, 0o700)
+            except FileExistsError:
+                pass
+            except OSError:
+                raise WorkspaceDenied("cannot create sub folder") from None
+            st = os.lstat(cur)
+            if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
+                raise WorkspaceDenied("sub path is not a plain directory")
+        return self.resolve(wid, s)
+
     def children(self, wid) -> Optional[List[str]]:
         """Direct child directory names (≤ 50, depth 1, no dot-dirs, no symlinks out) or None."""
         e = self.get(wid)
