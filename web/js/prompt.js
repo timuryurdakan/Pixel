@@ -11,6 +11,8 @@ import {
 
 const MAX_TASK_BLOCKS = 12;      // older task blocks are dropped from the output log
 const MAX_OUT_NODES = 3000;      // per task block (very long outputs keep their tail)
+/** v4-B: same limit as the connector's `task.start.handoff.note` (pixel_connector/tasks.py HANDOFF_NOTE_MAX). */
+export const HANDOFF_NOTE_MAX = 4096;
 
 export const PROFILE_TEXT = {
   readonly: { label: 'Sadece okuma', tip: 'Klasördeki dosyaları okuyabilir; düzenleyemez, komut çalıştıramaz.' },
@@ -337,6 +339,11 @@ export class TaskBlock {
     g.sum.textContent = denialText(g.count, g.targets, this.scope);
   }
 
+  /** A connector/UI note under the block (e.g. the handoff outcome), after the end line if there is one. */
+  note(text) {
+    this.el.appendChild(el('div', 'part-note muted handoff-note', text));
+  }
+
   result(text, truncated) {
     if (typeof text === 'string' && text && !this.sawText) {
       this._md().append(text);
@@ -389,6 +396,9 @@ class View {
     this.draft = '';
     this.fresh = false;
     this.recent = null;
+    this.handoffTo = '';             // v4-B: agent key to hand the result to ('' = none)
+    this.handoffNote = '';
+    this.autoWatch = false;          // watched only because a handoff task of this agent runs (not selected)
   }
 
   get running() { return ['sending', 'confirm', 'queued', 'running', 'stopping'].includes(this.state); }
@@ -423,9 +433,10 @@ export class PromptPanel {
    * @param {() => void} o.onDevices           open the devices page
    * @param {(running:boolean) => void} o.onActivity   a task of this tab runs / all finished
    * @param {HTMLElement} [o.headStop]         phone sheet header "Durdur" button
+   * @param {(deviceId:string, msg:object) => void} [o.onHandoff]   a handoff started (office animation)
    */
-  constructor({ hub, slot, toast, onPair, onDevices, onActivity, headStop = null }) {
-    Object.assign(this, { hub, slot, toast, onPair, onDevices, onActivity, headStop });
+  constructor({ hub, slot, toast, onPair, onDevices, onActivity, headStop = null, onHandoff = null }) {
+    Object.assign(this, { hub, slot, toast, onPair, onDevices, onActivity, headStop, onHandoff });
     this.views = new Map();
     this.agent = null;              // office agent JSON
     this.view = null;
@@ -566,7 +577,7 @@ export class PromptPanel {
     this.els.hint = el('div', 'ctl-hint muted small');
     this.els.msg = el('div', 'ctl-msg small');
     this.els.msg.setAttribute('role', 'status');
-    form.append(h, ta, row, this.els.hint, this.els.msg);
+    form.append(h, ta, row, this._handoffBox(), this.els.hint, this.els.msg);
     form.addEventListener('submit', (e) => { e.preventDefault(); this.send(); });
     Object.assign(this.els, { ta, send, fresh: cb, form });
 
@@ -603,6 +614,52 @@ export class PromptPanel {
     s.appendChild(root);
     this._grow();
     v.out.scrollTop = v.out.scrollHeight;
+  }
+
+  /** v4-B: "Bitince devret" — an agent of the same device that gets this task's last reply (+ an extra instruction). */
+  _handoffBox() {
+    const v = this.view;
+    const box = el('details', 'ctl-handoff');
+    const sum = el('summary', 'ctl-handoff-sum small', 'Bitince devret');
+    sum.title = 'Görev başarıyla biterse son yanıtı, seçtiğiniz ajana veri olarak verilir ve o ajan çalışmaya başlar.';
+    const to = el('select', 'ctl-handoff-to');
+    to.setAttribute('aria-label', 'Bitince şu ajana devret');
+    const note = el('textarea', 'ctl-handoff-note');
+    note.rows = 2;
+    note.placeholder = 'Ek talimat (isteğe bağlı), ör. "Bu planı uygula"';
+    note.setAttribute('aria-label', 'Devir için ek talimat');
+    note.spellcheck = false;
+    note.value = v.handoffNote || '';
+    to.addEventListener('change', () => { v.handoffTo = to.value; this._update(); });
+    note.addEventListener('input', () => { v.handoffNote = note.value; });
+    box.open = !!v.handoffTo;
+    box.append(sum, to, note);
+    Object.assign(this.els, { handoff: box, handoffSum: sum, handoffTo: to, handoffNote: note });
+    return box;
+  }
+
+  _updateHandoff(v, d) {
+    const { handoff, handoffSum, handoffTo, handoffNote } = this.els;
+    if (!handoff) return;
+    const supported = !!(d && d.info && Array.isArray(d.info.features) && d.info.features.includes('handoff'));
+    const others = supported && this.mode === 'ready' && !v.deleted && d.agents
+      ? [...d.agents.values()].filter((a) => a && typeof a.key === 'string' && a.key !== v.key) : [];
+    handoff.hidden = !others.length;
+    const sig = JSON.stringify(others.map((a) => [a.key, a.name]));
+    if (handoffTo.dataset.sig !== sig) {
+      const opts = [['', 'Devretme'], ...others.map((a) => [a.key, String(a.name || a.key)])].map(([value, text]) => {
+        const o = el('option', null, text);
+        o.value = value;
+        return o;
+      });
+      handoffTo.replaceChildren(...opts);
+      handoffTo.dataset.sig = sig;
+    }
+    const target = others.find((a) => a.key === v.handoffTo);
+    if (!target) v.handoffTo = '';
+    handoffTo.value = v.handoffTo;
+    handoffNote.hidden = !v.handoffTo;
+    handoffSum.textContent = target ? `Bitince devret: «${target.name}»` : 'Bitince devret';
   }
 
   /** E11: "Ajanı sil" with an inline confirmation (no window.confirm: it can be blocked in installed apps). */
@@ -736,6 +793,7 @@ export class PromptPanel {
     this.els.live.title = lt.title;
     this.els.outWrap.classList.toggle('empty', !v.blocks.size);
     this._updateDelete(v, d, da);
+    this._updateHandoff(v, d);
     this._renderUsage();
     this._syncHeadStop();
   }
@@ -934,13 +992,24 @@ export class PromptPanel {
       this._update();
       return;
     }
+    const req = { type: 'task.start', agent: v.key, prompt: text, fresh: !!v.fresh };
+    const target = v.handoffTo && d && d.agents ? d.agents.get(v.handoffTo) : null;
+    if (target) {
+      const note = (v.handoffNote || '').trim();
+      if (new TextEncoder().encode(note).length > HANDOFF_NOTE_MAX) {
+        v.message = { text: 'Devir talimatı çok uzun (en fazla 4 KB).', error: true };
+        this._update();
+        return;
+      }
+      req.handoff = { agent: target.key, note };
+    }
     const prev = v.state;
     v.state = 'sending';
     v.message = null;
     this._update();
     let ack;
     try {
-      ack = await this.hub.request(v.deviceId, { type: 'task.start', agent: v.key, prompt: text, fresh: !!v.fresh });
+      ack = await this.hub.request(v.deviceId, req);
     } catch (e) {
       v.state = prev === 'sending' ? 'idle' : prev;
       v.message = { text: e instanceof ControlError ? e.text : 'Gönderilemedi.', error: true };
@@ -949,8 +1018,17 @@ export class PromptPanel {
     }
     v.draft = '';
     v.fresh = false;
-    if (this.view === v && this.els) { this.els.ta.value = ''; this.els.fresh.checked = false; this._grow(); }
-    const b = v.block(ack.task, text);
+    v.handoffTo = '';
+    v.handoffNote = '';
+    if (this.view === v && this.els) {
+      this.els.ta.value = '';
+      this.els.fresh.checked = false;
+      this.els.handoffNote.value = '';
+      this.els.handoff.open = false;
+      this._grow();
+    }
+    const handNote = target && ack.handoff === target.key ? `Bitince «${target.name}» ajanına devredilecek` : null;
+    const b = v.block(ack.task, text, handNote);
     if (!b.ended) {
       v.task = ack.task;
       v.live = null;
@@ -994,6 +1072,7 @@ export class PromptPanel {
       if (this.view && this.view.deviceId === dev) this._update();
       return;
     }
+    if (m.type === 'task.handoff') { this._onHandoff(dev, m); return; }
     if (!['task.chunk', 'task.end', 'confirm.result', 'agent.state'].includes(m.type) || typeof m.agent !== 'string' && m.type !== 'confirm.result') return;
     let v = typeof m.agent === 'string' ? this._viewFor(dev, m.agent, false) : null;
     if (!v && m.type === 'confirm.result') {
@@ -1032,6 +1111,10 @@ export class PromptPanel {
         v.message = m.status === 'error' || m.status === 'budget' || m.status === 'denied'
           ? { text: line, error: true } : null;
       }
+      if (v.autoWatch && !v.running && !shown) {
+        v.autoWatch = false;
+        this.hub.watch(dev, v.key, false);
+      }
       this.onActivity(this._anyRunning());
       if (shown) {
         this._loadUsage();
@@ -1051,6 +1134,47 @@ export class PromptPanel {
       if (m.type !== 'task.end' && this.els) this.els.cost.textContent = '';
       this._update();
     }
+  }
+
+  /**
+   * v4-B `task.handoff` {task, from, to, status, next, confirm, queued, code, truncated}: ids and flags only. A's block
+   * says where the result went (or why not); B gets a view with the new task, so its output and the Task Board follow.
+   */
+  _onHandoff(dev, m) {
+    const ok = typeof m.task === 'string' && typeof m.from === 'string' && typeof m.to === 'string'
+      && (m.status === 'failed' || (m.status === 'started' && typeof m.next === 'string'));
+    if (!ok) return;
+    const nameOf = (key) => {
+      const a = this.hub.agentInfo({ device: dev, agent: key });
+      return a && a.name ? String(a.name) : 'diğer ajan';
+    };
+    const started = m.status === 'started';
+    const failText = `Devir yapılamadı: ${errorText(m.code)}`;
+    const va = this._viewFor(dev, m.from, false);
+    if (va && va.blocks.has(m.task)) {
+      va.blocks.get(m.task).note(started
+        ? `→ «${nameOf(m.to)}» ajanına devredildi${m.truncated ? ' (çıktı kısaltılarak)' : ''}` : failText);
+    }
+    if (!started) {
+      this.toast(failText, { error: true });
+    } else {
+      const vb = this._viewFor(dev, m.to, true);
+      const b = vb.block(m.next, null, `«${nameOf(m.from)}» ajanından devredilen görev`);
+      if (!b.ended) {
+        vb.task = m.next;
+        vb.live = null;
+        vb.endLine = null;
+        vb.state = m.confirm === 'pending' ? 'confirm' : m.queued ? 'queued' : 'running';
+        vb.startedAt = Date.now();
+        if (vb !== this.view && !vb.autoWatch) {
+          vb.autoWatch = true;
+          this.hub.watch(dev, m.to, true);
+        }
+        this.onActivity(true);
+      }
+      if (this.onHandoff) this.onHandoff(dev, m);
+    }
+    if (this.view && this.view.deviceId === dev) this._update();
   }
 
   _costAuthFor(dev) {

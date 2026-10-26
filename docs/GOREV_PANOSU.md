@@ -54,8 +54,8 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | A6 | v4 mimari belgesini düzelt ve projeye al (şimdi yapılabilir) | Antigravity | ✅ Teslim edildi |
 | A7 | Claude'un kalan Aşama 20 paketlerini devral (yalnızca kullanıcı isterse) | Antigravity | ⬜ |
 | A8 | v4-A: ofis duvarında Görev Tahtası | Antigravity | 🔀 Birleştirildi |
-| A9 | v4-B: masadan masaya devir (A8 sonrası) | Antigravity | ⬜ |
-| A10 | v4-C: iş akışı motoru ve ilk şablon (A9 sonrası) | Antigravity | ⬜ |
+| A9 | v4-B: masadan masaya devir (A8 sonrası) | Claude (2026-10-26, kullanıcı: "geç ve bitir") | ✅ |
+| A10 | v4-C: iş akışı motoru ve ilk şablon (A9 sonrası) | Claude (2026-10-26, kullanıcı: "geç ve bitir") | 🔄 |
 | A11 | Aşama 20 / Paket 6: bulut temizliği (**şimdi**, C3'ten bağımsız; push yok, Claude birleştirir) | Antigravity | ✅ Teslim edildi |
 | A12 | Aşama 20 / Paket 8b: belgeler (D1–D4, F5–F6, E7) | Antigravity | ✅ Teslim edildi |
 
@@ -230,4 +230,12 @@ görüntüleri, bilinen sorunlar.
   - **Hizalama & Uyum:** 360 px, 390 px ve 1280 px ekranlarda yatay taşma (0 horizontal scroll) doğrulaması; mobil ekranlarda sütunlar esnek biçimde dikey istiflenir (`grid-template-columns: 1fr`). Servis çalışanı önbelleği için `web/sw.js` `SHELL` listesine `/js/board.js` eklendi; `VERSION` / `APP_VERSION` kurallara uygun olarak artırılmadı (birleştirmede Claude artıracak).
   - **Yasaklı Dosyalar:** `web/js/control.js`, `devices.js`, `prompt.js` ve `pixel_connector/` klasörüne kesinlikle dokunulmadı.
   - **Doğrulama & Testler:** `tests/js/board.test.js` (sprite doğrulaması, duvar geçirimsizliği, yol bulma, gizlilik filtresi, klavye/erişilebilirlik ve yaşam döngüsü testleri) eklendi. `python3 -m unittest discover -s tests -p "test_relay_js.py"` headless Chrome'da hatasız geçti. `python3 -m unittest discover -s tests` ile 723 testin tamamı başarılı oldu (1 test pwsh yokluğu nedeniyle atlandı). `python3 tools/build_connector.py --check` güncel. Kendi dalında (`antigravity/gorevler`) commit'lendi, push yapılmadı.
-
+- **2026-10-26, Claude (A9, v4-B: Masadan masaya devir):** Teslim edildi, commit/push yok (koordinatör denetleyip
+  commit'leyecek). Değişen: `pixel_connector/{tasks.py,app.py,audit.py,__init__.py}` (3.3.0), `web/connector/*` (yeniden
+  derlendi, `6e907efd…`), `web/js/{prompt.js,agents.js,sprites.js (yalnızca ekleme: paper balonu),main.js (yalnızca devir
+  bağlantısı)}`, `web/css/style.css`, `web/sw.js` + `cloud.js` (`po-v3.0.14`), `docs/V3.md` (§3.4, §6.7, §20 "v4-B / A9"),
+  `README.md`, yeni `tests/test_v4_handoff.py` ve `tests/js/handoff.test.js`; `tests/test_v3_ui.py`'ye kontroller eklendi
+  (test ortamında `tasksPerMinute` 20), sürüm testleri 3.3.0. Kararlar: onay için yeni ayar yok, `confirm.task` geçerli;
+  B meşgulse (çalışan + sıradaki) devir `busy` ile yapılmaz, yalnızca çalışan varsa sıraya girer; çıktı sınırı 16 KB +
+  `maxPromptBytes`, not 4 KB. `python3 -m unittest discover -s tests`: 773 test, OK (1 atlandı); `build_connector.py --check`
+  güncel. `renderer.js` değişmedi (yeni balon mevcut yoldan çiziliyor). Gerçek Claude/Ollama ile denenmedi.

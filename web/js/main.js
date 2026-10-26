@@ -99,6 +99,18 @@ function v3Sync() {
   document.getElementById('btn-newagent').hidden = !anyReady;
 }
 
+/** v4-B handoff on a paired device: A walks to B's desk with a sheet of paper (bubbles only with reduced motion). */
+function animateHandoff(dev, m) {
+  const idOf = (key) => {
+    const hit = [...agents.values()].find((x) => x.control && x.control.device === dev && x.control.agent === key);
+    return hit ? hit.id : null;
+  };
+  const from = idOf(m.from), to = idOf(m.to);
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (from && to) manager.handoff(from, to, { reducedMotion });
+  updateBoard();
+}
+
 /** Apply a pending optimistic rename; dropped once the server shows the name, or after 60 s. */
 function withOverride(a) {
   const o = overrides.get(a.id);
@@ -617,7 +629,7 @@ async function setupV3(roomId, key) {
     badges: [$('btn-devices'), document.querySelector('#tabbar [data-tab="devices"]')] });
   let boosted = false;
   const panel = new PromptPanel({ hub, slot: $('agent-control'), toast, headStop: $('sheet-stop'),
-    onPair: () => wizard.open(2), onDevices: () => devices.open(),
+    onPair: () => wizard.open(2), onDevices: () => devices.open(), onHandoff: animateHandoff,
     onActivity: (running) => {
       hub.need('task', running);
       if (running && !boosted && transport && transport.boost) transport.boost({ ms: 120000 });

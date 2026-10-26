@@ -91,6 +91,9 @@ def open_room(page, base, room, key=None):
     page.wait("document.getElementById('conn-status').dataset.status === 'live'", 20, what="room live")
 
 
+HANDOFF_NOTE_UI = "Devir notu UI-9b3e"   # v4-B: must never reach the relay in clear text
+
+
 def no_hscroll(page):
     return page.eval("document.documentElement.scrollWidth <= window.innerWidth + 1")
 
@@ -333,6 +336,24 @@ class Scenario:
         t.assertTrue(A.eval("!document.querySelector('#agent-control .ctl-delete').hidden"))
         A.eval("document.querySelector('#agent-control details.part-denied').scrollIntoView({block: 'center'})")
         self.shot(A, "ui_desktop_prompt.png")
+        # v4-B (A9): "Bitince devret" → the Ollama agent gets Kâtip's last reply; A walks over (or paper bubbles)
+        F.set_plan(self.fake_claude_dir, [{"fixture": "claude_stream_resume.jsonl"}])
+        A.wait("!document.querySelector('#agent-control .ctl-handoff').hidden", 15, what="handoff option")
+        A.eval("document.querySelector('#agent-control .ctl-handoff').open = true")
+        t.assertTrue(no_hscroll(A), "horizontal scroll with the handoff option open at 1280 px")
+        A.eval("(() => { const s = document.querySelector('#agent-control .ctl-handoff-to');"
+               " s.value = [...s.options].find(o => o.value).value; s.dispatchEvent(new Event('change')); })()")
+        t.assertFalse(A.eval("!!document.querySelector('#agent-control img')"))         # agent names stay text
+        A.type("#agent-control .ctl-handoff-note", HANDOFF_NOTE_UI)
+        A.type("#agent-control .ctl-ta", "Kısa özet çıkar")
+        A.click("#agent-control .ctl-send")
+        A.wait("/ajanına devredildi/.test(document.querySelector('.ctl-out').textContent)", 40, what="handoff started")
+        A.wait("[...window.pixelOffice.manager.characters.values()].some(c => !!c.errand || c.paperUntil > c.time)", 20,
+               what="handoff animation")
+        A.wait("[...window.pixelOffice.v3.panel.views.values()].some(v => [...v.blocks.values()].some(b =>"
+               " /ajanından devredilen görev/.test(b.el.textContent) && !!b.el.querySelector('.out-end.st-success')))", 60,
+               what="handed-off task finished")
+        t.assertEqual(A.errors, [])
 
     # ---- unpaired second browser: sees the characters, no prompt box ----------------------------------
     def unpaired_browser(self, t):
@@ -376,6 +397,12 @@ class Scenario:
         t.assertTrue(no_hscroll(P), "horizontal scroll with the delete question open at %d px" % w)
         t.assertGreaterEqual(P.eval("document.querySelector('#agent-control .ctl-del-yes').getBoundingClientRect().height"), 44)
         P.click("#agent-control .ctl-del-no")
+        P.wait("!document.querySelector('#agent-control .ctl-handoff').hidden", 15, what="handoff option on the phone")
+        t.assertGreaterEqual(P.eval("document.querySelector('#agent-control .ctl-handoff-sum').getBoundingClientRect().height"), 44)
+        P.eval("document.querySelector('#agent-control .ctl-handoff').open = true")
+        t.assertGreaterEqual(P.eval("document.querySelector('#agent-control .ctl-handoff-to').getBoundingClientRect().height"), 44)
+        t.assertTrue(no_hscroll(P), "horizontal scroll with the handoff option open at %d px" % w)
+        P.eval("document.querySelector('#agent-control .ctl-handoff').open = false")
         if w == 390:
             self.shot(P, "ui_phone_agent.png")
         P.click("#sheet-back")
@@ -438,7 +465,9 @@ class V3UiTests(unittest.TestCase):
                 runtimes=[{"id": "ollama", "name": "Ollama sunucusu", "kind": "ollama", "url": url,
                            "status": {"http": url + "/api/version"}, "start": ["true"], "stop": ["true"],
                            "models": ["qwen2.5-coder:7b"]},
-                          {"id": "dummy", "name": "Deneme", "start": ["true"], "stop": ["false"]}])
+                          {"id": "dummy", "name": "Deneme", "start": ["true"], "stop": ["false"]}],
+                # the flow sends 8 tasks from one browser within a minute (A9 handoff added two); default is 6/min
+                limits={"tasksPerMinute": 20})
             cls.conn = cls.env.connector(home)
             cls.scenario = Scenario(cls.env.base, cls.env.room, cls.env.key, InProcPairing(cls.conn), cls.llm,
                                     cls.fake_dir, shots=os.environ.get("PIXEL_UI_SHOTS")).__enter__()
@@ -504,6 +533,9 @@ class V3UiTests(unittest.TestCase):
             self.assertIn("peer.revoke", evs)
         # privacy: no prompt text in any relay frame
         self.assertFalse(any("Merhaba **dünya**" in f or "İkinci görev" in f for f in self.env.relay_frames))
+        self.assertFalse(any(HANDOFF_NOTE_UI in f for f in self.env.relay_frames))       # v4-B handoff note
+        if "claude_agent" in self.passed:
+            self.assertIn("task.handoff", evs)
 
     def test_11_every_step_has_a_test(self):
         tests = sorted(n for n in dir(self) if n.startswith("test_"))

@@ -325,7 +325,7 @@ içine kurar, `~/.pixel-office/bin/pixel-connector` kısayolunu ve ayar dosyası
 Ekrana yazdığı özeti bu sürümün özetiyle karşılaştırın:
 
 ```
-pixel-connector.pyz SHA-256: a039f66952bb1aea7a1317de9991cceb629c58b8bb4b4c5730e3215b5b7d8a1b
+pixel-connector.pyz SHA-256: 6e907efd49008b751ee80956449fc6c3506d555082cb84d2ab24b7a650d03bba
 ```
 
 Windows (PowerShell): komut kutusundaki **Windows** sekmesini kullanın (`irm …/install.ps1 -OutFile install.ps1`, sonra
@@ -376,6 +376,16 @@ Bağlayıcı 3.2.5'ten itibaren Claude ajanları kendi `~/.claude/settings.json`
 dosyanızdaki izinleri (ör. "her zaman izin ver" ile eklenen komutlar) **almaz**; profil yalnızca bağlayıcının verdiği
 kurallarla sınırlıdır. Kullanıcı ayarlarınız gerekiyorsa (ör. `apiKeyHelper`) `"engines": {"claude": {"settingSources":
 ["user", "project"]}}` yazın; o dosyadaki izin kuralları da her profile eklenir.
+
+**Masadan masaya devir (bağlayıcı 3.3.0).** Görev kutusunun altındaki **Bitince devret** bölümünden aynı bilgisayardaki
+başka bir ajanı ve isteğe bağlı bir ek talimatı seçin. Görev **başarıyla** biterse son yanıtı (en fazla 16 KB; daha
+uzunsa kesildiği yazılır) o ajana "veri, talimat değil" diye işaretlenmiş olarak verilir ve ajan kendi klasörü, izin profili
+ve bütçesiyle çalışmaya başlar; ofiste ilk ajan elinde kâğıtla ikincinin masasına yürüyüp döner. Hata, iptal, süre ya da
+bütçe aşımında devir olmaz. İkinci ajanın bir görevi çalışıyorsa devredilen görev sıraya girer; bir görevi çalışıyor ve bir
+görevi de sıradaysa, silindiyse ya da bütçesi dolduysa devir yapılmaz ve nedeni çıktıda yazar. Devredilen görev bir daha
+devredilmez. `confirm.task` ayarı devredilen görev için de geçerlidir (`"always"` ile bilgisayarda "Devredilsin mi?" diye
+sorulur). İlk ajanın yanıtı, okuduğu dosyalardan ya da web sayfalarından gelen talimatlar içerebilir; ikinci ajan
+"Geliştirici" ya da "Otomatik" profildeyse `"confirm": {"task": "always"}` önerilir.
 
 `children: true` o klasörün alt klasörlerini de seçilebilir yapar. Elle düzenledikten sonra `pixel-connector config-check`,
 ardından `systemctl --user restart pixel-connector`. Claude Code yalnızca VS Code eklentisindeyse terminal sürümünü kurup bir kez

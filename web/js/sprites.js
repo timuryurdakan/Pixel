@@ -19,7 +19,7 @@ export const ANIMS = {
 
 export const TILE_NAMES = ['floor', 'floor_alt', 'rug', 'wall', 'window', 'door'];
 export const FURNITURE_NAMES = ['desk', 'desk_on', 'chair', 'bookshelf', 'plant', 'coffee_counter', 'water_cooler', 'bed', 'board'];
-export const BUBBLE_KINDS = ['zzz', 'dots', 'alert', 'steam', 'question', 'coffee', 'speech', 'heart', 'happy'];
+export const BUBBLE_KINDS = ['zzz', 'dots', 'alert', 'steam', 'question', 'coffee', 'speech', 'heart', 'happy', 'paper'];
 export const TOOL_ICON_KINDS = ['terminal', 'eye', 'pencil', 'magnifier', 'globe', 'people', 'checklist', 'gear'];
 
 // ---------------------------------------------------------------------------
@@ -1223,6 +1223,32 @@ const FURNITURE = {
   board: def(48, 24, PAL, () => BOARD),
 };
 
+// v4-B handoff: a sheet of paper with text lines (frame B: the lines "written" further).
+const PAPER_INNER_A = [
+  '..KKKKK...',
+  '..KwwwKK..',
+  '..KxxwwK..',
+  '..KwwwwK..',
+  '..KxxxwK..',
+  '..KwwwwK..',
+  '..KxxwwK..',
+  '..KwwwwK..',
+  '..KKKKKK..',
+  '..........',
+];
+const PAPER_INNER_B = [
+  '..KKKKK...',
+  '..KwwwKK..',
+  '..KxxxwK..',
+  '..KwwwwK..',
+  '..KxxxwK..',
+  '..KwwwwK..',
+  '..KxxxwK..',
+  '..KwwwwK..',
+  '..KKKKKK..',
+  '..........',
+];
+
 const zzz = (rows) => outlined(rows, 'K');
 const iconBubble = (inner) => compose(12, 12, [L(BUBBLE_FRAME_12, 0), L(inner, 1)]);
 
@@ -1236,6 +1262,7 @@ const BUBBLES = {
   speech: [def(14, 10, PAL_BUBBLE, () => SPEECH_A), def(14, 10, PAL_BUBBLE, () => SPEECH_B)],
   heart: [def(12, 10, PAL_BUBBLE, () => HEART_A), def(12, 10, PAL_BUBBLE, () => HEART_B)],
   happy: [def(12, 10, PAL_BUBBLE, () => HAPPY_A), def(12, 10, PAL_BUBBLE, () => HAPPY_B)],
+  paper: [def(12, 12, PAL_BUBBLE, () => iconBubble(PAPER_INNER_A)), def(12, 12, PAL_BUBBLE, () => iconBubble(PAPER_INNER_B))],
 };
 
 const ICON_DEFS = Object.fromEntries(
@@ -1529,7 +1556,7 @@ export function validateSprites() {
     if (d.w !== w || d.h !== h) errors.push(`${n}: declared ${d.w}x${d.h}, expected ${w}x${h}`);
     safe(n, () => checkMap(errors, n, d.rows, w, h, inPal(d.pal)));
   }
-  const bubbleDims = { zzz: [12, 10], dots: [14, 10], alert: [10, 12], steam: [8, 8], question: [10, 12], coffee: [12, 12], speech: [14, 10], heart: [12, 10], happy: [12, 10] };
+  const bubbleDims = { zzz: [12, 10], dots: [14, 10], alert: [10, 12], steam: [8, 8], question: [10, 12], coffee: [12, 12], speech: [14, 10], heart: [12, 10], happy: [12, 10], paper: [12, 12] };
   for (const [k, frames] of Object.entries(BUBBLES)) {
     if (frames.length !== 2) errors.push(`bubble ${k}: ${frames.length} frames, expected 2`);
     frames.forEach((d, i) => {

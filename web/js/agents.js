@@ -17,6 +17,7 @@ import { findPath } from './pathfinding.js';
 export const WALK_SPEED = 40;   // px/s (2.5 tiles/s)
 export const MIN_DWELL = 2.0;   // s at a spot before re-targeting (except leaving)
 export const FADE_TIME = 0.4;   // s
+export const HANDOFF_GIVE_S = 1.6;   // s both characters show the paper bubble during a handoff (v4-B)
 
 export const STATE_TARGET = {
   working:          { spot: 'desk',   anim: 'type',  bubble: 'tool' },
@@ -28,6 +29,7 @@ export const STATE_TARGET = {
 
 const targetOf = (state) => STATE_TARGET[state] || STATE_TARGET.thinking;
 const tileCenter = (t) => ({ px: t.x * TILE + 8, py: t.y * TILE + 15 });
+const NEIGHBOURS = [[0, 1], [-1, 0], [1, 0], [0, -1]];
 
 export class Character {
   /**
@@ -54,6 +56,8 @@ export class Character {
     this.lastIndex = {};         // spot kind → last regular index used
     this.teleport = null;        // {stage:'out'|'in'} when no path exists
     this.exiting = false;        // leaving: reached the door, fading out
+    this.errand = null;          // v4-B handoff walk: {goal, stage:'go'|'give', until, peer}
+    this.paperUntil = -1;        // show the paper bubble until this time (handoff)
     if (entering) {
       ({ px: this.px, py: this.py } = tileCenter(DOOR));
       this.alpha = 0;
@@ -93,6 +97,7 @@ export class Character {
     this.agent = agent;
     this._applyOwnerColor();
     if (this.phase === 'leaving' || this.phase === 'gone' || this.phase === 'entering') return;
+    if (this.errand) { this.retargetPending = true; return; }    // applied when the handoff walk is over
     const kind = targetOf(agent.state).spot;
     if (this.spot && this.spot.kind === kind) {
       // Same kind of spot (e.g. working ↔ thinking): just switch the animation.
@@ -112,6 +117,7 @@ export class Character {
   /** Release spot, walk to the door, fade out, then phase 'gone'. */
   leave() {
     if (this.phase === 'leaving' || this.phase === 'gone') return;
+    this.errand = null;
     this.office.releaseSpot(this.id);
     this.spot = null;
     this.retargetPending = false;
@@ -161,6 +167,48 @@ export class Character {
     return true;
   }
 
+  /**
+   * v4-B: walk to a free tile next to `peer`'s desk, hand over (both show the paper bubble for HANDOFF_GIVE_S), then walk
+   * back. Returns false (caller falls back to bubbles only) when this character is not settled or no path exists.
+   */
+  startErrand(peer) {
+    if (this.phase !== 'settled' || this.teleport || this.errand || !this.spot) return false;
+    const at = peer.spot || peer.tile;
+    const start = this.tile;
+    const pass = (goal) => (x, y) => this.office.isPassable(x, y, start, goal);
+    for (const [dx, dy] of NEIGHBOURS) {
+      const goal = { x: at.x + dx, y: at.y + dy };
+      if (!this.office.isWalkable(goal.x, goal.y) || (goal.x === start.x && goal.y === start.y)) continue;
+      const path = findPath(this.office.width, this.office.height, pass(goal), start, goal);
+      if (!path || !path.length) continue;
+      this.errand = { goal, stage: 'go', until: 0, peer };
+      this.phase = 'walking';
+      this.retargetPending = false;
+      this.goal = goal;
+      this.path = path;
+      this._nextStep();
+      return true;
+    }
+    return false;
+  }
+
+  _errandArrived() {
+    const e = this.errand;
+    e.stage = 'give';
+    e.until = this.time + HANDOFF_GIVE_S;
+    e.peer.paperUntil = Math.max(e.peer.paperUntil, e.until);
+    const at = e.peer.spot || e.peer.tile;
+    const t = this.tile;
+    this.dir = at.x > t.x ? 'right' : at.x < t.x ? 'left' : at.y < t.y ? 'up' : 'down';
+    this._setAnim('stand');
+  }
+
+  _endErrand() {
+    this.errand = null;
+    if (this.retargetPending || !this.spot) { this._retarget(); return; }
+    this._planPath(this.spot, false);
+  }
+
   /** Path to `goal`; when mid-step, the path is computed once the current step ends. */
   _planPath(goal, leaving) {
     this.goal = { x: goal.x, y: goal.y };
@@ -195,6 +243,7 @@ export class Character {
 
   _arrive() {
     this.step = null;
+    if (this.errand && this.errand.stage === 'go') { this._errandArrived(); return; }
     if (this.phase === 'leaving') {
       this.exiting = true;
       this.dir = 'down';
@@ -264,6 +313,11 @@ export class Character {
       return;
     }
 
+    if (this.errand && this.errand.stage === 'give') {
+      if (time >= this.errand.until) this._endErrand();
+      return;
+    }
+
     // Walking (or leaving): move towards the current step's tile centre.
     // (A character that turned back while fading out at the door fades in again.)
     if (this.phase === 'walking' && this.alpha < 1) this.alpha = Math.min(1, this.alpha + dt / FADE_TIME);
@@ -294,7 +348,11 @@ export class Character {
   }
 
   bubble() {
-    if (this.phase !== 'settled' || this.teleport) return null;
+    if (this.teleport) return null;
+    const paper = (this.errand && this.errand.stage === 'give') || this.paperUntil > this.time;
+    // The blinking "!" of an agent waiting for the user is never hidden (v2.md H35), not even by the handoff paper.
+    if (paper && !(this.phase === 'settled' && this.agent.state === 'waiting_for_user')) return { kind: 'paper' };
+    if (this.phase !== 'settled') return null;
     const t = targetOf(this.agent.state);
     if (t.bubble === 'tool') return { kind: 'tool', tool: this.agent.tool || '' };
     return { kind: t.bubble };
@@ -362,6 +420,21 @@ export class CharacterManager {
   remove(id) {
     const ch = this.characters.get(id);
     if (ch) ch.leave();
+  }
+
+  /**
+   * v4-B handoff from office agent `fromId` to `toId`: A walks to B's desk and back, both hold up a paper bubble.
+   * reducedMotion (or no path / A busy walking): no walk, only the bubbles. → 'walk' | 'bubbles' | null (unknown ids).
+   */
+  handoff(fromId, toId, { reducedMotion = false } = {}) {
+    const a = this.characters.get(fromId);
+    const b = this.characters.get(toId);
+    if (!a || !b || a === b || a.phase === 'gone' || a.phase === 'leaving' || b.phase === 'gone' || b.phase === 'leaving') return null;
+    if (!reducedMotion && a.startErrand(b)) return 'walk';
+    const until = this.time + HANDOFF_GIVE_S;
+    a.paperUntil = until;
+    b.paperUntil = until;
+    return 'bubbles';
   }
 
   update(dt, time) {

@@ -34,7 +34,7 @@ from .peers import DeviceKey, PeerStore
 from .relay import RelayClient
 from .runtimes import RuntimeError_, Runtimes
 from .session import Peer, Router
-from .tasks import Scheduler, TaskError, TaskRun, fit_result, prompt_sha
+from .tasks import Scheduler, TaskError, TaskRun, fit_result, handoff_prompt, parse_handoff, prompt_sha
 from .usage import Budgets, Ledger, tz_name
 from .workspaces import WorkspaceDenied, Workspaces
 
@@ -46,6 +46,7 @@ APPROVAL_RESULT = {"ok": "allow", "denied": "deny", "timeout": "expired", "withd
 APPROVAL_AUDIT = {"ok": "approval.approve", "denied": "approval.deny", "timeout": "approval.expire",
                   "withdrawn": "approval.withdraw"}
 APPROVAL_POLL_S = 0.5       # how often a waiting /ctl/approvals/tool call checks that its hook is still there
+FEATURES = ["handoff"]      # device.info.features: optional protocol parts this connector understands (v4-B)
 SLOW_TYPES = {"peer.hello", "runtime.list", "runtime.start", "runtime.stop", "model.load", "model.unload",
               "workspace.list", "agent.create", "peer.revoke"}
 
@@ -370,7 +371,7 @@ class Connector:
         ws = a.get("workspace") or {}
         self.audit.write(ev, bid=run.bid, peer=run.peer_label, agent=a["key"], engine=a["engine"],
                          ws=ws.get("id"), sub=ws.get("sub"), profile=a.get("profile"), prompt=run.prompt,
-                         result=result, task=run.id)
+                         result=result, task=run.id, handoff=(run.handoff or {}).get("agent"), origin=run.origin)
 
     def start_engine(self, run: TaskRun):
         a = self.agents.get(run.agent_key)
@@ -422,12 +423,41 @@ class Connector:
             pass
         self.send_to_task(run, fit_result(msg))
 
-    def send_to_task(self, run: TaskRun, msg: dict) -> None:
+    def task_handoff(self, run: TaskRun, result: Optional[str]) -> None:
+        """v4-B: A's task ended with success → one task for B on this device (B's own profile, folder, budget and
+        confirmation rule). Any failure is reported, never raised. The audit record holds ids and sizes, no text."""
+        h = run.handoff
+        info = {"outLen": 0, "truncated": False}
+        try:
+            if self._stop.is_set():
+                raise TaskError("not_allowed", "connector stopping")
+            b = self.agents.get(h["agent"])                  # AgentError unknown_agent (deleted meanwhile)
+            info = handoff_prompt(h["note"], result, run.agent.get("name"), self.cfg["limits"]["maxPromptBytes"])
+            title = "Devredilsin mi? %s → %s" % (str(run.agent.get("name"))[:24], str(b.get("name"))[:24])
+            ack = self.scheduler.submit(b, info["prompt"], False, run.peer, run.peer_label,
+                                        self._need_confirm(b, False), origin=run.id, confirm_title=title)
+        except (TaskError, AgentError) as e:
+            code, ack = e.code, None
+        except Exception as e:
+            self.log("handoff error %s: %s" % (run.id, type(e).__name__))
+            code, ack = "internal", None
+        else:
+            code = None
+        self.audit.write("task.handoff", bid=run.bid, task=run.id, next=ack["task"] if ack else None,
+                         **{"from": run.agent_key}, to=h["agent"], result=code or "ok",
+                         noteLen=len(h["note"].encode("utf-8")), outLen=info["outLen"], truncated=info["truncated"])
+        msg = {"type": "task.handoff", "task": run.id, "from": run.agent_key, "to": h["agent"],
+               "status": "failed" if ack is None else "started", "next": ack["task"] if ack else None,
+               "confirm": ack["confirm"] if ack else None, "queued": bool(ack and ack["queued"]), "code": code,
+               "truncated": info["truncated"]}
+        self.send_to_task(run, msg, also_watching=h["agent"])
+
+    def send_to_task(self, run: TaskRun, msg: dict, also_watching: Optional[str] = None) -> None:
         targets = []
         if run.peer is not None and not run.peer.channel.closed:
             targets.append(run.peer)
         for p in self.router.all_peers():
-            if run.agent_key in p.watching and p not in targets:
+            if (run.agent_key in p.watching or also_watching in p.watching) and p not in targets:
                 targets.append(p)
         for p in targets:
             try:
@@ -467,6 +497,7 @@ class Connector:
                               "enabled": p != "auto" or self.cfg["profiles"]["auto"]["enabled"]}
                              for p in ("readonly", "edit", "dev", "auto")],
                 "remote": dict(self.cfg["remote"]), "approvals": {"remote": self.remote_approvals()["enabled"]},
+                "features": list(FEATURES),
                 "time": int(self.clock() * 1000), "tz": tz_name()}
 
     def h_peer_hello(self, peer: Peer, msg: dict) -> None:
@@ -682,17 +713,27 @@ class Connector:
         if len(prompt.encode("utf-8")) > self.cfg["limits"]["maxPromptBytes"]:
             raise Reply("too_large", "prompt too large")
         fresh = msg.get("fresh") is True
-        mode = self.cfg["confirm"]["task"]
-        # "new_session" is about Claude Code sessions; other engines have none, so it never asks for them (H25).
-        need = mode == "always" or (mode == "new_session" and a["engine"] == "claude"
-                                    and (fresh or not a.get("claudeSessionStarted")))
+        handoff = parse_handoff(msg.get("handoff"))
+        if handoff is not None:
+            if handoff["agent"] == a["key"]:
+                raise Reply("bad_request", "handoff to the same agent")
+            self.agents.get(handoff["agent"])                 # unknown_agent; checked again when A ends
         try:
-            ack = self.scheduler.submit(a, prompt, fresh, peer, peer.label, need)
+            ack = self.scheduler.submit(a, prompt, fresh, peer, peer.label, self._need_confirm(a, fresh), handoff=handoff)
         except TaskError as e:
             if e.code in ("rate_limited", "busy"):
                 self.audit.write("denied", bid=peer.bid, agent=a["key"], reason=e.code)
             raise
-        return dict({"type": "task.ack"}, **ack)
+        out = dict({"type": "task.ack"}, **ack)
+        if handoff is not None:
+            out["handoff"] = handoff["agent"]
+        return out
+
+    def _need_confirm(self, a: dict, fresh: bool) -> bool:
+        mode = self.cfg["confirm"]["task"]
+        # "new_session" is about Claude Code sessions; other engines have none, so it never asks for them (H25).
+        return mode == "always" or (mode == "new_session" and a["engine"] == "claude"
+                                    and (fresh or not a.get("claudeSessionStarted")))
 
     def h_task_cancel(self, peer, msg) -> Optional[dict]:
         tid = msg.get("task")

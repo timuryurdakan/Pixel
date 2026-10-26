@@ -609,6 +609,17 @@ kbd.kbd-hint { margin-left: 6px; font: 10px var(--font); opacity: .75; }
 .ctl-msg:empty { display: none; }
 .ctl-msg { color: #cfe8d0; }
 .ctl-msg.error, .error { color: #ff8a80; }
+/* v4-B: "Bitince devret" (desk-to-desk handoff) */
+.ctl-handoff { font-size: 12px; }
+.ctl-handoff[hidden], .ctl-handoff-note[hidden] { display: none; }
+.ctl-handoff-sum { cursor: pointer; color: var(--muted); padding: 2px 0; overflow-wrap: anywhere; }
+.ctl-handoff[open] .ctl-handoff-sum { color: var(--text); }
+.ctl-handoff-to, .ctl-handoff-note {
+  display: block; width: 100%; max-width: 100%; margin-top: 6px; font: 12px var(--font); padding: 5px 6px;
+  color: var(--text); background: #16161f; border: 2px solid #000;
+}
+.ctl-handoff-note { resize: vertical; min-height: 40px; }
+.handoff-note { margin-top: 4px; }
 
 .ctl-outwrap { position: relative; display: flex; flex-direction: column; border: 2px solid #000; background: #121219; }
 .ctl-outwrap.empty .ctl-out::before { content: "Görev çıktısı burada akar."; color: var(--muted); font-style: italic; }
@@ -860,6 +871,8 @@ input.pair-code { font: bold 20px/1.2 var(--font) !important; letter-spacing: 2p
   body.v3.has-sel .det-head .close { display: none; }          /* ← in the sheet header does the same */
   .edit-name { min-width: 44px; min-height: 44px; }
   .ctl-row .check { min-height: 44px; }
+  .ctl-handoff-sum { display: flex; align-items: center; min-height: 44px; padding: 0; }
+  .ctl-handoff-to, .ctl-handoff-note { min-height: 44px; font-size: 16px; }
   .ctl .btn.small, .devices-page .btn.small, .dlg .btn.small { min-height: 44px; padding: 4px 12px; font-size: 12px; }
   .devices-page .link-btn { display: inline-flex; align-items: center; min-height: 44px; }
   .ctl-recent summary, .budget-edit summary { padding: 12px 0; line-height: 20px; }
