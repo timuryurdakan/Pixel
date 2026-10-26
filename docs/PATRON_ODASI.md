@@ -621,3 +621,48 @@ ama kullanıcı "biri bitmeden diğeri başlamasın" dediği için sıralı tutu
 ## 11. Uygulama sapmaları
 
 Bu bölümü P1–P9'u uygulayan ajanlar doldurur (tasarımdan farklı yapılan her şey, tarih ve gerekçeyle).
+
+### P1 — Plan şeması ve rol kütüphanesi (2026-10-26, Bağlayıcı Mühendisi)
+
+Kod: `pixel_connector/boss.py` (saf modül, henüz hiçbir yerden çağrılmıyor), testler `tests/test_boss_plan.py`.
+Bağlayıcı 3.6.0.
+
+1. **`needs` → `after`.** §10/2 bağımlılığı `after` diye adlandırdığı için plan alanı `after`; `needs` artık bilinmeyen
+   alan (red). Anlamı §4.4'teki `needs` ile aynı: yalnızca kendisinden **önce** yazılmış iş emirleri (ileri, kendine,
+   bilinmeyen, tekrarlanan ve döngülü başvuru red); P3 bu iş emirlerinin çıktılarını çitli veri olarak ekler.
+2. **İş emri talimatı tek adım sınırına sığmalı.** Her alan kendi sınırında olsa bile toplam (bağlayıcının sabit metni +
+   rol talimatı + özet + başlık + hedef + kabul ölçütleri + dosyalar) A10'un 4096 bayt adım talimatı sınırını aşarsa
+   plan `bad_plan` ile reddedilir (kırpma yok). En büyük hedef (2000 bayt) + en uzun başlık ve özetle sığar (testli).
+3. **Gizli karakter uçlarda da red.** `workflows._text` baştaki/sondaki boşluk sayılan kontrol karakterlerini
+   (U+2028/U+2029, U+0085, `\x0b`, `\x1c`–`\x1f`) kırpıp kabul ediyordu; plan metinlerinde bunlar da reddedilir (`_strict_text`).
+4. **Dosya yolu kuralları genişletildi:** §4.4'tekilere ek olarak `\`, `:` (sürücü harfi, NTFS akışı), herhangi bir
+   yerde `~`, `?`/`[]`/`{}` jokerleri, boş ve `.` bileşenleri (`a//b`, `./a`, `a/`), baş/son boşluk red. `files`
+   isteğe bağlı (yoksa `[]`), `after` de öyle. Tekrarlanan dosya adı denetlenmez (zararsız).
+5. **Tavanlar §10/4'e göre** (`MAX_ORDERS = 4`, düzeltme planında en fazla 2, `MAX_PARALLEL = 2`, 1,00 $, 45 dk, 100 tur,
+   planlama 0,20 $ / 10 tur, plan onayı 900 s). `run_ceiling`: `connector.json` değeri 0,10–3,00 $ dışında
+   `bad_config` (P2 bunu yapılandırma hatası olarak işler; alan adı P2'de kesinleşir, öneri `boss.maxCostUsd`).
+   `run_cost_cap`: tarayıcı yalnızca düşürür, 0,10 $ altı ya da tavan üstü `bad_request` (kırpılmaz, S26-04).
+   Planlama tavanı `min(0,20 $, çalışma tavanı)`.
+6. **Rol kütüphanesi (`ROLES`):** `frontend`/`backend`/`docs` `edit`, `review` `readonly`, **`test` `dev`** (§10/3)
+   ve `confirm: true` (her test iş emrinden önce onay; P3). Test rolünün komutları yalnızca kendi listesi
+   (`role_allow_rules`): `Bash(<k> *)`, `k` ∈ `python3 -m unittest`, `python -m unittest`, `python3 -m pytest`,
+   `pytest`, `npm test`. `validate_role` bunun dışındaki her kuralı (çıplak `Bash`, `Bash(*)`, kabuk, `git`, `npm *`,
+   `;`/`&&`/`|`/`$()`, `Edit`/`Read` kuralları) ve `dev` olmayan bir rolde herhangi bir komut kuralını reddeder; `auto`
+   hiçbir rolde olamaz. Tahmini maliyetler: Frontend/Backend 0,30 $, Test 0,25 $, Belge/İnceleme 0,15 $,
+   değerlendirme 0,15 $ (taslaktaki 0,40 $, 1,00 $ tavana göre küçültüldü). Tüm roller Claude, model `null`. Rozetler
+   mevcut araç simgelerinden (`TOOL_ICON_KINDS`); Patron (`BOSS_ROLE`, `readonly`, rozet `people`) `ROLES` içinde
+   değil, plan onu seçemez.
+7. **Paralellik yardımcıları:** `files_conflict` büyük/küçük harf duyarsız; bir yol altındakileri de kapsar (klasör
+   olabilir); joker içeren desen, jokerden önceki sabit klasörün tamamını kapsar; boş `files` belirsizdir ve her şeyle
+   çakışır. İki `readonly` iş emri hiç çakışmaz. `dependencies` = `after` + çakıştığı önceki iş emirleri (çakışanlar
+   yazılış sırasıyla çalışır); `ready_orders` aynı anda en fazla 2 iş emri verir (daha büyük `max_parallel` yok sayılır).
+8. **Durum tablosu:** `running` → `reporting|error|cancelled` doğrudan da olabilir (yarım raporu bağlayıcı şablonla
+   yazar, Patron görevi yok); bitmiş durumlardan çıkış yok, yeni iş yeni nesne (`idle` → `planning`).
+9. **`plan_to_steps`** yalnızca A10'un şablon alanlarını üretir (`usePrevious` yok); sıra/paralellik, `after`
+   çıktıları ve Test onayı P3'te. Son adım `patron` (Patron, `readonly`, sabit değerlendirme talimatı).
+
+**P2/P3 için notlar:** (a) Test rolünün dar izin listesi bugün uygulanamaz: `engines/claude.build_argv` profilin
+`profiles.dev.allow` listesini kullanıyor; görev başına bu listenin **yerine geçen** (eklenmeyen) bir kural listesi
+gerekir (güvenlik çekirdeğine yakın, ayrı küçük commit). (b) Test rolü dosya yazıp test çalıştırabildiği için pratikte
+klasörde kod çalıştırabilir (`npm test` `package.json` betiğini çalıştırır); §10/3 kararıyla kabul, sınır her test iş
+emrindeki kullanıcı onayı. P8 bunu ayrıca incelemeli.

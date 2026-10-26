@@ -58,8 +58,8 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | A10 | v4-C: iş akışı motoru ve ilk şablon (A9 sonrası) | Claude (2026-10-26, kullanıcı: "geç ve bitir") | ✅ |
 | A11 | Aşama 20 / Paket 6: bulut temizliği (**şimdi**, C3'ten bağımsız; push yok, Claude birleştirir) | Antigravity | ✅ Teslim edildi |
 | A12 | Aşama 20 / Paket 8b: belgeler (D1–D4, F5–F6, E7) | Antigravity | ✅ Teslim edildi |
-| P1 | Patron Odası: plan şeması ve rol kütüphanesi (ayrıntı: [`docs/PATRON_ODASI.md`](PATRON_ODASI.md) §9; §10 kararlarından sonra) | Claude | ⬜ |
-| P2 | Patron Odası: Patron masası, istem → plan → onay (P1 sonrası) | Claude | ⬜ |
+| P1 | Patron Odası: plan şeması ve rol kütüphanesi (ayrıntı: [`docs/PATRON_ODASI.md`](PATRON_ODASI.md) §9; §10 kararlarından sonra) | Claude | ✅ |
+| P2 | Patron Odası: Patron masası, istem → plan → onay (P1 sonrası) | Claude | 🔄 |
 | P3 | Patron Odası: iş emirlerinin yürütülmesi, değerlendirme, rapor (P2 sonrası) | Claude | ⬜ |
 | P4 | Patron Odası: pixel art, Patron ve odası (P3 sonrası) | Claude | ⬜ |
 | P5 | Patron Odası: ofis haritası ve sahne (P4 sonrası) | Claude | ⬜ |
@@ -274,3 +274,13 @@ görüntüleri, bilinen sorunlar.
   yarış testinde yeni iptalin kapatılması. Kararlar: S26-08'de çalışan görev de iptal; Windows'ta durdur → değiştir →
   başlat (gerçek makinede denenmedi); kanca dosyası yalnızca kuruluysa ve satırı varsa yenilenir. `python3 -m unittest
   discover -s tests`: 850 test, OK (1 atlandı); `build_connector.py --check` güncel.
+- **2026-10-26, Claude (Patron Odası P1: plan şeması ve rol kütüphanesi, Bağlayıcı Mühendisi):** Teslim edildi,
+  commit/push yok (koordinatör denetleyip commit'leyecek). Yeni: `pixel_connector/boss.py` (saf modül, henüz hiçbir
+  yerden çağrılmıyor), `tests/test_boss_plan.py` (46 test); ikisi de `git add -N` ile işaretlendi (derleme yalnızca
+  git'in bildiği dosyaları alır, içerik sahnelenmedi). Değişen: `pixel_connector/__init__.py` (3.6.0), `web/connector/*`
+  (`bf6e7c12…`), `README.md` (SHA satırı), sürüm testleri (`test_e2e_protocol.py`, `test_phase20_connector.py`, yalnızca
+  numara), `docs/PATRON_ODASI.md` §11, `docs/V3.md` §20, `PROJECT.md` §6 (A9 kaydı çıkarıldı; zaten günlükteydi),
+  günlük. Kararlar: plan alanı `after` (§10/2), Test rolü `dev` + kendi 5 test komutu + `confirm`, iş emri talimatı
+  4096 baytı aşarsa plan reddi; ayrıntı ve P2/P3 notları (Test rolünün izin listesinin `engines/claude.py`'de görev
+  başına uygulanması gerekiyor) §11'de. `python3 -m unittest discover -s tests`: 896 test, OK (1 atlandı: `pwsh`);
+  `build_connector.py --check` güncel.
