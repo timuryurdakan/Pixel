@@ -1,8 +1,10 @@
 // Pixel Office — canvas renderer (ARCHITECTURE.md §6.4).
 // Cached static background, y-sorted furniture + characters, bubbles, crisp labels.
 
-import { getCharacterFrame, getTileSprite, getFurnitureSprite, getBubbleSprite, getToolIcon, getCatFrame, CHAR_W, CHAR_H } from './sprites.js';
-import { TILE, SCALE, CAT_TILE } from './office.js';
+import { getCharacterFrame, getTileSprite, getFurnitureSprite, getBubbleSprite, getToolIcon, getCatFrame, CHAR_W, CHAR_H,
+  getBossFrame, getBossDeskSprite } from './sprites.js';
+import { TILE, SCALE, CAT_TILE, BOSS_SEAT, BOSS_DESK, BOSS_DOOR, inBossRoom } from './office.js';
+import { bossPose } from './boss_scene.js';
 import { ParticleSystem, LightingEngine, AgentReactions, STEP_DUST_PER_S, CODE_SPARKLE_PER_S } from './fx.js';
 import { drawBoardOverlay, BOARD_X, BOARD_Y, BOARD_W, BOARD_H } from './board.js';
 
@@ -119,12 +121,44 @@ export class Renderer {
         let name = (x + y) % 2 === 1 ? 'floor_alt' : 'floor';
         if (ch === '=') name = 'rug';
         else if (ch === 'D') name = 'door';
+        else if (ch === 'd') name = 'door_front';
         else if (ch === '#') name = 'wall';
         else if (ch === 'W') name = 'window';
+        else if (inBossRoom(x, y)) name = 'boss_floor';
         ctx.drawImage(getTileSprite(name), x * TILE, y * TILE);
       }
     }
+    // The Boss's brass sign on his door's wall cap (docs/PATRON_ODASI.md §3.3).
+    if (o.tileAt(BOSS_DOOR.x, BOSS_DOOR.y) === 'd') ctx.drawImage(getFurnitureSprite('boss_sign'), BOSS_DOOR.x * TILE, BOSS_DOOR.y * TILE);
     return c;
+  }
+
+  /** The office map has the Boss's seat and desk (an older/custom map may not). */
+  _hasBoss() {
+    const o = this.office;
+    return o.tileAt(BOSS_SEAT.x, BOSS_SEAT.y) === 'L' && o.tileAt(BOSS_DESK.x, BOSS_DESK.y) === 'X';
+  }
+
+  /**
+   * The Boss at his desk as one y-sorted item: chair → desk (one row lower, with `files` folders) → seated Boss, so his
+   * torso covers the back of the desk top and his hands lie on it (docs/PATRON_ODASI.md §3.3). Never labelled.
+   */
+  _bossItem(pose) {
+    const ctx = this.ctx;
+    const sx = BOSS_SEAT.x * TILE, sy = BOSS_SEAT.y * TILE + TILE - CHAR_H;
+    const desk = getBossDeskSprite(pose.files);
+    const dx = BOSS_DESK.x * TILE, dy = BOSS_DESK.y * TILE + TILE - desk.height;
+    const chair = getFurnitureSprite('boss_chair');
+    const man = getBossFrame(pose.anim, 'down', pose.frame);
+    return {
+      sortY: (BOSS_DESK.y + 1) * TILE - 1,
+      x: dx,
+      draw: () => {
+        ctx.drawImage(chair, sx, sy);
+        ctx.drawImage(desk, dx, dy);
+        ctx.drawImage(man, sx, sy);
+      },
+    };
   }
 
   /** Sprite rect (world px) of a character. */
@@ -137,7 +171,7 @@ export class Renderer {
    * @param {import('./agents.js').Character[]} characters
    * @param {{selectedId:string|null, hoverId:string|null, time:number}} opts
    */
-  render(characters, { selectedId = null, hoverId = null, time = 0, boardData = null } = {}) {
+  render(characters, { selectedId = null, hoverId = null, time = 0, boardData = null, boss = null } = {}) {
     if (boardData !== null) this.boardData = boardData;
     const dt = this._lastTime ? Math.min(0.1, Math.max(0, time - this._lastTime)) : 0.016;
     this._lastTime = time;
@@ -166,6 +200,7 @@ export class Renderer {
       }
       const img = getFurnitureSprite(name);
       const dx = f.x * TILE;
+      if (f.kind === 'sofa') { items.push({ sortY: f.sortY, x: dx, draw: () => ctx.drawImage(img, dx, f.y * TILE) }); continue; }
       const dy = f.kind === 'bed' ? f.y * TILE : f.y * TILE + TILE - img.height;
       items.push({
         sortY: f.sortY,
@@ -228,6 +263,9 @@ export class Renderer {
       },
     });
 
+    const bossNow = this._hasBoss() ? (boss || bossPose({ time })) : null;
+    if (bossNow) items.push(this._bossItem(bossNow));
+
     items.sort((a, b) => a.sortY - b.sortY || a.x - b.x);
     for (const it of items) it.draw();
 
@@ -256,6 +294,14 @@ export class Renderer {
         ctx.globalAlpha = 1;
       } else img = getBubbleSprite(b.kind, Math.floor(time * 2));
       if (img) ctx.drawImage(img, Math.round(bx - img.width / 2), Math.round(by - img.height / 2 + bob));
+    }
+
+    if (bossNow && bossNow.bubble) {
+      const img = bossNow.bubble === 'alert'
+        ? (Math.floor(time * 4) % 2 === 0 ? getBubbleSprite('alert', 0) : null)
+        : getBubbleSprite(bossNow.bubble, Math.floor(time * 2));
+      const bob = Math.round(Math.sin(time * Math.PI * 4));
+      if (img) ctx.drawImage(img, BOSS_SEAT.x * TILE + 8 - img.width / 2, BOSS_SEAT.y * TILE + TILE - CHAR_H - 2 - img.height / 2 + bob);
     }
 
     // Cat mascot emote bubble

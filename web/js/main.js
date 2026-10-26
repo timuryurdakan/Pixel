@@ -11,6 +11,7 @@ import { MiniWindow } from './pip.js';
 import * as cloud from './cloud.js';
 import { sound } from './audio.js';
 import { TaskBoard, categorizeTasks } from './board.js';
+import { BossScene, connectBossScene } from './boss_scene.js';
 
 export const STEP = 1 / 60;   // fixed timestep (s)
 export const MAX_STEPS = 5;   // per animation frame (excess is dropped)
@@ -22,7 +23,7 @@ const debug = params.has('debug');
 const viewMini = params.get('view') === 'mini';
 const errors = [];
 
-let office, manager, renderer, ui, canvas;
+let office, manager, renderer, ui, canvas, bossScene;
 let selectedId = null, hoverId = null;
 let gameTime = 0;
 let firstSnapshot = true;
@@ -102,15 +103,18 @@ function v3Sync() {
   document.getElementById('btn-workflows').hidden = !(v3.supportsWorkflows && [...v3.hub.devices.values()].some(v3.supportsWorkflows));
 }
 
+/** Office agent id of a paired device's agent (its `control` link), or null. */
+function officeIdOf(dev, key) {
+  const hit = [...agents.values()].find((x) => x.control && x.control.device === dev && x.control.agent === key);
+  return hit ? hit.id : null;
+}
+
+const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 /** v4-B handoff on a paired device: A walks to B's desk with a sheet of paper (bubbles only with reduced motion). */
 function animateHandoff(dev, m) {
-  const idOf = (key) => {
-    const hit = [...agents.values()].find((x) => x.control && x.control.device === dev && x.control.agent === key);
-    return hit ? hit.id : null;
-  };
-  const from = idOf(m.from), to = idOf(m.to);
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (from && to) manager.handoff(from, to, { reducedMotion });
+  const from = officeIdOf(dev, m.from), to = officeIdOf(dev, m.to);
+  if (from && to) manager.handoff(from, to, { reducedMotion: prefersReducedMotion() });
   updateBoard();
 }
 
@@ -296,12 +300,13 @@ function loop(ts) {
   while (acc >= STEP && steps < MAX_STEPS) {
     gameTime += STEP;
     manager.update(STEP, gameTime);
+    bossScene.update(gameTime);
     acc -= STEP;
     steps++;
   }
   if (steps === MAX_STEPS) acc = Math.min(acc, STEP);
   try {
-    renderer.render(manager.list(), { selectedId, hoverId, time: gameTime });
+    renderer.render(manager.list(), { selectedId, hoverId, time: gameTime, boss: bossScene.pose(gameTime) });
   } catch (err) {
     reportError(err);
   }
@@ -410,6 +415,7 @@ function bootCommon() {
   office = new Office();
   manager = new CharacterManager(office);
   renderer = new Renderer(canvas, office);
+  bossScene = new BossScene({ manager, resolve: officeIdOf, reducedMotion: prefersReducedMotion });
   ui = new UI({
     list: document.getElementById('agent-list'),
     details: document.getElementById('agent-details'),
@@ -477,7 +483,7 @@ function bootCommon() {
   if (typeof ResizeObserver === 'function') new ResizeObserver(() => { if (!(mini && mini.window)) fitCanvas(); }).observe(document.getElementById('stage'));
   window.addEventListener('resize', () => { if (!(mini && mini.window)) fitCanvas(); });
 
-  window.pixelOffice = { office, manager, renderer, ui, sound, agents, errors, overrides,
+  window.pixelOffice = { office, manager, renderer, ui, sound, agents, errors, overrides, bossScene,
     get board() { return board; },
     get transport() { return transport; }, get backend() { return backend; }, get room() { return room; },
     get mini() { return mini; } };
@@ -654,6 +660,8 @@ async function setupV3(roomId, key) {
   // connector 3.5.0: "Bilgisayarınızdaki bağlayıcı eski." strip (paired + connected devices only; never in ?view=mini)
   const updateBanner = new UpdateBanner({ root: $('update-banner'), hub, toast, copy: (t) => cloud.copyText(t),
     onInstall: () => wizard.open(1), onLayout: () => fitCanvas() });
+  // Patron Odası P5: boss.state / boss.event from paired computers drive the Boss and the specialists' file walks.
+  connectBossScene(bossScene, hub);
   v3 = { hub, panel, devices, wizard, newAgent, approvals, workflows, wfDialog, supportsWorkflows, updateBanner,
     pendingSelect: null, setTab };
   window.pixelOffice.v3 = v3;

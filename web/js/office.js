@@ -1,15 +1,18 @@
 // Pixel Office — office map, walkability, spots + reservation (ARCHITECTURE.md §4, §6.1).
+// Top right: the Boss's room (docs/PATRON_ODASI.md §3.2, §10/1): ',' carpet, 'F' file cabinet, 'L' the Boss's chair,
+// 'XXX' his desk, 'SS' sofa, 'd' its door. No office agent gets a spot in there; only the Boss and specialists who
+// fetch or bring back a file (BOSS_DROP_TILES).
 
 export const MAP_W = 22, MAP_H = 14, TILE = 16, SCALE = 3;
 
 export const MAP_ROWS = [
-  "##WW##WW##WW######WW##",
-  "#KK.P...KK..P...kCk.Q#",
-  "#...............ccc..#",
-  "#.TT..TT..TT.........#",
-  "#.h...h...h....======#",
-  "#..............======#",
-  "#.TT..TT..TT...======#",
+  "#######WW###WW####WW##",
+  "#.Q.kCk.......#FF,,,P#",
+  "#...ccc.......#,,L,,,#",
+  "#.TT..TT..TT..#,XXX,,#",
+  "#.h...h...h...#,,,,,,#",
+  "#.............#,,,,SS#",
+  "#.TT..TT..TT..###d####",
   "#.h...h...h..........#",
   "#.............###.####",
   "#.TT..TT..TT..#......#",
@@ -22,17 +25,28 @@ export const MAP_ROWS = [
 export const DOOR = { x: 4, y: 13 };
 export const SPAWN = { x: 4, y: 12 };
 
-const WALKABLE = new Set(['.', '=', 'D']);
+const WALKABLE = new Set(['.', '=', 'D', ',', 'd']);
 
 /**
- * The office cat sleeps on the lower-right corner of the lounge rug (v2.md H3). The tile is no spot (regular or
- * overflow) and nobody needs it to reach anything, so it is taken out of the walkable grid: characters walk around
- * the cat instead of over it.
+ * The office cat sleeps on the rest room's rug, lower right between the beds (v2.md H3; moved there when the lounge
+ * became the Boss's room). The tile is no spot (regular or overflow) and nobody needs it to reach anything, so it is
+ * taken out of the walkable grid: characters walk around the cat instead of over it.
  */
-export const CAT_TILE = Object.freeze({ x: 20, y: 6 });
-export const BOARD_TILE = Object.freeze({ x: 13, y: 1, w: 48, h: 24 });
-export const BOARD_TILES = Object.freeze([{ x: 13, y: 1 }, { x: 14, y: 1 }, { x: 15, y: 1 }]);
-const isBoardTile = (x, y) => y === 1 && x >= 13 && x <= 15;
+export const CAT_TILE = Object.freeze({ x: 18, y: 11 });
+/** Task Board (v4 A8): 3 tiles on the top wall, between the water cooler and the Boss's room. */
+export const BOARD_TILE = Object.freeze({ x: 9, y: 1, w: 48, h: 24 });
+export const BOARD_TILES = Object.freeze([{ x: 9, y: 1 }, { x: 10, y: 1 }, { x: 11, y: 1 }]);
+const isBoardTile = (x, y) => y === BOARD_TILE.y && x >= BOARD_TILE.x && x < BOARD_TILE.x + BOARD_TILES.length;
+
+/** The Boss's room (inner tiles, walls excluded), his seat (chair + seated Boss) and desk (the 3 tiles below it). */
+export const BOSS_ROOM = Object.freeze({ x: 15, y: 1, w: 6, h: 5 });
+export const BOSS_SEAT = Object.freeze({ x: 17, y: 2 });
+export const BOSS_DESK = Object.freeze({ x: 16, y: 3, w: 48, h: 24 });
+export const BOSS_DOOR = Object.freeze({ x: 17, y: 6 });
+/** Where a specialist stands to take or hand back a file: in front of the desk, facing the Boss. Preferred first. */
+export const BOSS_DROP_TILES = Object.freeze([{ x: 17, y: 4 }, { x: 16, y: 4 }, { x: 18, y: 4 }]);
+export const inBossRoom = (x, y) =>
+  x >= BOSS_ROOM.x && x < BOSS_ROOM.x + BOSS_ROOM.w && y >= BOSS_ROOM.y && y < BOSS_ROOM.y + BOSS_ROOM.h;
 const isDecorTile = (x, y) => (x === CAT_TILE.x && y === CAT_TILE.y) || isBoardTile(x, y);
 const SPOT_TILES = new Set(['h', 'c', 'b']);
 
@@ -42,8 +56,8 @@ const FACING = { desk: 'up', coffee: 'down', sleep: 'down' };
 /** Overflow spots per kind (§4.3), used after the regular ones are taken. */
 const OVERFLOW = {
   desk: [[12, 3], [12, 6], [12, 9], [13, 4], [13, 7], [13, 10]],
-  coffee: [[15, 4], [17, 4], [19, 4], [16, 6], [18, 6], [20, 5]],
-  sleep: [[17, 10], [18, 10], [17, 11], [18, 11], [17, 9], [18, 9]],
+  coffee: [[3, 2], [7, 2], [2, 2], [8, 2], [3, 1], [7, 1]],
+  sleep: [[17, 10], [18, 10], [17, 11], [17, 9], [18, 9], [16, 12]],
 };
 
 /** Map char → regular spot kind. */
@@ -126,13 +140,17 @@ export class Office {
           this.furniture.push({ kind: 'coffee_counter', x, y, w: 48, h: 24, sortY: blockSort(y) });
         } else if (ch === 'Q') {
           this.furniture.push({ kind: 'water_cooler', x, y, w: 16, h: 24, sortY: blockSort(y) });
+        } else if (ch === 'F') {
+          this.furniture.push({ kind: 'file_cabinet', x, y, w: 16, h: 24, sortY: blockSort(y) });
+        } else if (ch === 'S' && at(x - 1, y) !== 'S') {
+          this.furniture.push({ kind: 'sofa', x, y, w: 32, h: 16, sortY: blockSort(y) });
         } else if (ch === 'b') {
           const spot = this.spots.sleep.find((s) => s.x === x && s.y === y);
           this.furniture.push({ kind: 'bed', x, y, w: 16, h: 32, sortY: y * TILE + 1, spot });
         }
       }
     }
-    // Task Board (v4 A8): 3-tile whiteboard mounted on the top wall at x=13..15, y=1.
+    // Task Board (v4 A8): 3-tile whiteboard mounted on the top wall (BOARD_TILE).
     this.furniture.push({
       kind: 'board',
       x: BOARD_TILE.x,

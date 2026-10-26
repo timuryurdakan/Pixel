@@ -1,10 +1,12 @@
 // Pixel Office v4 — Task Board (Kanban Whiteboard - A8, docs/V4_ANTIGRAVITY.md).
 // Plain ES module: data model, canvas mini-board renderer, DOM modal dialog and accessibility.
 
-export const BOARD_W = 48;
-export const BOARD_H = 24;
-export const BOARD_X = 208; // 13 * 16
-export const BOARD_Y = 8;   // row 1 wall offset (1 * 16 + 16 - 24)
+import { BOARD_TILE, TILE } from './office.js';
+
+export const BOARD_W = BOARD_TILE.w;
+export const BOARD_H = BOARD_TILE.h;
+export const BOARD_X = BOARD_TILE.x * TILE;                  // world px of the board on the top wall (office.js)
+export const BOARD_Y = BOARD_TILE.y * TILE + TILE - BOARD_H; // bottom-aligned on its row: 8 = 1 * 16 + 16 - 24
 
 export const COLUMNS = [
   { id: 'queued', label: 'Sırada', color: '#4a8fd6', lightColor: '#cfe2f7' },

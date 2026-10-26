@@ -12,13 +12,13 @@
 // "Yeni sürüm hazır — Yenile" (cloud.js APP_VERSION, kept equal to VERSION by tests/test_release.py).
 // Bump VERSION (and cloud.js APP_VERSION) on every release (Phase 10 checklist).
 
-const VERSION = 'po-v4.0.3';
+const VERSION = 'po-v4.0.4';
 const SHELL = [
   '/', '/index.html', '/css/style.css',
   '/js/main.js', '/js/office.js', '/js/pathfinding.js', '/js/agents.js', '/js/renderer.js', '/js/ui.js',
   '/js/sprites.js', '/js/fx.js', '/js/audio.js', '/js/transport.js', '/js/cloud.js', '/js/pip.js',
   '/js/relay.js', '/js/e2e.js', '/js/idb.js', '/js/control.js', '/js/prompt.js', '/js/devices.js', '/js/usage.js',
-  '/js/approvals.js', '/js/board.js', '/js/workflows.js', '/js/update_banner.js',
+  '/js/approvals.js', '/js/board.js', '/js/workflows.js', '/js/update_banner.js', '/js/boss_scene.js',
   '/rehber.html', '/css/guide.css', '/js/guide.js',
   '/manifest.webmanifest',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png', '/icons/apple-touch-icon.png',

@@ -18,6 +18,7 @@ export const WALK_SPEED = 40;   // px/s (2.5 tiles/s)
 export const MIN_DWELL = 2.0;   // s at a spot before re-targeting (except leaving)
 export const FADE_TIME = 0.4;   // s
 export const HANDOFF_GIVE_S = 1.6;   // s both characters show the paper bubble during a handoff (v4-B)
+export const ERRAND_QUEUE_S = 30;    // s a queued errand (character still entering/walking) may wait before it is dropped
 
 export const STATE_TARGET = {
   working:          { spot: 'desk',   anim: 'type',  bubble: 'tool' },
@@ -56,8 +57,10 @@ export class Character {
     this.lastIndex = {};         // spot kind → last regular index used
     this.teleport = null;        // {stage:'out'|'in'} when no path exists
     this.exiting = false;        // leaving: reached the door, fading out
-    this.errand = null;          // v4-B handoff walk: {goal, stage:'go'|'give', until, peer}
+    this.errand = null;          // v4-B handoff / Boss file walk: {goal, stage:'go'|'give', until, peer, face, bubble, onGive}
+    this.queuedErrand = null;    // {goals, opts, at}: started once the character is free (just entered or settled)
     this.paperUntil = -1;        // show the paper bubble until this time (handoff)
+    this.paperKind = 'paper';    // …or the Boss's folder (reduced motion: bubbles instead of the walk)
     if (entering) {
       ({ px: this.px, py: this.py } = tileCenter(DOOR));
       this.alpha = 0;
@@ -118,6 +121,7 @@ export class Character {
   leave() {
     if (this.phase === 'leaving' || this.phase === 'gone') return;
     this.errand = null;
+    this.queuedErrand = null;
     this.office.releaseSpot(this.id);
     this.spot = null;
     this.retargetPending = false;
@@ -172,19 +176,29 @@ export class Character {
    * back. Returns false (caller falls back to bubbles only) when this character is not settled or no path exists.
    */
   startErrand(peer) {
-    if (this.phase !== 'settled' || this.teleport || this.errand || !this.spot) return false;
     const at = peer.spot || peer.tile;
+    const goals = NEIGHBOURS.map(([dx, dy]) => ({ x: at.x + dx, y: at.y + dy }));
+    return this.startErrandTo(goals, { peer, face: at });
+  }
+
+  /**
+   * Walk to the first reachable free tile of `goals` (an array, or a function returning one when the walk starts), stand there facing `face` for HANDOFF_GIVE_S showing `bubble`
+   * (`onGive(until)` is called on arrival), then go back to the own spot (or to the one the current state asks for).
+   * Shared by the A9 handoff (peer's desk, paper) and the Boss's room (drop tile in front of his desk, folder).
+   * Possible when settled, or right after entering (no spot yet). → false when busy or nothing is reachable.
+   */
+  startErrandTo(goals, { peer = null, face = null, bubble = 'paper', onGive = null } = {}) {
+    if (!this._errandFree()) return false;
     const start = this.tile;
     const pass = (goal) => (x, y) => this.office.isPassable(x, y, start, goal);
-    for (const [dx, dy] of NEIGHBOURS) {
-      const goal = { x: at.x + dx, y: at.y + dy };
+    for (const goal of typeof goals === 'function' ? goals() : goals) {
       if (!this.office.isWalkable(goal.x, goal.y) || (goal.x === start.x && goal.y === start.y)) continue;
       const path = findPath(this.office.width, this.office.height, pass(goal), start, goal);
       if (!path || !path.length) continue;
-      this.errand = { goal, stage: 'go', until: 0, peer };
+      this.errand = { goal: { x: goal.x, y: goal.y }, stage: 'go', until: 0, peer, face: face || (peer && (peer.spot || peer.tile)) || goal, bubble, onGive };
       this.phase = 'walking';
       this.retargetPending = false;
-      this.goal = goal;
+      this.goal = this.errand.goal;
       this.path = path;
       this._nextStep();
       return true;
@@ -192,12 +206,39 @@ export class Character {
     return false;
   }
 
+  /**
+   * startErrandTo now if the character is free, else once it is (entering → walking in, walking → settled).
+   * A queued errand older than ERRAND_QUEUE_S is dropped. → 'walk' | 'queued' | false (leaving/gone, or no path).
+   */
+  queueErrandTo(goals, opts = {}) {
+    if (this.phase === 'leaving' || this.phase === 'gone') return false;
+    if (this._errandFree()) return this.startErrandTo(goals, opts) ? 'walk' : false;
+    this.queuedErrand = { goals, opts, at: this.time };
+    return 'queued';
+  }
+
+  _errandFree() {
+    if (this.teleport || this.errand || this.exiting) return false;
+    if (this.phase === 'settled') return !!this.spot;
+    return this.phase === 'walking' && !this.spot && !this.step;   // just faded in at the door
+  }
+
+  /** Start the queued errand if the character is free; true if it started walking. */
+  _runQueuedErrand() {
+    const q = this.queuedErrand;
+    if (!q || !this._errandFree()) return false;
+    this.queuedErrand = null;
+    if (this.time - q.at > ERRAND_QUEUE_S) return false;
+    return this.startErrandTo(q.goals, q.opts);
+  }
+
   _errandArrived() {
     const e = this.errand;
     e.stage = 'give';
     e.until = this.time + HANDOFF_GIVE_S;
-    e.peer.paperUntil = Math.max(e.peer.paperUntil, e.until);
-    const at = e.peer.spot || e.peer.tile;
+    if (e.peer) { e.peer.paperUntil = Math.max(e.peer.paperUntil, e.until); e.peer.paperKind = 'paper'; }
+    if (e.onGive) e.onGive(e.until);
+    const at = e.face;
     const t = this.tile;
     this.dir = at.x > t.x ? 'right' : at.x < t.x ? 'left' : at.y < t.y ? 'up' : 'down';
     this._setAnim('stand');
@@ -260,6 +301,7 @@ export class Character {
     this.settledAt = time;
     this.dir = this.spot.facing;
     this._setAnim(this._settledAnim());
+    this._runQueuedErrand();
   }
 
   _settledAnim() {
@@ -291,14 +333,17 @@ export class Character {
         }
       } else {
         this.alpha = Math.min(1, this.alpha + dt / FADE_TIME);
-        if (this.alpha >= 1) this.teleport = null;
+        if (this.alpha >= 1) { this.teleport = null; this._runQueuedErrand(); }
       }
       return;
     }
 
     if (this.phase === 'entering') {
       this.alpha = Math.min(1, this.alpha + dt / FADE_TIME);
-      if (this.alpha >= 1) { this.phase = 'walking'; this._retarget(); }
+      if (this.alpha >= 1) {
+        this.phase = 'walking';
+        if (!this._runQueuedErrand()) this._retarget();
+      }
       return;
     }
 
@@ -349,9 +394,12 @@ export class Character {
 
   bubble() {
     if (this.teleport) return null;
-    const paper = (this.errand && this.errand.stage === 'give') || this.paperUntil > this.time;
+    const giving = this.errand && this.errand.stage === 'give';
+    const paper = giving || this.paperUntil > this.time;
     // The blinking "!" of an agent waiting for the user is never hidden (v2.md H35), not even by the handoff paper.
-    if (paper && !(this.phase === 'settled' && this.agent.state === 'waiting_for_user')) return { kind: 'paper' };
+    if (paper && !(this.phase === 'settled' && this.agent.state === 'waiting_for_user')) {
+      return { kind: giving ? this.errand.bubble : this.paperKind };
+    }
     if (this.phase !== 'settled') return null;
     const t = targetOf(this.agent.state);
     if (t.bubble === 'tool') return { kind: 'tool', tool: this.agent.tool || '' };
@@ -434,6 +482,8 @@ export class CharacterManager {
     const until = this.time + HANDOFF_GIVE_S;
     a.paperUntil = until;
     b.paperUntil = until;
+    a.paperKind = 'paper';
+    b.paperKind = 'paper';
     return 'bubbles';
   }
 
