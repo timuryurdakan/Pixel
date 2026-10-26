@@ -4,6 +4,9 @@
     python3 tools/build_connector.py            # build and write
     python3 tools/build_connector.py --check    # exit 1 if the committed files differ from a fresh build
 
+SHA256SUMS also lists the hook files of web/hook/ (`../hook/<name>`) for `pixel-connector update`, so editing a hook
+file needs a rebuild too.
+
 Only git-tracked files under pixel_connector/ are bundled (`git ls-files`; without git, all of them with a warning).
 The archive is reproducible: entries sorted, fixed timestamps (1980-01-01), fixed modes, stored (no compression, so
 the bytes don't depend on the local zlib). Contents: pixel_connector/**.py, pixel_agent.py (from web/hook/, used for
@@ -96,11 +99,26 @@ def sums_text(files: dict) -> str:
     return "".join("%s  %s\n" % (hashlib.sha256(data).hexdigest(), name) for name, data in sorted(files.items()))
 
 
+
+
+def hook_files() -> tuple:
+    """The hook files `pixel-connector update` refreshes in ~/.pixel-office/ (served at /hook/), from the connector's
+    own allow-list so the two never differ. Only their digests go into SHA256SUMS; they are not bundled (except
+    pixel_agent.py, see sources())."""
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from pixel_connector.update import HOOK_FILES, HOOK_SUMS_PREFIX
+    return HOOK_SUMS_PREFIX, HOOK_FILES
+
+
 def outputs() -> dict:
     pyz = build_bytes()
     files = {PYZ: pyz}
     for name in ("install.sh", "install.ps1"):
         files[name] = (OUT_DIR / name).read_bytes()
+    prefix, hooks = hook_files()               # named relative to /connector/, as `sha256sum -c` reads them
+    for name in hooks:
+        files[prefix + name] = (ROOT / "web" / "hook" / name).read_bytes()
     return {PYZ: pyz, SUMS: sums_text(files).encode("ascii")}
 
 

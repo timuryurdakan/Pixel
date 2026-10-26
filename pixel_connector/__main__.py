@@ -11,6 +11,7 @@
     pixel-connector approve [<id>|--link] | deny <id>
     pixel-connector remote-approvals [on|off|status]
     pixel-connector doctor | config-check | install-service [--dry-run] | uninstall-service [--dry-run] | reset-keys
+    pixel-connector update [--check]
 """
 
 from __future__ import annotations
@@ -890,7 +891,7 @@ def update_line(server: str, own_sha: Optional[str], opener=None) -> str:
         return "Güncelleme: kontrol edilemedi (%s)" % type(e).__name__
     if pub == own_sha:
         return "Güncelleme: ✓ sunucudaki sürümle aynı (%s…)" % own_sha[:12]
-    return ("Güncelleme var: kurulum komutunu yeniden çalıştırın (Cihazlar → Cihaz ekle). "
+    return ("Güncelleme var: pixel-connector update komutunu çalıştırın. "
             "Bu bilgisayar %s…, sunucu %s…" % (own_sha[:12], pub[:12]))
 
 
@@ -930,6 +931,18 @@ def doctor_claude_engine(home: str, cfg):
     return ClaudeEngine(cfg.data["engines"]["claude"], cfg.data["profiles"],
                         discover=lambda: CFG.find_claude(exclude=[w["real"] for w in cfg.data["workspaces"]]),
                         on_path_refresh=refreshed)
+
+
+def cmd_update(args) -> int:
+    """Only on the user's command (V3.md §5.4): never automatic, never triggered from a browser."""
+    from . import update as U
+    home = _home(args)
+    cfg = CFG.load_config(home)
+    if not cfg.ok:
+        for e in cfg.errors:
+            print("Hata: " + e, file=sys.stderr)
+        return 2
+    return U.run_update(cfg.data["server"], U.running_archive(), CFG.office_home(), check_only=args.check)
 
 
 def cmd_install_service(args) -> int:
@@ -1016,6 +1029,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--pyz")
     s = sub.add_parser("uninstall-service")
     s.add_argument("--dry-run", action="store_true")
+    s = sub.add_parser("update", help="sunucudaki sürümü indirip doğrular ve kurar (yalnızca siz çalıştırınca)")
+    s.add_argument("--check", action="store_true", help="yalnızca kontrol et, hiçbir şeyi değiştirme")
     s = sub.add_parser("reset-keys")
     s.add_argument("--yes", action="store_true")
     return p
@@ -1036,7 +1051,7 @@ def main(argv=None) -> int:
              "runtimes": cmd_runtimes, "usage": cmd_usage, "approve": cmd_approve, "remote-approvals": cmd_remote_approvals,
              "deny": lambda a: cmd_approve(a, ok=False), "doctor": cmd_doctor, "config-check": cmd_config_check,
              "install-service": cmd_install_service, "uninstall-service": cmd_uninstall_service,
-             "reset-keys": cmd_reset_keys}
+             "reset-keys": cmd_reset_keys, "update": cmd_update}
     fn = table.get(args.cmd)
     if fn is None:
         build_parser().print_help()

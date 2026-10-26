@@ -16,6 +16,11 @@ from xml.sax.saxutils import escape as _xml_escape
 UNIT_NAME = "pixel-connector.service"
 LAUNCHD_LABEL = "tr.pixeloffice.connector"
 SCHTASK_NAME = "PixelOffice\\Connector"
+# The Antigravity watcher's service (web/hook/pixel_antigravity.py AG_*; that file can't be imported from here).
+# `pixel-connector update` restarts it after replacing its files; tests/test_connector_update.py keeps them equal.
+AG_UNIT_NAME = "pixel-antigravity.service"
+AG_LAUNCHD_LABEL = "tr.pixeloffice.antigravity"
+AG_SCHTASK_NAME = "PixelOffice\\Antigravity"
 SYSTEM_PATH = ("/usr/local/bin", "/usr/bin", "/bin", "/usr/local/sbin", "/usr/sbin", "/sbin")
 TASK_XML_FILE = "pixel-connector.task.xml"
 TASK_RESTART_COUNT = 3              # Task Scheduler: restart a failed task 3× …

@@ -87,6 +87,11 @@ export const NO_WORKSPACE_HINT = `Bu cihazda izinli klasör yok. Bilgisayarda ş
 export const MIN_CONNECTOR = '3.1.0';
 export const UPDATE_HINT = 'Güncelleme var: bu bilgisayarda kurulum komutunu yeniden çalıştırın '
   + '(Cihazlar → Cihaz ekle → kurulum komutu). Ayarlar ve eşleşmeler korunur.';
+// Connector 3.5.0 has `pixel-connector update`; older ones only update by running the install command again.
+export const UPDATE_COMMAND_SINCE = '3.5.0';
+export const UPDATE_CMD = 'pixel-connector update';
+export const UPDATE_HINT_CMD = `Güncelleme var: bu bilgisayarda şunu çalıştırın: ${UPDATE_CMD} `
+  + '(ayarlar ve eşleşmeler korunur).';
 const SHA_RE = /^[0-9a-f]{64}$/;
 const VERSION_RE = /^(\d{1,4})\.(\d{1,4})\.(\d{1,4})/;
 
@@ -134,6 +139,17 @@ export function connectorOutdated(info, publishedSha) {
   if (versionLess(info.connector, MIN_CONNECTOR)) return true;
   return typeof info.pyz === 'string' && SHA_RE.test(info.pyz) && typeof publishedSha === 'string'
     && SHA_RE.test(publishedSha) && info.pyz !== publishedSha;
+}
+
+/** True when the device's connector has the `pixel-connector update` command (3.5.0 or newer). */
+export function hasUpdateCommand(info) {
+  if (!info || typeof info.connector !== 'string' || !VERSION_RE.test(info.connector)) return false;
+  return !versionLess(info.connector, UPDATE_COMMAND_SINCE);
+}
+
+/** The device card's update hint for this connector: the update command (3.5.0+) or the install command again. */
+export function updateHint(info) {
+  return hasUpdateCommand(info) ? UPDATE_HINT_CMD : UPDATE_HINT;
 }
 
 /** True when a device's `workspace.list` result is known and empty. */
@@ -319,7 +335,7 @@ export class DevicesPage {
       const info = d.info;
       publishedConnectorSha().then((sha) => {
         if (c.headToken !== headToken || !connectorOutdated(info, sha)) return;
-        c.head.appendChild(el('p', 'dev-hint dev-update small', UPDATE_HINT));
+        c.head.appendChild(el('p', 'dev-hint dev-update small', updateHint(info)));
       });
     }
     if (d.ready && d.info && d.info.approvals && typeof d.info.approvals.remote === 'boolean') {

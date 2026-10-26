@@ -35,7 +35,8 @@ from .peers import DeviceKey, PeerStore
 from .relay import RelayClient
 from .runtimes import RuntimeError_, Runtimes
 from .session import Peer, Router
-from .tasks import Scheduler, TaskError, TaskRun, fit_result, handoff_prompt, parse_handoff, prompt_sha
+from .tasks import (CANCEL_REVOKED, Scheduler, TaskError, TaskRun, fit_result, handoff_prompt, parse_handoff,
+                    prompt_sha)
 from .usage import Budgets, Ledger, tz_name
 from .workflows import WorkflowEngine, WorkflowError
 from .workspaces import WorkspaceDenied, Workspaces
@@ -921,7 +922,8 @@ class Connector:
             self.audit.write("peer.revoke", bid=bid, by=by or "local")
             if bid != by:
                 self.router.close_bid(bid)
-            self.workflows.peer_revoked(bid)
+            self.workflows.peer_revoked(bid)              # S26-02: first, so a run ends as `revoked`, not by its step
+            self.scheduler.cancel_for_bid(bid, CANCEL_REVOKED)   # S26-08: confirm / queued / running tasks
         return ok
 
     # -- loopback control API (CLI) --------------------------------------------------------------

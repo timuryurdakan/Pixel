@@ -14,6 +14,12 @@ export const COST_MIN = 0.01;                // = COST_BOUNDS
 export const COST_MAX = 20;
 export const MAX_STEPS = 8;
 const RUN_ID_RE = /^w_[A-Za-z0-9_-]{10}$/;
+
+/** S26-04: the template's guardrails.maxCostUsd is the highest cap a start may ask for (the connector refuses more). */
+function costCeiling(t) {
+  const v = t && t.limits ? t.limits.maxCostUsd : NaN;
+  return Number.isFinite(v) && v >= COST_MIN && v <= COST_MAX ? v : COST_MAX;
+}
 const SHOW_FINISHED = 3;                     // finished runs listed per device
 
 export const STATE_TEXT = {
@@ -256,6 +262,7 @@ export class WorkflowDialog {
     this.desc.textContent = t && t.description ? t.description : '';
     this.briefRow.hidden = !(t && t.needsBrief);
     this.f.cost.value = t && t.limits ? String(t.limits.maxCostUsd) : '1';
+    this.f.cost.max = String(costCeiling(t));
     this.f.sub.value = t && t.folder ? t.folder : '';
     this.limits.textContent = t && t.limits
       ? `Sınırlar: en fazla ${t.limits.maxTurns} tur, ${Math.round(t.limits.timeoutS / 60)} dk. Aşılırsa akış durur, sonraki adım başlamaz.`
@@ -334,7 +341,10 @@ export class WorkflowDialog {
     if (t.needsBrief && !brief) return { error: 'Ne istediğinizi kısaca yazın.' };
     if (new TextEncoder().encode(brief).length > BRIEF_MAX) return { error: 'İstek çok uzun (en fazla 4 KB).' };
     const cost = Number(String(this.f.cost.value).replace(',', '.'));
-    if (!(cost >= COST_MIN && cost <= COST_MAX)) return { error: `Maliyet tavanı ${COST_MIN}–${COST_MAX} $ arasında olmalı.` };
+    const ceiling = costCeiling(t);
+    if (!(cost >= COST_MIN && cost <= ceiling)) {
+      return { error: `Maliyet tavanı ${COST_MIN}–${ceiling} $ arasında olmalı (şablonun sınırı ${ceiling} $).` };
+    }
     if (!this.f.workspace.value) return { error: 'Bir çalışma klasörü seçin.' };
     const steps = {};
     for (const s of t.steps) {

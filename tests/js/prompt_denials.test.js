@@ -2,7 +2,7 @@
 // the folder/permission hint, and "Ajanı sil" with an inline confirmation in the prompt panel. Fake hub, real DOM.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TaskBlock, PromptPanel, denialText, shortPath, agentScope } from '../../web/js/prompt.js';
+import { TaskBlock, PromptPanel, denialText, shortPath, agentScope, endText } from '../../web/js/prompt.js';
 import { DeviceHub, ControlError } from '../../web/js/control.js';
 import { MemoryStore } from '../../web/js/idb.js';
 
@@ -169,4 +169,9 @@ test('hub: agent.deleted from the device removes the agent in every tab; deleteA
   d.agents.set('c', { key: 'c' });
   await assert.rejects(hub.deleteAgent('d1', 'c'));
   assert.equal(d.agents.size, 1);
+});
+
+test('S26-08: a task cancelled because its browser was unpaired says so', () => {
+  assert.equal(endText({ status: 'cancelled', error: { code: 'revoked' } }), 'Durduruldu: başlatan tarayıcının eşleşmesi kaldırıldı');
+  assert.equal(endText({ status: 'cancelled', error: null }), 'Durduruldu');
 });

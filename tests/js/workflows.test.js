@@ -177,6 +177,12 @@ test('dialog: templates and steps as text, engine choice, request, approve/deny/
   dlg.querySelector('[name=brief]').value = 'Kafe sitesi';
   dlg.querySelector('[name=cost]').value = '50';
   assert.match(d.request().error, /Maliyet tavanı/);
+  // S26-04: the template's cap (1 $ here) is the ceiling, not the 20 $ protocol bound
+  assert.equal(dlg.querySelector('[name=cost]').max, '1');
+  dlg.querySelector('[name=cost]').value = '1.5';
+  assert.equal(d.request().error, 'Maliyet tavanı 0.01–1 $ arasında olmalı (şablonun sınırı 1 $).');
+  dlg.querySelector('[name=cost]').value = '1';
+  assert.equal(d.request().msg.maxCostUsd, 1);
   dlg.querySelector('[name=cost]').value = '0.3';
   const { msg } = d.request();
   assert.deepEqual(msg, { type: 'workflow.start', template: 'statik-site', workspace: { id: 'isler', sub: 'statik-site' },

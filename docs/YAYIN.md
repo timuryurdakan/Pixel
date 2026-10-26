@@ -131,3 +131,19 @@ Sırayla yapın. Node.js kurmanız **gerekmez**. Ekrandaki düğme adları zaman
 - Telefonda eski sayfa önbellekte kaldıysa Cihazlar sayfası "güvenlik politikası (CSP) röle adresini engelliyor" der (eski
   CSP yeni adrese izin vermez). Sayfayı tamamen kapatıp yeniden açın; olmazsa site verilerini temizleyin (Chrome: adres
   çubuğundaki simge → Site ayarları → Verileri temizle). Ana ekrana eklenmiş uygulama için de aynısı geçerlidir.
+
+## 8. Yeni bağlayıcı sürümü yayımlandıktan sonra kullanıcılar nasıl haberdar olur?
+
+- Yayın: `python3 tools/build_connector.py` (`--check` geçmeli), README'deki `pixel-connector.pyz SHA-256` satırı,
+  commit + push. Vercel yeni `web/connector/pixel-connector.pyz` ve `SHA256SUMS` dosyalarını yayımlar; `SHA256SUMS`
+  kanca dosyalarının (`../hook/*.py`) özetlerini de içerir.
+- Kontrol: `curl -s https://www.pixeloffice.com.tr/connector/SHA256SUMS` yeni `pixel-connector.pyz` özetini göstermeli.
+- **Haberdar olma (kendiliğinden güncelleme yok):** eşleşmiş tarayıcı bağlı bilgisayarın çalıştırdığı `.pyz` özetini
+  (`device.info.pyz`) sunucudaki `SHA256SUMS` ile karşılaştırır. Farklıysa ofisin üstünde sarı şerit çıkar
+  ("Bilgisayarınızdaki bağlayıcı eski."), cihaz kartında da aynı not görünür; bilgisayarda `pixel-connector doctor`
+  "Güncelleme var" der. Şerit kapatılırsa o sürüm için bir daha çıkmaz, sonraki yayında yeniden çıkar.
+- **Kullanıcının yapacağı:** bağlayıcı 3.5.0 ve sonrası → o bilgisayarda `pixel-connector update`
+  (indirir, doğrular, değiştirir, servisi yeniden başlatır). 3.5.0'dan eski → bir kez Cihazlar → Cihaz ekle'deki
+  kurulum komutu (şeritteki "Kurulum komutunu göster" düğmesi oraya götürür).
+- Site ele geçirilse bile hiçbir bilgisayar kendiliğinden kod kurmaz: güncelleme yalnızca kullanıcı komutu
+  çalıştırınca olur (tarayıcıdan tetiklenen bir güncelleme mesajı yok, `docs/V3.md` §5.4).

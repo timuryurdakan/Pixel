@@ -164,6 +164,7 @@ export function endText(m) {
   if (st === 'timeout') return `Süre aşımı (${Math.max(1, Math.round((m.durationMs || 0) / 60000))} dk)`;
   if (st === 'error') return `Hata: ${errorText(m.error && m.error.code)}`;
   if (st === 'denied' && m.error && m.error.code === 'confirm_timeout') return 'Cihazda onay süresi doldu';
+  if (st === 'cancelled' && m.error && m.error.code === 'revoked') return 'Durduruldu: başlatan tarayıcının eşleşmesi kaldırıldı';
   return END_TEXT[st] || 'Bitti';
 }
 

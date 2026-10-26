@@ -254,3 +254,14 @@ görüntüleri, bilinen sorunlar.
   tests`: 803 test, OK (1 atlandı); `build_connector.py --check` güncel. Gerçek Claude/Ollama ile denenmedi.
   **Koordinatör (2026-10-26):** gerçek Claude (haiku, tavan 0,50 $) ile şablon uçtan uca geçti: 0,025 $, ~1,6 dk,
   `~/PixelOfficeIsler/kafe-deneme/` içinde 4 dosya, klasör dışına yazma yok. Birleştirildi.
+- **2026-10-26, Claude (Bağlayıcı 3.5.0: `update` komutu, güncelleme şeridi, S26-04, S26-08):** Teslim edildi,
+  commit/push yok (koordinatör denetleyip commit'leyecek). Yeni: `pixel_connector/update.py` (derleme yalnızca git'in
+  bildiği dosyaları aldığı için `git add -N` ile işaretlendi; içerik sahnelenmedi), `web/js/update_banner.js`,
+  `tests/test_connector_update.py`, `tests/test_update_banner_ui.py`, `tests/js/update_banner.test.js`. Değişen:
+  `pixel_connector/{__main__.py,app.py,tasks.py,workflows.py,service.py,__init__.py}` (3.5.0), `tools/build_connector.py`
+  (`SHA256SUMS`'a kanca satırları), `web/connector/*` (`2d9ab830…`), `web/js/{devices.js,main.js,prompt.js,workflows.js}`,
+  `web/index.html`, `web/css/style.css`, `web/sw.js` + `cloud.js` (`po-v4.0.2`, SHELL'e `update_banner.js`), `README.md`,
+  `docs/{V3.md,YAYIN.md,SECURITY_AUDIT.md}`, `PROJECT.md`, günlük; testlerde sürüm numaraları, doctor metni ve iki S26-02
+  yarış testinde yeni iptalin kapatılması. Kararlar: S26-08'de çalışan görev de iptal; Windows'ta durdur → değiştir →
+  başlat (gerçek makinede denenmedi); kanca dosyası yalnızca kuruluysa ve satırı varsa yenilenir. `python3 -m unittest
+  discover -s tests`: 850 test, OK (1 atlandı); `build_connector.py --check` güncel.

@@ -60,7 +60,7 @@ class BuildTests(unittest.TestCase):
             self.assertIn("__main__.py", names)
             self.assertIn("pixel_agent.py", names)
             for mod in ("crypto", "session", "relay", "ws", "app", "tasks", "agents", "approvals", "audit", "config",
-                        "peers", "runtimes", "service", "usage", "workspaces", "__main__", "__init__"):
+                        "peers", "runtimes", "service", "usage", "workspaces", "update", "__main__", "__init__"):
                 self.assertIn("pixel_connector/%s.py" % mod, names)
             for eng in ("base", "claude", "ollama", "openai_compat", "__init__"):
                 self.assertIn("pixel_connector/engines/%s.py" % eng, names)

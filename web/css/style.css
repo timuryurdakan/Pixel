@@ -1152,3 +1152,26 @@ input.pair-code { font: bold 20px/1.2 var(--font) !important; letter-spacing: 2p
   .wf-form select, .wf-form input, .wf-brief { min-height: 44px; font-size: 16px; }
   .wf-run-actions .btn { min-height: 44px; min-width: 88px; }
 }
+
+/* ---- connector 3.5.0 (2026-10-26): outdated connector strip above the office (update_banner.js) ---- */
+body.update-banner-on #topbar { flex-wrap: wrap; }
+.update-banner {
+  order: 99;
+  flex: 1 0 100%;
+  min-width: 0;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+  padding: 6px 8px 6px 12px;
+  background: #3a2c1a;
+  border: 2px solid var(--warn);
+  box-shadow: 3px 3px 0 #000;
+  color: var(--text);
+  font: 12.5px/1.4 var(--font);
+}
+.ub-text { flex: 1 1 260px; min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.ub-title { color: var(--warn); }
+.ub-dev { color: var(--muted); }
+.ub-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.ub-cmd { padding: 4px 8px; background: #16161f; border: 1px solid var(--line); user-select: all; overflow-wrap: anywhere; }
+.update-banner .btn { min-height: 44px; }
+.ub-close { min-width: 44px; font-size: 18px; line-height: 1; }
+body.mini .update-banner { display: none; }

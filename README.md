@@ -26,7 +26,7 @@ Pixel Office, tarayıcıda çalışan pixel-art bir sanal ofistir. Bilgisayarın
    - [Gizlilik ve güvenlik](#gizlilik-ve-güvenlik)
    - [Ücretsiz plan limitleri](#ücretsiz-plan-limitleri)
 4. [Ajan Kontrol Merkezi (v3, deneme)](#ajan-kontrol-merkezi-v3-deneme)
-   - [Bağlayıcıyı kurma](#bağlayıcıyı-kurma) · [Eşleştirme](#masaüstü-ve-telefonu-eşleştirme) · [Görev verme](#görev-verme) · [Bütçeler](#token-göstergesi-ve-bütçeler) · [Sorun giderme (v3)](#sorun-giderme-v3)
+   - [Bağlayıcıyı kurma](#bağlayıcıyı-kurma) · [Güncelleme](#bağlayıcıyı-güncelleme) · [Eşleştirme](#masaüstü-ve-telefonu-eşleştirme) · [Görev verme](#görev-verme) · [Bütçeler](#token-göstergesi-ve-bütçeler) · [Sorun giderme (v3)](#sorun-giderme-v3)
    - [Yayına alma kontrol listesi (v3)](#yayına-alma-kontrol-listesi-v3)
 5. [Ajanları yeniden adlandırma](#ajanları-yeniden-adlandırma)
 6. [Durumlar nasıl belirleniyor?](#durumlar-nasıl-belirleniyor)
@@ -325,7 +325,7 @@ içine kurar, `~/.pixel-office/bin/pixel-connector` kısayolunu ve ayar dosyası
 Ekrana yazdığı özeti bu sürümün özetiyle karşılaştırın:
 
 ```
-pixel-connector.pyz SHA-256: dd38eae4b78ca8817bfdcd42d539d248ed518fb7e242a1337593930e1bac3f2c
+pixel-connector.pyz SHA-256: 2d9ab83029bad795d15d83d1ca410ba343fb309b68f71e27a96568f6019a5d24
 ```
 
 Windows (PowerShell): komut kutusundaki **Windows** sekmesini kullanın (`irm …/install.ps1 -OutFile install.ps1`, sonra
@@ -408,8 +408,36 @@ ardından `systemctl --user restart pixel-connector`. Claude Code yalnızca VS C
 **Servis (Linux):** durum `systemctl --user status pixel-connector`, günlük `journalctl --user -u pixel-connector`.
 Oturum açmadan da çalışsın isterseniz `loginctl enable-linger $USER`. Her şeyi kontrol etmek için `pixel-connector doctor`
 (çalışma klasörü yoksa ya da saat farkı varsa söyler; saat farkını önbelleğe alınmayan `/api/health` yanıtından ölçer).
-Güncellemek için kurulum komutunu yeniden çalıştırın (servis yeni sürümle yeniden başlar). Kaldırmak için
+Güncellemek için aşağıdaki "Bağlayıcıyı güncelleme" bölümüne bakın. Kaldırmak için
 `pixel-connector uninstall-service`, ardından `~/.pixel-office/connector/` klasörünü silin.
+
+### Bağlayıcıyı güncelleme
+
+**Eski olduğunu nasıl anlarsınız?** Eşleşmiş tarayıcıda, bağlı bilgisayardaki bağlayıcı sunucunun yayımladığı sürümden
+farklıysa ofisin üstünde sarı bir şerit çıkar: "Bilgisayarınızdaki bağlayıcı eski." Cihazlar sayfasındaki cihaz kartında
+da aynı not görünür. Bilgisayarda `pixel-connector doctor` da "Güncelleme var" satırını yazar. Şeridi × ile
+kapatabilirsiniz; bir sonraki sürüm yayımlanınca yeniden çıkar. Yalnızca izleyen (anahtarsız) ya da eşleşmemiş
+tarayıcılarda ve mini pencerede şerit yoktur.
+
+**Bağlayıcı 3.5.0 ve sonrası:** o bilgisayarda
+
+```sh
+pixel-connector update            # indirir, SHA-256'yı doğrular, değiştirir, servisi yeniden başlatır
+pixel-connector update --check    # yalnızca bakar, hiçbir şeyi değiştirmez (çıkış kodu 2 = güncelleme var)
+```
+
+Komut `connector.json` içindeki sunucudan (yalnızca `https://`) `connector/SHA256SUMS` ve `pixel-connector.pyz`
+dosyalarını indirir, özeti doğrular, aynıysa "Zaten güncel" der. Farklıysa dosyayı aynı klasörde geçici bir dosyaya yazıp
+tek adımda değiştirir (izin 0600), servis kuruluysa yeniden başlatır ve yeni sürümü yazar. `~/.pixel-office/` içindeki
+kanca dosyaları (`pixel_hook.py`, `pixel_agent.py`, `pixel_antigravity.py`) varsa onlar da kendi özetleriyle doğrulanıp
+yenilenir; Antigravity izleyici servisi kuruluysa o da yeniden başlar. Ayarlar, anahtarlar, eşleşmeler ve ajanlar
+değişmez. İndirme ya da doğrulama başarısız olursa hiçbir dosya değişmez. Güncelleme **asla kendiliğinden** ya da
+tarayıcıdan tetiklenerek yapılmaz; yalnızca siz bu komutu çalıştırınca olur. Windows'ta görev önce durdurulur, dosya
+değiştirilir, sonra yeniden başlatılır (bu yol henüz gerçek bir Windows makinesinde denenmedi).
+
+**3.5.0'dan eski bağlayıcılar:** bu sürümlerde `update` komutu yok. Bir kez Cihazlar → Cihaz ekle'deki kurulum komutunu
+o bilgisayarda yeniden çalıştırın (şeritteki "Kurulum komutunu göster" düğmesi oraya götürür); ayarlar ve eşleşmeler
+korunur. Sonraki güncellemeler için `pixel-connector update` yeterlidir.
 
 ### Masaüstü ve telefonu eşleştirme
 

@@ -583,9 +583,9 @@ function bootCloud(config) {
 // --- v3: device control (V3.md §11) ---------------------------------------------------------------------
 async function setupV3(roomId, key) {
   const [{ DeviceHub }, { PromptPanel }, { DevicesPage, PairWizard, NewAgentDialog }, { fmtCompact: fmtTok },
-    { ApprovalCenter }, { WorkflowStore, WorkflowDialog, supportsWorkflows }] = await Promise.all([
+    { ApprovalCenter }, { WorkflowStore, WorkflowDialog, supportsWorkflows }, { UpdateBanner }] = await Promise.all([
     import('./control.js'), import('./prompt.js'), import('./devices.js'), import('./usage.js'), import('./approvals.js'),
-    import('./workflows.js')]);
+    import('./workflows.js'), import('./update_banner.js')]);
   const $ = (id) => document.getElementById(id);
   const hub = new DeviceHub({ roomId, writeKey: key,
     isVisible: () => document.visibilityState !== 'hidden' || !!(mini && mini.window) });
@@ -651,7 +651,11 @@ async function setupV3(roomId, key) {
     } });
   const wfDialog = new WorkflowDialog({ dialog: $('dlg-workflows'), hub, store: workflows, toast });
   workflows.onChange(() => updateBoard());
-  v3 = { hub, panel, devices, wizard, newAgent, approvals, workflows, wfDialog, supportsWorkflows, pendingSelect: null, setTab };
+  // connector 3.5.0: "Bilgisayarınızdaki bağlayıcı eski." strip (paired + connected devices only; never in ?view=mini)
+  const updateBanner = new UpdateBanner({ root: $('update-banner'), hub, toast, copy: (t) => cloud.copyText(t),
+    onInstall: () => wizard.open(1), onLayout: () => fitCanvas() });
+  v3 = { hub, panel, devices, wizard, newAgent, approvals, workflows, wfDialog, supportsWorkflows, updateBanner,
+    pendingSelect: null, setTab };
   window.pixelOffice.v3 = v3;
 
   ui.ctlInfo = (a) => {

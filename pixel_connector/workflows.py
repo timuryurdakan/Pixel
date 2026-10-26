@@ -326,7 +326,9 @@ def parse_start(msg: dict, template: dict) -> dict:
         raise WorkflowError("bad_request", "brief required")
     cap = template["guardrails"]["maxCostUsd"]
     if msg.get("maxCostUsd") is not None:
-        cap = _number(msg["maxCostUsd"], "maxCostUsd", COST_BOUNDS, False, code="bad_request")
+        # S26-04: the template's value is a ceiling the browser may only lower. Refused, not clamped, so the user never
+        # believes a higher cap is in force.
+        cap = _number(msg["maxCostUsd"], "maxCostUsd", (COST_BOUNDS[0], cap), False, code="bad_request")
     agent_steps = {s["id"]: s for s in template["steps"] if s["type"] == "agent"}
     raw_steps = msg.get("steps")
     if raw_steps is None:
@@ -667,7 +669,8 @@ class WorkflowEngine:
             st.result = msg.get("result") if isinstance(msg.get("result"), str) else None
             state, code = TASK_OUTCOME.get(msg.get("status"), (ERROR, "error"))
             err = (msg.get("error") or {}).get("code") if isinstance(msg.get("error"), dict) else None
-            if state != DONE and err and msg.get("status") in ("error", "denied"):
+            # A user's cancel carries no error; a connector cancel does (S26-08 `revoked`) and the run keeps that code.
+            if state != DONE and err and msg.get("status") in ("error", "denied", "cancelled"):
                 code = err
             if msg.get("status") == "budget" and st.cost_cap is not None and st.cost >= st.cost_cap - 1e-9:
                 code = "cost_cap"                     # Claude stopped at the run's remaining cost (--max-budget-usd)

@@ -39,3 +39,20 @@ test('outdated: different published build, or a pre-3.1.0 connector', () => {
   assert.equal(connectorOutdated(null, A), false);
   assert.ok(UPDATE_HINT.startsWith('Güncelleme var: bu bilgisayarda kurulum komutunu yeniden çalıştırın'));
 });
+
+test('3.5.0: update command or install command, by connector version', async () => {
+  const { hasUpdateCommand, updateHint, UPDATE_HINT_CMD, UPDATE_CMD } = await import('../../web/js/devices.js');
+  assert.equal(UPDATE_CMD, 'pixel-connector update');
+  assert.equal(hasUpdateCommand({ connector: '3.5.0' }), true);
+  assert.equal(hasUpdateCommand({ connector: '3.10.0' }), true);
+  assert.equal(hasUpdateCommand({ connector: '4.0.0' }), true);
+  assert.equal(hasUpdateCommand({ connector: '3.4.1' }), false);
+  assert.equal(hasUpdateCommand({ connector: 'weird' }), false);
+  assert.equal(hasUpdateCommand(null), false);
+  assert.equal(updateHint({ connector: '3.5.0' }), UPDATE_HINT_CMD);
+  assert.ok(UPDATE_HINT_CMD.includes('pixel-connector update'));
+  assert.equal(updateHint({ connector: '3.4.1' }), UPDATE_HINT);
+  // SHA256SUMS also lists the hook files since 3.5.0; only the .pyz line counts
+  const sums = `${B}  ../hook/pixel_agent.py\n${B}  ../hook/pixel_hook.py\n${'1'.repeat(64)}  install.ps1\n${A}  pixel-connector.pyz\n`;
+  assert.equal(parsePublishedSha(sums), A);
+});
