@@ -166,3 +166,39 @@ function loop(ms) {
 }
 drawScene(0);
 requestAnimationFrame(loop);
+
+// --- Patron Odası (docs/PATRON_ODASI.md §3.3): Boss frames next to agents, desk variants, a small room
+const bossEl = document.getElementById('boss');
+for (const pal of pals.slice(0, 3)) show(bossEl, S.getCharacterFrame(pal, 'stand', 'down', 0), 'ajan');
+for (const [anim, a] of Object.entries(S.BOSS_ANIMS)) {
+  for (const dir of a.dirs) {
+    for (let f = 0; f < a.frames; f++) show(bossEl, S.getBossFrame(anim, dir, f), `${anim.slice(5)} ${dir[0]}${f}`);
+  }
+}
+for (let n = 0; n <= S.BOSS_DESK_MAX_FILES; n++) show(document.getElementById('bossdesk'), S.getBossDeskSprite(n), `${n} dosya`);
+
+function bossRoom(anim, frame, files) {
+  // 6×4 tiles: carpet, wall row with the sign over door_front, chair → desk → Boss (seated anchor rule)
+  const c = document.createElement('canvas');
+  c.width = 6 * 16; c.height = 4 * 16;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 6; x++) {
+    const tile = y === 0 ? (x === 4 ? 'door_front' : x === 5 ? 'door_side' : 'wall') : 'boss_floor';
+    ctx.drawImage(S.getTileSprite(tile), x * 16, y * 16);
+  }
+  ctx.drawImage(S.getFurnitureSprite('boss_sign'), 4 * 16, 0);
+  const bottom = (img, x, tileY) => ctx.drawImage(img, x, (tileY + 1) * 16 - img.height);
+  bottom(S.getFurnitureSprite('file_cabinet'), 0, 1);
+  bottom(S.getFurnitureSprite('boss_chair'), 2 * 16, 1);
+  bottom(S.getBossDeskSprite(files), 16, 2);
+  bottom(S.getBossFrame(anim, 'down', frame), 2 * 16, 1);
+  bottom(S.getFurnitureSprite('sofa'), 3 * 16, 3);
+  return c;
+}
+const roomEl = document.getElementById('bossroom');
+show(roomEl, bossRoom('boss_sit', 0, 0), 'sit, 0 dosya');
+show(roomEl, bossRoom('boss_write', 0, 2), 'write 0, 2 dosya');
+show(roomEl, bossRoom('boss_write', 1, 2), 'write 1');
+show(roomEl, bossRoom('boss_read', 0, 5), 'read 0, 5 dosya');
+show(roomEl, bossRoom('boss_give', 0, 1), 'give, 1 dosya');

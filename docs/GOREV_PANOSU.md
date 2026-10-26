@@ -61,8 +61,8 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | P1 | Patron Odası: plan şeması ve rol kütüphanesi (ayrıntı: [`docs/PATRON_ODASI.md`](PATRON_ODASI.md) §9; §10 kararlarından sonra) | Claude | ✅ |
 | P2 | Patron Odası: Patron masası, istem → plan → onay (P1 sonrası) | Claude | ✅ |
 | P3 | Patron Odası: iş emirlerinin yürütülmesi, değerlendirme, rapor (P2 sonrası) | Claude | ✅ |
-| P4 | Patron Odası: pixel art, Patron ve odası (P3 sonrası) | Claude | 🔄 |
-| P5 | Patron Odası: ofis haritası ve sahne (P4 sonrası) | Claude | ⬜ |
+| P4 | Patron Odası: pixel art, Patron ve odası (P3 sonrası) | Claude | ✅ |
+| P5 | Patron Odası: ofis haritası ve sahne (P4 sonrası) | Claude | 🔄 |
 | P6 | Patron Odası: Patron paneli ve Görev Tahtası (P5 sonrası) | Claude | ⬜ |
 | P7 | Patron Odası: QA ve belgeler (P6 sonrası) | Claude | ⬜ |
 | P8 | Patron Odası: bağımsız güvenlik incelemesi (P7 sonrası) | Claude | ⬜ |
@@ -305,3 +305,11 @@ görüntüleri, bilinen sorunlar.
   var), günlük. Güvenlik çekirdeğine ve `engines/claude.py`'ye dokunulmadı; web dosyası değişmedi. Kararlar (uzman
   hatası → iş durur, değerlendirme + rapor tek Patron görevi, paralel adımlar tavanı böler) §11'de.
   `python3 -m unittest discover -s tests`: 946 test, OK (1 atlandı: `pwsh`); `build_connector.py --check` güncel.
+- **2026-10-26, Claude (Patron Odası P4: Patron ve odasının çizimleri, Pixel Art Uzmanı):** Teslim edildi, commit/push
+  yok (koordinatör denetleyip commit'leyecek). Yeni: `tests/js/boss_sprites.test.js` (7 test, başsız Chrome; `git add -N`).
+  Değişen: `web/js/sprites.js` (yalnızca ekleme: Patron paleti ve kareleri, `getBossFrame`/`BOSS_ANIMS`,
+  `getBossDeskSprite`/`BOSS_DESK_MAX_FILES`, mobilya/karo/balon kayıtları, `validateSprites()` ve `listSprites()`
+  eklemeleri; mevcut çizim/palet/adlar aynı), `web/sprite-preview.html` + `web/js/sprite-preview.js` (Patron bölümü),
+  `web/sw.js` + `web/js/cloud.js` (`po-v4.0.3`), `docs/PATRON_ODASI.md` §3.3 (gerçek adlar, boyutlar, oturan Patron
+  çizim sırası) ve §11, `PROJECT.md` §6 (3.5.0 kaydı çıkarıldı; günlükte var), günlük. Harita/sahne mantığına
+  dokunulmadı (P5). `python3 -m unittest discover -s tests`: 946 test, OK (1 atlandı: `pwsh`).

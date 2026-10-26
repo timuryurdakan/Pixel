@@ -125,16 +125,27 @@ Kararlar ve gerekçeler:
 
 ### 3.3 Yeni çizimler (`web/js/sprites.js`, yalnızca ekleme)
 
-| Ad | Boyut | Not |
-|---|---|---|
-| Patron karakteri | 16 × 24 | Sabit palet: koyu lacivert takım, beyaz gömlek, kırmızı kravat, gri şakaklar. Kareler: `boss_sit` (aşağı bakar, 1 kare), `boss_write` (2 kare, kâğıda yazar), `boss_read` (2 kare, gazete), `boss_give` (1 kare, dosya uzatır). Mevcut karakter palet sisteminden ayrı, kendi paleti. |
-| `boss_desk` | 48 × 24 | Koyu ahşap, yeşil masa sümeni, lamba; `boss_desk_files` çeşidi: üstünde 1–5 renkli dosya (plan bekliyorken/çalışırken). |
-| `boss_chair` | 16 × 24 | Yüksek sırtlı kahverengi deri koltuk (patronun arkasında görünür). |
-| `file_cabinet` | 16 × 24 | Gri metal, üç çekmece. |
-| `sofa` | 32 × 16 | Deri misafir kanepesi (süs). |
-| `door_side` | 16 × 16 | Sol duvardaki oda kapısı (iç kapı). |
-| `boss_sign` | 16 × 8 | Kapının üstünde pirinç levha; "PATRON" yazısı yerine kravat simgesi (piksel yazı ölçeklenince bozulur). |
-| `folder` balonu | 12 × 12 | Taşınan dosya; mevcut `paper` balonunun yanında `BUBBLE_KINDS`'a ekleme. |
+P4 ile çizildi (2026-10-26). Gerçek adlar ve boyutlar:
+
+| Ad | Boyut | Erişim | Not |
+|---|---|---|---|
+| Patron karakteri | 16 × 24 | `getBossFrame(anim, dir, frame)`, `BOSS_ANIMS` | Kendi sabit paleti (karakter palet sistemi dışında): koyu lacivert takım, beyaz gömlek, kırmızı kravat, gri şakaklar ve gri bıyık. Kareler: `boss_sit` (1, aşağı bakar), `boss_write` (2, başı eğik, kâğıda yazar), `boss_read` (2, gazete; 2. karede gazete 1 px iner, gözler yana kayar), `boss_give` (1, sağ elde dosya uzatır), `boss_stand` (aşağı/yukarı/sağ/sol, 1), `boss_walk` (aşağı/yukarı/sağ/sol, 4; sol = sağın aynası, ajanlarla aynı kare düzeni ve ayak satırı 23). |
+| `boss_desk` | 48 × 24 | `getFurnitureSprite('boss_desk')` | Maun, yeşil masa sümeni (ortada), yeşil camlı banker lambası (solda), kalemlik, iki çekmeceli ayak. |
+| `boss_desk_files_1` … `_5` | 48 × 24 | `getBossDeskSprite(n)` (0–`BOSS_DESK_MAX_FILES` = 5, sınırlanır; 0 = `boss_desk`) | Aynı masa, sağda üst üste 1–5 renkli dosya. |
+| `boss_chair` | 16 × 24 | `getFurnitureSprite` | Yüksek sırtlı, kapitone kahverengi deri koltuk, önden (Patron önünde oturur). |
+| `file_cabinet` | 16 × 24 | `getFurnitureSprite` | Gri metal, üç çekmece (etiket + kulp). |
+| `sofa` | 32 × 16 | `getFurnitureSprite` | Kapitone deri misafir kanepesi (süs). |
+| `door_side` | 16 × 16 | `getTileSprite` (karo) | Dikey duvardaki iç kapı: üstte duvar kapağı, solda menteşeli açık maun kanat, ahşap eşik, pirinç eşik çizgisi; yürünür (soldan sağa geçilir). |
+| `door_front` | 16 × 16 | `getTileSprite` (karo) | Yatay duvardaki iç kapı: duvar kapağı, kapalı maun panel kapı, pirinç tokmak. Kapının hangi duvarda olacağını P5 seçer. |
+| `boss_floor` | 16 × 16 | `getTileSprite` (karo) | Odanın zemini: koyu yeşil halı, seyrek altın baklava deseni (ofis tahta zemininden ayrı). |
+| `boss_sign` | 16 × 8 | `getFurnitureSprite` | Pirinç levha, ortada kırmızı kravat simgesi, köşe vidaları; kapının üstündeki duvar karosuna çizilir. |
+| `folder` balonu | 12 × 12, 2 kare | `getBubbleSprite('folder', f)`, `BUBBLE_KINDS` (sonda) | Sarı dosya; 2. karede dosyadan kâğıt çıkar. |
+
+**Oturan Patron için çizim sırası (P5):** oturan kareler (`boss_sit/write/read/give`) yalnızca belden yukarısını
+içerir. Patron (koltukla birlikte) masanın orta karesinin hemen üstündeki karede durur; çizim sırası
+`boss_chair` → `boss_desk` (bir alt karede, altı hizalı) → Patron. Böylece Patronun gövdesi masa üstünün arka kenarını
+örter, elleri/kâğıdı/gazetesi masanın üstünde görünür. Ayakta/yürürken ajanlar gibi altı hizalı çizilir.
+Önizleme sayfasındaki "Patron Odası" bölümü bu sırayla çizilmiş örnek odadır.
 
 `validateSprites()` ve `web/sprite-preview.html` yeni çizimleri de listeler. `prefers-reduced-motion` açıkken Patron
 yalnızca `boss_sit` karesinde kalır.
@@ -794,3 +805,25 @@ rapor), `app.py` (rol ajanları komut almaz, açılışta ofise raporlanmaz; `wo
     çok hızlı biten işlerde `rate_limited` ile durabilir. P2 testlerinden ikisi `approved`'da beklemeyi doğruluyordu;
     artık onaydan sonra yürütme başladığı için `running`'i ve yayınlanan `approved` durumunu doğrulayacak şekilde
     güncellendi.
+
+### P4 — Pixel art: Patron ve odası (2026-10-26, Pixel Art Uzmanı)
+
+Kod: `web/js/sprites.js` (yalnızca ekleme: Patron bölümü, kayıt girdileri, getter'lar, doğrulama), `web/sprite-preview.html`
+/ `web/js/sprite-preview.js` (Patron kareleri ajanların yanında, masa çeşitleri, örnek oda), yeni
+`tests/js/boss_sprites.test.js` (7 test, `tests/test_relay_js.py` ile başsız Chrome'da). Web `po-v4.0.3`.
+
+1. **Ek çizimler:** kapı için iki karo (`door_side` dikey duvar, `door_front` yatay duvar; oda sağ üstte olduğundan
+   kapı duvarı P5'e kaldı), odanın zemini `boss_floor` (halı) ve ayakta/yürüme kareleri (`boss_stand`, `boss_walk`, 4
+   yön). Kapılar ve zemin mobilya değil **karo** (`TILE_NAMES`), çünkü haritada duvar/zemin katmanında çizilirler.
+2. **Patron kare adları** `BOSS_ANIMS` anahtarlarıdır (`boss_sit` …); ajanların `ANIMS`'ine eklenmedi (karakter
+   palet sistemi ve `getCharacterFrame` değişmedi). Yürüme kareleri ajanların bacak/gövde parçalarını Patron paletiyle
+   yeniden kullanır, baş ve gömlek/kravat kendi parçalarıdır.
+3. **Oturan kareler yalnızca belden yukarı** (ayrıntı §3.3, çizim sırası): Patron masanın arkasında izleyiciye bakarken
+   ellerinin masa üstünde görünmesi için. Bu, normal Y sıralamasından farklıdır; P5 Patron için özel sıra uygular.
+4. **Masa dosya çeşitleri** ayrı adlar (`boss_desk_files_1..5`, `FURNITURE`'da kayıtlı, `FURNITURE_NAMES`'te yalnızca
+   `boss_desk`); P5 `getBossDeskSprite(n)` kullanır.
+5. **Mevcut adlar korunur, yeni adlar sona eklenir:** `TILE_NAMES` (+3), `FURNITURE_NAMES` (+5), `BUBBLE_KINDS`
+   (+`folder`). `listSprites()` yeni `bossAnims` ve `bossDeskMaxFiles` alanlarını döner. Yeni paletler (`PAL_BOSS`,
+   `BOSS_CHAR_PAL`, `PAL_BUBBLE_FOLDER`) mevcut paletleri değiştirmez (kopya + yeni anahtar).
+6. **`boss_sign`** kapı karosunun üstüne (duvar karosuna) çizilecek şekilde 16 × 8; "PATRON" yazısı yok (§3.3).
+

@@ -17,9 +17,10 @@ export const ANIMS = {
   sleep: { frames: 2, fps: 1, dirs: ['down'] },
 };
 
-export const TILE_NAMES = ['floor', 'floor_alt', 'rug', 'wall', 'window', 'door'];
-export const FURNITURE_NAMES = ['desk', 'desk_on', 'chair', 'bookshelf', 'plant', 'coffee_counter', 'water_cooler', 'bed', 'board'];
-export const BUBBLE_KINDS = ['zzz', 'dots', 'alert', 'steam', 'question', 'coffee', 'speech', 'heart', 'happy', 'paper'];
+export const TILE_NAMES = ['floor', 'floor_alt', 'rug', 'wall', 'window', 'door', 'boss_floor', 'door_front', 'door_side'];
+export const FURNITURE_NAMES = ['desk', 'desk_on', 'chair', 'bookshelf', 'plant', 'coffee_counter', 'water_cooler', 'bed', 'board',
+  'boss_desk', 'boss_chair', 'file_cabinet', 'sofa', 'boss_sign'];
+export const BUBBLE_KINDS = ['zzz', 'dots', 'alert', 'steam', 'question', 'coffee', 'speech', 'heart', 'happy', 'paper', 'folder'];
 export const TOOL_ICON_KINDS = ['terminal', 'eye', 'pencil', 'magnifier', 'globe', 'people', 'checklist', 'gear'];
 
 // ---------------------------------------------------------------------------
@@ -1194,6 +1195,459 @@ const ICONS = {
 };
 
 // ---------------------------------------------------------------------------
+// Patron Odası (docs/PATRON_ODASI.md §3.3, P4): the Boss character, his room's
+// furniture, tiles and the `folder` bubble. Additions only: the Boss has his own
+// fixed palette (not makeCharacterPalette) so he never looks like an agent.
+// ---------------------------------------------------------------------------
+
+const BOSS_SKIN = '#e8b48f';
+// Boss character palette: K/E outline+eyes, S/s skin, r blush, H/h hair, G/g grey
+// temples & moustache, T/t navy suit, P/p trousers, O shoes, W/w shirt, R/Q tie,
+// N/n newspaper, x print, A paper, Y pen, F/f manila folder.
+const BOSS_CHAR_PAL = {
+  K: '#1b1b2a', E: '#1b1b2a', S: BOSS_SKIN, s: darken(BOSS_SKIN), r: mix(BOSS_SKIN, '#ff5a6e', 0.35),
+  H: '#3a302c', h: '#241e1c', G: '#c3c6cf', g: '#8d919c',
+  T: '#2e3d70', t: '#1f2a52', P: '#28345e', p: '#1b2445', O: '#2a1d18',
+  W: '#f4f4f4', w: '#c9cfdc', R: '#d32f2f', Q: '#8e1c1c',
+  N: '#efe9da', n: '#c7bea6', x: '#5a5a68', A: '#ffffff', Y: '#e0b84a', F: '#e9b44c', f: '#b8862e',
+};
+
+const BOSS_HEAD_DOWN = [
+  '....KKKKKKKK....',
+  '...KHHHHHHHHK...',
+  '..KHHHHHHHHHhK..',
+  '..KHHHHHHHHHhK..',
+  '..KGHHHHHHHHGK..',
+  '..KGSSSSSSSSgK..',
+  '..KGHHSSSSHHgK..',
+  '..KSSESSSSESsK..',
+  '..KSSSSssSSSsK..',
+  '..KsrGGGGGGrsK..',
+  '...KsSSSSSSsK...',
+  '....KKKKKKKK....',
+];
+// Eyes lowered (looking at the desk) for boss_write.
+const BOSS_HEAD_DOWN_LOOK = BOSS_HEAD_DOWN.map((r, i) => (i === 7 ? '..KSSsSSSSsSsK..' : i === 8 ? '..KSSESssSESsK..' : r));
+// Eyes glancing to the viewer's right for boss_read frame 1.
+const BOSS_HEAD_DOWN_SIDE = BOSS_HEAD_DOWN.map((r, i) => (i === 7 ? '..KSSSESSSSEsK..' : r));
+const BOSS_HEAD_UP = [
+  '....KKKKKKKK....',
+  '...KHHHHHHHHK...',
+  '..KHHHHHHHHHhK..',
+  '..KHHHHHHHHHhK..',
+  '..KHHHHHHHHHhK..',
+  '..KGHHHHHHHHGK..',
+  '..KGHHHHHHHHgK..',
+  '..KGhHHHHHHhgK..',
+  '..KGhhHHHHhhgK..',
+  '..KSGhhhhhhgSK..',
+  '...KsSSSSSSsK...',
+  '....KKKKKKKK....',
+];
+const BOSS_HEAD_SIDE = [
+  '....KKKKKKK.....',
+  '...KHHHHHHHK....',
+  '..KHHHHHHhHHK...',
+  '..KHHHHHHHHHHK..',
+  '..KhHHHHHHHHHK..',
+  '..KhGHHHHSSSHK..',
+  '..KhGGHSSSHHSK..',
+  '..KhGGSSSSSESK..',
+  '..KhgSsSSSSSSSK.',
+  '...KgSSSSSGGGK..',
+  '....KsSSSSSSK...',
+  '.....KKKKKKK....',
+];
+
+// Shirt + tie overlays for the shared torso parts (TORSO_DOWN at y 13, swing at y 14).
+const BOSS_SHIRT_DOWN = [
+  '.....WWRRWW.....',
+  '......WRRW......',
+  '.......RR.......',
+  '.......QQ.......',
+];
+const BOSS_SHIRT_SIDE = [
+  '..........W.....',
+  '..........WR....',
+  '...........R....',
+];
+const BOSS_COLLAR_UP = [
+  '......WWWW......',
+];
+
+// Seated behind the desk, facing the viewer: upper body only (rows 16..23); the
+// desk front hides the rest. See getBossFrame() for the intended draw order.
+const BOSS_TORSO_SEAT = [
+  '..KKTTWRRWTTKK..',
+  '.KTTTTWRRWTTTTK.',
+  '.KTtTTtRRtTTtTK.',
+  '.KTtTTTRRTTTtTK.',
+  '.KTtKTTQQTTKtTK.',
+  '.KTtKTTTTTTKtTK.',
+  '.KTTKTTTTTTKTTK.',
+  '.KKKKKKKKKKKKKK.',
+];
+const BOSS_HANDS_FOLDED = [ // rows 21..23
+  '.KTTtKKKKKKtTTK.',
+  '.KKWWSSSSSSWWKK.',
+  '...KKKKKKKKKK...',
+];
+const BOSS_WRITE_A = [ // rows 19..23: sheet on the desk, pen hand on the right
+  '.KTtKTTQQTTKtTK.',
+  '.KTtKTTTTTTKKTK.',
+  '.KTWKAAAAAKSSKK.',
+  '.KKSKAxxAAKYSK..',
+  '...KKAAAAAKKK...',
+];
+const BOSS_WRITE_B = [
+  '.KTtKTTQQTTKtTK.',
+  '.KTtKTTTTTKKTTK.',
+  '.KTWKAAAAKSSKKK.',
+  '.KKSKAxxxKYSK...',
+  '...KKAAAAAKK....',
+];
+const BOSS_NEWSPAPER = [ // rows 12..23, held up in both hands
+  '.KKKKKKKKKKKKKK.',
+  '.KNNNNNNnNNNNNK.',
+  '.KNxxxxNnNxxxNK.',
+  '.KNNNNNNnNNNNNK.',
+  'KSNxxNxNnNxNxNSK',
+  'KSNNNNNNnNNNNNSK',
+  '.KNxNxxNnNxxNNK.',
+  '.KNNNNNNnNNNNNK.',
+  '.KNxxNxNnNxNxNK.',
+  '.KNNNNNNnNNNNNK.',
+  '.KnnnnnnnnnnnnK.',
+  '.KKKKKKKKKKKKKK.',
+];
+const BOSS_GIVE = [ // rows 17..23: right arm (viewer's right) holds out a folder
+  '.KTTTTWRRWTTTKK.',
+  '.KTtTTtRRtTTKTTK',
+  '.KTtTTTRRTTKTTKK',
+  '.KTtKTTQQTKKKKKK',
+  '.KTtKTTTTKSFFFFK',
+  '.KKWKTTTTKSFFFFK',
+  '..KSKKKKKKKffffK',
+];
+
+function boss(rows, y, x = 0) { return { rows, x, y }; }
+
+const BOSS_FRAME_DEFS = {
+  'boss_stand:down:0': [boss(LEGS_STAND, 19), boss(TORSO_DOWN, 13), boss(BOSS_SHIRT_DOWN, 13), boss(BOSS_HEAD_DOWN, 1)],
+  'boss_stand:up:0': [boss(LEGS_STAND, 19), boss(TORSO_UP, 13), boss(BOSS_COLLAR_UP, 13), boss(BOSS_HEAD_UP, 1)],
+  'boss_stand:right:0': [boss(LEGS_SIDE, 19), boss(TORSO_SIDE, 13), boss(BOSS_SHIRT_SIDE, 13), boss(BOSS_HEAD_SIDE, 1)],
+
+  'boss_walk:down:0': [boss(LEGS_STEP, 19), boss(TORSO_DOWN_SWING, 14), boss(BOSS_SHIRT_DOWN, 14), boss(BOSS_HEAD_DOWN, 2)],
+  'boss_walk:down:1': [boss(LEGS_STAND, 19), boss(TORSO_DOWN, 13), boss(BOSS_SHIRT_DOWN, 13), boss(BOSS_HEAD_DOWN, 1)],
+  'boss_walk:down:2': [boss(mirror(LEGS_STEP), 19), boss(mirror(TORSO_DOWN_SWING), 14), boss(BOSS_SHIRT_DOWN, 14), boss(BOSS_HEAD_DOWN, 2)],
+  'boss_walk:down:3': [boss(LEGS_STAND, 19), boss(TORSO_DOWN, 13), boss(BOSS_SHIRT_DOWN, 13), boss(BOSS_HEAD_DOWN, 1)],
+
+  'boss_walk:up:0': [boss(mirror(LEGS_STEP), 19), boss(TORSO_UP_SWING, 14), boss(BOSS_COLLAR_UP, 14), boss(BOSS_HEAD_UP, 2)],
+  'boss_walk:up:1': [boss(LEGS_STAND, 19), boss(TORSO_UP, 13), boss(BOSS_COLLAR_UP, 13), boss(BOSS_HEAD_UP, 1)],
+  'boss_walk:up:2': [boss(LEGS_STEP, 19), boss(mirror(TORSO_UP_SWING), 14), boss(BOSS_COLLAR_UP, 14), boss(BOSS_HEAD_UP, 2)],
+  'boss_walk:up:3': [boss(LEGS_STAND, 19), boss(TORSO_UP, 13), boss(BOSS_COLLAR_UP, 13), boss(BOSS_HEAD_UP, 1)],
+
+  'boss_walk:right:0': [boss(LEGS_SIDE_STEP, 19), boss(TORSO_SIDE_BACK, 14), boss(BOSS_SHIRT_SIDE, 14), boss(BOSS_HEAD_SIDE, 2)],
+  'boss_walk:right:1': [boss(LEGS_SIDE, 19), boss(TORSO_SIDE, 13), boss(BOSS_SHIRT_SIDE, 13), boss(BOSS_HEAD_SIDE, 1)],
+  'boss_walk:right:2': [boss(LEGS_SIDE_STEP2, 19), boss(TORSO_SIDE_FWD, 14), boss(BOSS_SHIRT_SIDE, 14), boss(BOSS_HEAD_SIDE, 2)],
+  'boss_walk:right:3': [boss(LEGS_SIDE, 19), boss(TORSO_SIDE, 13), boss(BOSS_SHIRT_SIDE, 13), boss(BOSS_HEAD_SIDE, 1)],
+
+  'boss_sit:down:0': [boss(BOSS_TORSO_SEAT, 16), boss(BOSS_HANDS_FOLDED, 21), boss(BOSS_HEAD_DOWN, 4)],
+  'boss_write:down:0': [boss(BOSS_TORSO_SEAT, 16), boss(BOSS_WRITE_A, 19), boss(BOSS_HEAD_DOWN_LOOK, 5)],
+  'boss_write:down:1': [boss(BOSS_TORSO_SEAT, 16), boss(BOSS_WRITE_B, 19), boss(BOSS_HEAD_DOWN_LOOK, 5)],
+  'boss_read:down:0': [boss(BOSS_TORSO_SEAT, 16), boss(BOSS_HEAD_DOWN, 4), boss(BOSS_NEWSPAPER, 12)],
+  'boss_read:down:1': [boss(BOSS_TORSO_SEAT, 16), boss(BOSS_HEAD_DOWN_SIDE, 4), boss(BOSS_NEWSPAPER, 13)],
+  'boss_give:down:0': [boss(BOSS_TORSO_SEAT, 16), boss(BOSS_GIVE, 17), boss(BOSS_HEAD_DOWN, 4)],
+};
+
+const bossMapCache = new Map();
+
+/** Pixel map for a Boss frame (left = mirrored right, like agents). */
+function bossMap(anim, dir, frame) {
+  const key = `${anim}:${dir}:${frame}`;
+  let m = bossMapCache.get(key);
+  if (m) return m;
+  if (dir === 'left') {
+    m = mirror(bossMap(anim, 'right', frame));
+  } else {
+    const d = BOSS_FRAME_DEFS[key];
+    if (!d) throw new Error(`no boss frame ${key}`);
+    m = compose(CHAR_W, CHAR_H, d);
+  }
+  bossMapCache.set(key, m);
+  return m;
+}
+
+// Room furniture palette: the shared PAL plus mahogany (D/J/O/U), leather (1/2/3),
+// green desk blotter (4/5), brass (6/7), banker's-lamp glass (8/9), carpet (V/X/Z).
+const PAL_BOSS = {
+  ...PAL,
+  D: '#3e2016', J: '#5a2f20', O: '#74402a', U: '#9a5a3a',
+  1: '#4a2418', 2: '#6e3622', 3: '#93502f',
+  4: '#2f6b4a', 5: '#22503a',
+  6: '#e0b84a', 7: '#a8802e',
+  8: '#2e8a5f', 9: '#7fd6a6',
+  V: '#2f5d50', X: '#284f45', Z: '#a88c48',
+};
+const PAL_BUBBLE_FOLDER = { ...PAL_BUBBLE, F: '#e9b44c', f: '#b8862e' };
+
+const BOSS_DESK_W = 48;
+export const BOSS_DESK_MAX_FILES = 5;
+
+function deskRow(left, fill, right, w = BOSS_DESK_W) {
+  return left + fill.repeat(w - left.length - right.length) + right;
+}
+
+// 48×24 front view. Rows 0..4 hold the things standing on the desk, 5..12 the
+// top (back edge, mahogany, green blotter in the middle where the Boss's hands
+// rest), 13..23 the front with two drawer pedestals.
+const BOSS_DESK_BASE = (() => {
+  const drawer = ['UUUUUUUUUUUU', 'OOOO6667OOOO', 'DDDDDDDDDDDD'];
+  const front = [];
+  front.push(deskRow('K', 'K', 'K'));
+  for (let i = 0; i < 9; i++) {
+    const d = drawer[i % 3];
+    const mid = i === 0 || i === 8 ? 'J'.repeat(18) : i === 1 ? 'J' + 'D'.repeat(16) + 'J' : 'JD' + 'J'.repeat(14) + 'UJ';
+    front.push('KJ' + d + 'JK' + mid + 'KJ' + d + 'JK');
+  }
+  front.push(deskRow('K', 'K', 'K'));
+  return [
+    ...blank(BOSS_DESK_W, 5),
+    deskRow('.K', 'K', 'K.'),
+    deskRow('KU', 'U', 'UK'),
+    deskRow('KO', 'O', 'OK'),
+    deskRow('KO', 'O', 'OK'),
+    deskRow('KO', 'O', 'OK'),
+    deskRow('KO', 'O', 'OK'),
+    deskRow('KU', 'U', 'UK'),
+    deskRow('KJ', 'J', 'JK'),
+    ...front,
+  ];
+})();
+const BOSS_BLOTTER = [ // x 14, y 6
+  'KKKKKKKKKKKKKKKKKKKK',
+  'K444444444444444445K',
+  'K444444444444444445K',
+  'K444444444444444445K',
+  'K555555555555555555K',
+  'KKKKKKKKKKKKKKKKKKKK',
+];
+const BOSS_LAMP = [ // x 3, y 0
+  '..KKKKK..',
+  '.K89888K.',
+  'K8888888K',
+  'KKKKKKKKK',
+  '...K6K...',
+  '...K6K...',
+  '..K667K..',
+  '..KKKKK..',
+];
+const BOSS_PEN_STAND = [ // x 29, y 4
+  'K..K.',
+  'rK.Ke',
+  'KK6KK',
+  'K676K',
+  'KKKKK',
+];
+const FILE_COLORS = [['r', 'R'], ['e', 'E'], ['n', 'N'], ['Y', 'o'], ['v', 'z']];
+
+/** Desk map with `files` (0..5) coloured folders stacked on the right. */
+function bossDeskMap(files) {
+  const layers = [
+    { rows: BOSS_DESK_BASE, x: 0, y: 0 },
+    { rows: BOSS_BLOTTER, x: 14, y: 6 },
+    { rows: BOSS_LAMP, x: 3, y: 0 },
+    { rows: BOSS_PEN_STAND, x: 29, y: 4 },
+  ];
+  const n = Math.max(0, Math.min(BOSS_DESK_MAX_FILES, Math.floor(files) || 0));
+  for (let i = 0; i < n; i++) {
+    const [c, s] = FILE_COLORS[i % FILE_COLORS.length];
+    const top = 9 - 2 * i;
+    const x = 34 + (i % 2);
+    const rows = [deskRow('K', c, 'K', 12), deskRow('K', s, 'ppK', 12)];
+    if (i === n - 1) rows.unshift(deskRow('K', 'K', 'K', 12));
+    layers.push({ rows, x, y: i === n - 1 ? top - 1 : top });
+  }
+  if (n) layers.push({ rows: [deskRow('K', 'K', 'K', 13)], x: 34, y: 11 });
+  return compose(BOSS_DESK_W, 24, layers);
+}
+
+const BOSS_CHAIR = [
+  '...KKKKKKKKKK...',
+  '..K3333333333K..',
+  '..K3222222221K..',
+  '..K3212212121K..',
+  '..K3222222221K..',
+  '..K3221212221K..',
+  '..K3222222221K..',
+  '..K3212212121K..',
+  '..K3222222221K..',
+  '..K3221212221K..',
+  '..K3222222221K..',
+  '..K3222222221K..',
+  '..K3222222221K..',
+  '.KKK22222222KKK.',
+  'K332K222222K332K',
+  'K221K111111K221K',
+  'K221K333333K221K',
+  'KKKKK222222KKKKK',
+  '....K111111K....',
+  '.....KKGGKK.....',
+  '.......GG.......',
+  '...KKKKGGKKKK...',
+  '..KGGGGGGGGGGK..',
+  '..KaK......KaK..',
+];
+
+const FILE_CABINET = (() => {
+  const drawer = [
+    '.KAaaaaaaaaaaGK.',
+    '.KAaKKKKaaaaaGK.',
+    '.KAaKppKaaaaaGK.',
+    '.KAaKKKKKKKKaGK.',
+    '.KAaaaaaGGGGaGK.',
+    '.KKKKKKKKKKKKKK.',
+  ];
+  return [
+    '.KKKKKKKKKKKKKK.',
+    '.KAAAAAAAAAAAAK.',
+    '.KKKKKKKKKKKKKK.',
+    ...drawer,
+    ...drawer,
+    ...drawer,
+    '.KGGGGGGGGGGGGK.',
+    '.KKKKKKKKKKKKKK.',
+    '.KK..........KK.',
+  ];
+})();
+
+const SOFA = [
+  '...KKKKKKKKKKKKKKKKKKKKKKKKKK...',
+  '..K33333333333333333333333333K..',
+  '..K32222122221222212222122221K..',
+  '.KKK222222222222222222222222KKK.',
+  'K332K2222122221222212222122K332K',
+  'K221K2222222222222222222222K221K',
+  'K221KKKKKKKKKKKKKKKKKKKKKKKK221K',
+  'K221K3333333333K33333333333K221K',
+  'K221K2222222222K22222222222K221K',
+  'K221K2222222222K22222222222K221K',
+  'K221K1111111111K11111111111K221K',
+  'K221KKKKKKKKKKKKKKKKKKKKKKKK221K',
+  'K2211111111111111111111111111221',
+  'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK',
+  '.KdK.......................KdK..',
+  '.KKK.......................KKK..',
+];
+
+const BOSS_SIGN = [
+  '.KKKKKKKKKKKKKK.',
+  'K6W666666666667K',
+  'K6K666KRRK66K67K',
+  'K666666QQ666667K',
+  'K66666RRRR66667K',
+  'K66666RRRQ66667K',
+  'K777777RQ777777K',
+  '.KKKKKKKKKKKKKK.',
+];
+
+// Carpet: the room's floor, clearly different from the office planks.
+const BOSS_FLOOR = [
+  'VVVVVVVVVVVVVVVV',
+  'VVVVVVVXVVVVVVVV',
+  'VVVZVVVVVVVVVVVV',
+  'VVZXZVVVVVVVVXVV',
+  'VVVZVVVVVVVVVVVV',
+  'VVVVVVVVVVXVVVVV',
+  'VXVVVVVVVVVVVVVV',
+  'VVVVVVVVVVVVVVVV',
+  'VVVVVVVVVVVVVVVV',
+  'VVVVVVVVVVVZVVVV',
+  'VVVVVXVVVVZXZVVV',
+  'VVVVVVVVVVVZVVVV',
+  'VVVVVVVVVVVVVVVX',
+  'VVVXVVVVVVVVVVVV',
+  'VVVVVVVVVXVVVVVV',
+  'VVVVVVVVVVVVVVVV',
+];
+
+// Inner door in a horizontal wall (wall cap on top, mahogany door, brass knob).
+const DOOR_FRONT = [
+  'MMMMMMMMMMMMMMMM',
+  'LLLLLLLLLLLLLLLL',
+  'LLLLLLLLLLLLLLLL',
+  'MMMMMMMMMMMMMMMM',
+  'KKKKKKKKKKKKKKKK',
+  'qKKKKKKKKKKKKKKq',
+  'qKkJJJJJJJJJJkKq',
+  'qKkJOOOJJOOOJkKq',
+  'qKkJOUOJJOUOJkKq',
+  'qKkJOOOJJOOOJkKq',
+  'qKkJJJJJJJJ67kKq',
+  'qKkJOOOJJOOOJkKq',
+  'QKkJOUOJJOUOJkKQ',
+  'dKkJOOOJJOOOJkKd',
+  'wKkJJJJJJJJJJkKw',
+  'kKKKKKKKKKKKKKKk',
+];
+// Inner door in a vertical wall (the wall column is drawn with wall tiles): the
+// lintel's cap on top, below an open doorway with the mahogany leaf swung against
+// the jamb and a brass threshold, so a walker passes left/right through it.
+const DOOR_SIDE = [
+  'MMMMMMMMMMMMMMMM',
+  'LLLLLLLLLLLLLLLL',
+  'LLLLLLLLLLLLLLLL',
+  'MMMMMMMMMMMMMMMM',
+  'KKKKKKKKKKKKKKKK',
+  'KJJJJKSSSSSSSSSS',
+  'KJOOJKHHHHHHHHHH',
+  'KJOUJKFFFFFFFFFF',
+  'KJOOJKffffffffff',
+  'KJ67JKSSSSSSSSSS',
+  'KJOOJKHHHHHHHHHH',
+  'KJOUJKFFFFFFFFFF',
+  'KJOOJKffffffffff',
+  'KJJJJKSSSSSSSSSS',
+  'KKKKKKHHHHHHHHHH',
+  '6777777777777776',
+];
+
+const FOLDER_INNER_A = [
+  '..........',
+  '.KKKK.....',
+  '.KffKKKKK.',
+  '.KFFFFFFK.',
+  '.KFFFFFFK.',
+  '.KFFFFFFK.',
+  '.KFFFFFFK.',
+  '.KffffffK.',
+  '.KKKKKKKK.',
+  '..........',
+];
+const FOLDER_INNER_B = [
+  '....KKK...',
+  '.KKKKWWK..',
+  '.KffKxWWK.',
+  '.KFFFFFFK.',
+  '.KFFFFFFK.',
+  '.KFFFFFFK.',
+  '.KFFFFFFK.',
+  '.KffffffK.',
+  '.KKKKKKKK.',
+  '..........',
+];
+
+/** Boss animations (frames are 16×24 like agents, own palette). */
+export const BOSS_ANIMS = {
+  boss_sit: { frames: 1, fps: 0, dirs: ['down'] },
+  boss_write: { frames: 2, fps: 3, dirs: ['down'] },
+  boss_read: { frames: 2, fps: 0.5, dirs: ['down'] },
+  boss_give: { frames: 1, fps: 0, dirs: ['down'] },
+  boss_stand: { frames: 1, fps: 0, dirs: ['down', 'up', 'right', 'left'] },
+  boss_walk: { frames: 4, fps: 8, dirs: ['down', 'up', 'right', 'left'] },
+};
+
+// ---------------------------------------------------------------------------
 // Registry of static sprites: name → {w, h, rows (lazy), pal}
 // ---------------------------------------------------------------------------
 
@@ -1209,6 +1663,9 @@ const TILES = {
   wall: def(16, 16, PAL, () => WALL),
   window: def(16, 16, PAL, () => WINDOW),
   door: def(16, 16, PAL, () => DOOR),
+  boss_floor: def(16, 16, PAL_BOSS, () => BOSS_FLOOR),
+  door_front: def(16, 16, PAL_BOSS, () => DOOR_FRONT),
+  door_side: def(16, 16, PAL_BOSS, () => DOOR_SIDE),
 };
 
 const FURNITURE = {
@@ -1221,6 +1678,15 @@ const FURNITURE = {
   water_cooler: def(16, 24, PAL, () => WATER_COOLER),
   bed: def(16, 32, PAL, () => BED),
   board: def(48, 24, PAL, () => BOARD),
+  boss_desk: def(48, 24, PAL_BOSS, () => bossDeskMap(0)),
+  // boss_desk_files_1..5: the same desk with that many folders (see getBossDeskSprite)
+  ...Object.fromEntries(Array.from({ length: BOSS_DESK_MAX_FILES }, (_, i) => [
+    `boss_desk_files_${i + 1}`, def(48, 24, PAL_BOSS, () => bossDeskMap(i + 1)),
+  ])),
+  boss_chair: def(16, 24, PAL_BOSS, () => BOSS_CHAIR),
+  file_cabinet: def(16, 24, PAL_BOSS, () => FILE_CABINET),
+  sofa: def(32, 16, PAL_BOSS, () => SOFA),
+  boss_sign: def(16, 8, PAL_BOSS, () => BOSS_SIGN),
 };
 
 // v4-B handoff: a sheet of paper with text lines (frame B: the lines "written" further).
@@ -1263,6 +1729,7 @@ const BUBBLES = {
   heart: [def(12, 10, PAL_BUBBLE, () => HEART_A), def(12, 10, PAL_BUBBLE, () => HEART_B)],
   happy: [def(12, 10, PAL_BUBBLE, () => HAPPY_A), def(12, 10, PAL_BUBBLE, () => HAPPY_B)],
   paper: [def(12, 12, PAL_BUBBLE, () => iconBubble(PAPER_INNER_A)), def(12, 12, PAL_BUBBLE, () => iconBubble(PAPER_INNER_B))],
+  folder: [def(12, 12, PAL_BUBBLE_FOLDER, () => iconBubble(FOLDER_INNER_A)), def(12, 12, PAL_BUBBLE_FOLDER, () => iconBubble(FOLDER_INNER_B))],
 };
 
 const ICON_DEFS = Object.fromEntries(
@@ -1361,19 +1828,20 @@ export function getCharacterFrame(palette, anim, dir, frame) {
   return cached(key, () => renderMap(characterMap(anim, d, f), charColorMap(pal)));
 }
 
-/** name ∈ floor|floor_alt|rug|wall|window|door. @returns {HTMLCanvasElement} 16x16 */
+/** name ∈ TILE_NAMES (floor|floor_alt|rug|wall|window|door + Boss room: boss_floor|door_front|door_side). @returns {HTMLCanvasElement} 16x16 */
 export function getTileSprite(name) {
   const d = TILES[name];
   return d ? renderDef(`t|${name}`, d) : fallback(`tile:${name}`);
 }
 
-/** name ∈ desk|desk_on|chair|bookshelf|plant|coffee_counter|water_cooler|bed. */
+/** name ∈ desk|desk_on|chair|bookshelf|plant|coffee_counter|water_cooler|bed|board + Boss room:
+ *  boss_desk|boss_desk_files_1..5|boss_chair|file_cabinet|sofa|boss_sign. */
 export function getFurnitureSprite(name) {
   const d = FURNITURE[name];
   return d ? renderDef(`f|${name}`, d) : fallback(`furniture:${name}`);
 }
 
-/** kind ∈ zzz|dots|alert|steam|question (+ coffee, speech). */
+/** kind ∈ BUBBLE_KINDS (zzz|dots|alert|steam|question|coffee|speech|heart|happy|paper|folder). */
 export function getBubbleSprite(kind, frame = 0) {
   const frames = BUBBLES[kind];
   if (!frames) return fallback(`bubble:${kind}`);
@@ -1485,6 +1953,29 @@ export function getCatFrame(anim = 'sleep', frame = 0) {
   return renderDef(`cat|${anim}|${f}`, frames[f]);
 }
 
+/**
+ * Patron Odası: the Boss character. anim ∈ BOSS_ANIMS keys, dir ∈ that anim's dirs
+ * (others fall back like agents), frame taken modulo the frame count.
+ * The seated frames (boss_sit/write/read/give) show the upper body only and are
+ * meant to be drawn at the tile right above the middle of boss_desk, in the order
+ * boss_chair → boss_desk → Boss, so his torso hides the back of the desk top and
+ * his hands lie on it. Standing/walking frames anchor like agents (feet on row 23).
+ * @returns {HTMLCanvasElement} 16x24
+ */
+export function getBossFrame(anim = 'boss_sit', dir = 'down', frame = 0) {
+  const a = BOSS_ANIMS[anim] || BOSS_ANIMS.boss_sit;
+  if (!BOSS_ANIMS[anim]) anim = 'boss_sit';
+  const d = a.dirs.includes(dir) ? dir : a.dirs[0];
+  const f = ((Math.floor(frame) || 0) % a.frames + a.frames) % a.frames;
+  return cached(`boss|${anim}|${d}|${f}`, () => renderMap(bossMap(anim, d, f), BOSS_CHAR_PAL));
+}
+
+/** The Boss's 48x24 desk with `files` (0..BOSS_DESK_MAX_FILES, clamped) folders on it. */
+export function getBossDeskSprite(files = 0) {
+  const n = Math.max(0, Math.min(BOSS_DESK_MAX_FILES, Math.floor(files) || 0));
+  return getFurnitureSprite(n ? `boss_desk_files_${n}` : 'boss_desk');
+}
+
 /** @returns {HTMLCanvasElement} 12x12 icon in a white bubble. */
 export function getToolIcon(toolName) {
   const kind = toolIconKind(toolName);
@@ -1548,7 +2039,13 @@ export function validateSprites() {
     desk: [32, 24], desk_on: [32, 24], chair: [16, 16], bookshelf: [16, 24], plant: [16, 24],
     coffee_counter: [48, 24], water_cooler: [16, 24], bed: [16, 32],
     board: [48, 24],
+    boss_floor: [16, 16], door_front: [16, 16], door_side: [16, 16],
+    boss_desk: [48, 24], boss_chair: [16, 24], file_cabinet: [16, 24], sofa: [32, 16], boss_sign: [16, 8],
   };
+  for (let i = 1; i <= BOSS_DESK_MAX_FILES; i++) {
+    expect[`boss_desk_files_${i}`] = [48, 24];
+    if (!FURNITURE[`boss_desk_files_${i}`]) errors.push(`missing furniture boss_desk_files_${i}`);
+  }
   for (const n of TILE_NAMES) if (!TILES[n]) errors.push(`missing tile ${n}`);
   for (const n of FURNITURE_NAMES) if (!FURNITURE[n]) errors.push(`missing furniture ${n}`);
   for (const [n, d] of Object.entries({ ...TILES, ...FURNITURE })) {
@@ -1556,7 +2053,7 @@ export function validateSprites() {
     if (d.w !== w || d.h !== h) errors.push(`${n}: declared ${d.w}x${d.h}, expected ${w}x${h}`);
     safe(n, () => checkMap(errors, n, d.rows, w, h, inPal(d.pal)));
   }
-  const bubbleDims = { zzz: [12, 10], dots: [14, 10], alert: [10, 12], steam: [8, 8], question: [10, 12], coffee: [12, 12], speech: [14, 10], heart: [12, 10], happy: [12, 10], paper: [12, 12] };
+  const bubbleDims = { zzz: [12, 10], dots: [14, 10], alert: [10, 12], steam: [8, 8], question: [10, 12], coffee: [12, 12], speech: [14, 10], heart: [12, 10], happy: [12, 10], paper: [12, 12], folder: [12, 12] };
   for (const [k, frames] of Object.entries(BUBBLES)) {
     if (frames.length !== 2) errors.push(`bubble ${k}: ${frames.length} frames, expected 2`);
     frames.forEach((d, i) => {
@@ -1564,6 +2061,21 @@ export function validateSprites() {
       if (d.w !== w || d.h !== h) errors.push(`bubble ${k}: declared ${d.w}x${d.h}, expected ${w}x${h}`);
       safe(`bubble ${k}#${i}`, () => checkMap(errors, `bubble ${k}#${i}`, d.rows, w, h, inPal(d.pal)));
     });
+  }
+  // Boss: parts in his palette, every frame 16x24
+  const bossKey = (ch) => Object.prototype.hasOwnProperty.call(BOSS_CHAR_PAL, ch);
+  const bossParts = {
+    BOSS_HEAD_DOWN, BOSS_HEAD_DOWN_LOOK, BOSS_HEAD_DOWN_SIDE, BOSS_HEAD_UP, BOSS_HEAD_SIDE, BOSS_SHIRT_DOWN,
+    BOSS_SHIRT_SIDE, BOSS_COLLAR_UP, BOSS_TORSO_SEAT, BOSS_HANDS_FOLDED, BOSS_WRITE_A, BOSS_WRITE_B,
+    BOSS_NEWSPAPER, BOSS_GIVE,
+  };
+  for (const [n, rows] of Object.entries(bossParts)) checkMap(errors, `boss part ${n}`, rows, 16, rows.length, bossKey);
+  for (const [anim, a] of Object.entries(BOSS_ANIMS)) {
+    for (const dir of a.dirs) {
+      for (let f = 0; f < a.frames; f++) {
+        safe(`boss ${anim}:${dir}:${f}`, () => checkMap(errors, `boss ${anim}:${dir}:${f}`, bossMap(anim, dir, f), CHAR_W, CHAR_H, bossKey));
+      }
+    }
   }
   for (const [k, inner] of Object.entries(ICONS)) {
     checkMap(errors, `icon ${k} (inner)`, inner, 10, 10, inPal(PAL_ICON));
@@ -1587,5 +2099,7 @@ export function listSprites() {
     bubbles: [...BUBBLE_KINDS],
     icons: [...TOOL_ICON_KINDS],
     anims: Object.fromEntries(Object.entries(ANIMS).map(([k, v]) => [k, { ...v, dirs: [...v.dirs] }])),
+    bossAnims: Object.fromEntries(Object.entries(BOSS_ANIMS).map(([k, v]) => [k, { ...v, dirs: [...v.dirs] }])),
+    bossDeskMaxFiles: BOSS_DESK_MAX_FILES,
   };
 }
