@@ -666,3 +666,70 @@ Bağlayıcı 3.6.0.
 gerekir (güvenlik çekirdeğine yakın, ayrı küçük commit). (b) Test rolü dosya yazıp test çalıştırabildiği için pratikte
 klasörde kod çalıştırabilir (`npm test` `package.json` betiğini çalıştırır); §10/3 kararıyla kabul, sınır her test iş
 emrindeki kullanıcı onayı. P8 bunu ayrıca incelemeli.
+
+### P2 — Patron masası: istem → plan → onay (2026-10-26, Bağlayıcı/Güvenlik Mühendisi)
+
+Kod: `pixel_connector/boss.py` P2 bölümü (`BossDesk`, `BossJob`, `TaskPolicy`/`task_policy`, `parse_ask`,
+`extract_plan`, planlama ve yeniden deneme istemleri), `app.py` (`boss.*` işleyicileri, `"boss"` özelliği, Patron ajanının
+gizlenmesi, eşleşme kaldırma, kapanış), `tasks.py` (`TaskRun.policy`), `engines/base.py` + `engines/claude.py` (görev
+politikası), `config.py` (`boss.maxCostUsd`), `audit.py` (olay adları). Testler `tests/test_boss_desk.py` (30).
+Bağlayıcı 3.7.0.
+
+1. **Yeni durum `approved` ("Onaylandı").** Onaylanan plan P3 yürütücüsünü bu durumda bekler (`approval → approved →
+   running`; P1'deki `approval → running` da geçerli kaldı). İş bu durumda masayı tutar (ikinci `boss.ask` → `busy`);
+   İptal, eşleşme kaldırma ya da bağlayıcının durması onu `cancelled` yapar. Yarım/sahte yürütme yok.
+2. **Plan bloğu kuralları (§4.4'ten sıkı):** yanıtta bu isteğin rastgele işaretleriyle **tam olarak bir** blok olmalı
+   ("son geçerli blok" değil; iki blok, eksik ya da ters sırada işaret → red), blok **tek bir JSON nesnesi** (iki nesne,
+   dizi, yinelenen anahtar, `NaN`, aşırı iç içe yapı → red). Tek bir çevreleyen ```` ```json ```` çiti kabul edilir.
+   Yanıt ≤ 64 KiB, blok ≤ 32 KiB (aşan red, kırpma yok). Sonra `validate_plan` (cihazda açık profillere göre).
+3. **Bir yeniden deneme:** geçersiz planda Patron oturumuna (`--resume`, yeni işaret satırlarıyla) bir kez "yalnızca
+   geçerli JSON ver" denir; ikinci hata `error/bad_plan`. Gerekçe: biçim hataları çoğunlukla bir düzeltmeyle gider ve
+   maliyet sınırlı, çünkü planlama tavanı (0,20 $ / 10 tur) iki denemenin **toplamıdır** (ikinci denemeye kalan tutar ve
+   tur verilir). Yeniden deneme isteminde Patronun metni yer almaz, yalnızca bağlayıcının neden kodu ya da alan yolu
+   (ör. `orders[0].title`).
+4. **Yapılandırılmış çıktı bayrağı denenmedi:** koordinatör talimatı gereği gerçek Claude Code çalıştırılmadı; işaret
+   satırları kullanılıyor. P9'daki gerçek denemede kurulu sürümün bayrağı (`claude --help`) incelenebilir.
+5. **Görev politikası (P1 notu a):** `boss.TaskPolicy` (rol, profil, izin listesi, ek ret, tur tavanı) yalnızca bağlayıcı
+   kodunda kurulur (`Scheduler.submit(policy=…)`); hiçbir mesaj alanı ona dönüşmez, `TaskPolicy` olmayan bir değer
+   `precheck`'te `internal` ile reddedilir. Politika varsa profil ajan kaydından değil rolden gelir, rolün komut listesi
+   cihazın `profiles.dev.allow` listesinin **yerine** geçer (eklenmez), `Agent` ve `Task` reddedilir, tur tavanı
+   cihazınkinin altında kalır. `engines/claude.build_argv` ayrıca savunur: geçersiz kılma yalnızca `dev` profilinde ve
+   yalnızca `Bash(<komut> *)` biçiminde (çıplak `Bash`, `Bash(*)`, yol, `;`/`&&`/`|`/`$()` red), `auto` ile hiç;
+   `BUILTIN_DENY`, profilin `deny` listesi ve `FORBIDDEN_ARGS` aynen. Politikası olmayan görevlerde davranış değişmedi.
+6. **Patron ajanı:** `agents.json` içinde `boss: "<çalışma alanı>[/<alt klasör>]"`, ad "Patron", Claude. `agent.list`'te
+   görünmez; `agent.update` ve `task.start` onun için `not_allowed`; ofise hiç raporlanmaz (kapanışta ve silmede de).
+   Her işte saklı profil/model `readonly`/varsayılana geri yazılır (elle değiştirilse bile görev politikası zaten
+   `readonly`). Hafıza sıfırlama `agent.reset` yerine **`boss.reset {workspace}`** (Patron ajanı listede olmadığı için);
+   Patron çalışırken `busy`.
+7. **Protokol (kesinleşen):** istekler `boss.ask {workspace {id, sub?}, brief, maxCostUsd?}`, `boss.approve {job,
+   approve: bool}`, `boss.cancel {job}`, `boss.get {job?}`, `boss.reset {workspace}` (izin listesi; bilinmeyen alan →
+   `bad_request`, yani `profile`/`engine`/`allow` gönderilemez). Yanıtlar `boss.ack {job: <durum>}`, `boss.ok`,
+   `boss.get.result {job, plan}`. Olaylar: `boss.state` (düz alanlar: `job`, `state`, `code`, `round`, `orders`,
+   `costUsd`, `maxCostUsd`, `estimateUsd`, `run`, `workspace {id, sub}`, `startedAt`, `endedAt`, `expiresAt`; metin yok)
+   ve `boss.plan` (`job`, doğrulanmış `plan`, kullanılan rollerin `roles {ad, rozet, profil}`, `estimateUsd`,
+   `maxCostUsd`, `round`, `expiresAt`), ikisi de bütün eşleşmiş tarayıcılara E2E (S26-05). `boss.report` P3'te. Yeni hata
+   kodu `unknown_job`. `device.info` ayrıca `boss: {maxCostUsd}` taşır (P6'nın tavan alanı için).
+8. **Tek iş:** etkin Patron işi ya da etkin A10 akışı varken `boss.ask` → `busy`. Ters yön (Patron işi varken
+   `workflow.start`) P3'e kaldı (`workflows.py` P2 kapsamında değildi).
+9. **`connector.json` → `boss.maxCostUsd`** (alan adı kesinleşti): yoksa 1,00 $; 0,10–3,00 $ dışı, sayı olmayan ya da
+   `null` → yapılandırma hatası (bağlayıcı başlamaz, `confirm.task` ile aynı kural) ve veride güvenli varsayılan 1,00 $;
+   `boss` nesne değilse hata, bilinmeyen alt anahtar uyarı. `setup`'ın yazdığı ilk yapılandırmada `boss: {maxCostUsd: 1.0}`.
+10. **Onaylar:** `confirm.agentCreate` açıkken `boss.ask` önce bilgisayarda onaylanır; `confirm.task` kuralı planlama
+    görevine de uygulanır. Plan onayı yerel onay kaydıdır (tür `boss`, 15 dk, `/onay` ve CLI'de; önizleme: özet, iş
+    emri başlıkları, tahmin ve tavan — yalnızca bu bilgisayarda) ve eşleşmiş tarayıcıdan `boss.approve`.
+11. **İptal hemen:** `boss.cancel`/eşleşme kaldırma/kapanış işi hemen bitirir, çalışan planlama görevi iptal edilir
+    (kaldırmada `revoked` koduyla); görevin geç gelen sonu yalnızca maliyetini işe ekler.
+12. **Denetim kaydı:** `boss.ask` (iş, ajan, klasör, `briefLen`, tavanlar), `boss.planned` (görev, deneme, durum, maliyet,
+    tur, `outLen`), `boss.retry` (kod), `boss.plan` (iş emri sayısı, `planLen`, tahmin, maliyet, deneme), `boss.approve` /
+    `boss.deny` / `boss.expire` (`by`), `boss.cancel`, `boss.end`, `boss.reset`; Patron ajanı oluşturma `agent.create`
+    `boss: true`. Metin yok (kanarya testli). Planlama görevinin `task.start` kaydı mevcut `audit.storePrompts` kuralına
+    uyar (varsayılan kapalı: yalnızca SHA-256 + uzunluk).
+13. Planlama görevinin akışı (`task.chunk`/`task.end`, Patronun yanıtı) mevcut görev kuralıyla yalnızca isteyen eşleşmiş
+    tarayıcıya gider; izleyiciye, röleye düz metin ve ofis sunucusuna hiçbir şey gitmez (testli).
+
+**P3 için notlar:** (1) Arayüz: `approved` durumundaki `BossJob`: `plan`, `estimate`, `run_cap` (çalışma tavanı;
+planlamaya harcanan `cost` buna dahil), `workspace`, `peer`/`bid`/`label`, `agent` (Patron ajanı, değerlendirme adımı
+için). P3 `approved → running` geçişini ve `run` alanını yazar; çalışma tavanından planlama maliyetini düşmeli.
+(2) Rol görevleri `Scheduler.submit(..., policy=boss.task_policy(rol, tur))` ile gönderilmeli; Test rolünün dar listesi
+ve `Agent`/`Task` reddi böylece uygulanır. (3) `workflow.start` Patron işi varken `busy` olmalı. (4) Patron ajanı
+`BossDesk` dışında görev almadığı için değerlendirme adımı da `task_policy("patron", …)` ile gönderilmeli.

@@ -228,7 +228,7 @@ def validate_budget(b, errors: List[str], where: str, need_scope: bool = True) -
 # --------------------------------------------------------------------------------------------------
 
 KNOWN_TOP = {"v", "server", "room", "key", "owner", "deviceName", "workspaces", "engines", "profiles", "runtimes",
-             "confirm", "budgets", "limits", "remote", "audit", "approvalPort", "remoteApprovals"}
+             "confirm", "budgets", "limits", "remote", "audit", "approvalPort", "remoteApprovals", "boss"}
 
 
 class Config:
@@ -484,6 +484,7 @@ def validate(raw: Any, home: Optional[str] = None, which=shutil.which) -> Tuple[
     d["audit"] = {"storePrompts": _bool(au.get("storePrompts"), False)}
     d["approvalPort"] = _num(raw.get("approvalPort"), 8766, 0, 65535, integer=True)
     d["remoteApprovals"] = remote_approvals_from(raw)
+    d["boss"] = boss_from(raw, errors, warnings)
 
     budgets = []
     for i, b in enumerate(raw.get("budgets") or []):
@@ -493,6 +494,31 @@ def validate(raw: Any, home: Optional[str] = None, which=shutil.which) -> Tuple[
             budgets.append(v)
     d["budgets"] = budgets
     return d, errors, warnings
+
+
+def boss_from(raw: dict, errors: List[str], warnings: List[str]) -> dict:
+    """Patron Odası: `boss.maxCostUsd` is the device's run cost ceiling (default 1.00 $, at most 3.00 $; a browser may
+    only lower it). An invalid value is a configuration error and the safe default is kept."""
+    from .boss import RUN_COST_DEFAULT, BossError, run_ceiling      # boss → workflows → config: imported lazily
+    out = {"maxCostUsd": RUN_COST_DEFAULT}
+    bs = raw.get("boss")
+    if bs is None:
+        return out
+    if not isinstance(bs, dict):
+        errors.append("boss: must be an object")
+        return out
+    for k in bs:
+        if k != "maxCostUsd":
+            warnings.append("unknown key 'boss.%s' ignored" % k)
+    if "maxCostUsd" not in bs:
+        return out
+    try:
+        if bs["maxCostUsd"] is None:
+            raise BossError("bad_config", "boss.maxCostUsd")
+        out["maxCostUsd"] = run_ceiling(bs["maxCostUsd"])
+    except BossError:
+        errors.append("boss.maxCostUsd: must be a number from 0.10 to 3.00 (USD)")
+    return out
 
 
 def remote_approvals_from(raw) -> dict:
@@ -742,4 +768,5 @@ def initial_config(server: str, room: str, key: str, owner: str, device_name: Op
         "remote": {"agentCreate": True, "agentDelete": True, "budgetEdit": True},
         "audit": {"storePrompts": False},
         "approvalPort": 8766,
+        "boss": {"maxCostUsd": 1.0},
     }

@@ -121,7 +121,8 @@ def fit_result(msg: dict, field: str = "result", limit: int = MAX_INNER) -> dict
 class TaskRun:
     def __init__(self, sched: "Scheduler", task: str, agent: dict, prompt: str, fresh: bool, peer, label: str,
                  handoff: Optional[dict] = None, origin: Optional[str] = None,
-                 on_end: Optional[Callable[[dict], None]] = None, cost_cap: Optional[float] = None) -> None:
+                 on_end: Optional[Callable[[dict], None]] = None, cost_cap: Optional[float] = None,
+                 policy=None) -> None:
         self.s = sched
         self.id = task
         self.agent = agent
@@ -144,6 +145,7 @@ class TaskRun:
         self.origin = origin                  # task id of A when this run is B's handoff task (never hands off again)
         self.on_end = on_end                  # v4-C: called with the task.end message (workflow step)
         self.cost_cap = cost_cap              # v4-C: at most this much USD for a Claude run (the workflow's remainder)
+        self.policy = policy                  # Patron Odası: boss.TaskPolicy (profile, allow override, deny, turns)
         self._lock = threading.Lock()
         self.send_lock = threading.Lock()     # chunk and end messages leave in order
         self._parts: List[dict] = []
@@ -271,10 +273,11 @@ class Scheduler:
     def submit(self, agent: dict, prompt: str, fresh: bool, peer, label: str, need_confirm: bool,
                handoff: Optional[dict] = None, origin: Optional[str] = None,
                confirm_title: Optional[str] = None, on_end: Optional[Callable[[dict], None]] = None,
-               cost_cap: Optional[float] = None) -> dict:
+               cost_cap: Optional[float] = None, policy=None) -> dict:
         """Validate and enqueue. → task.ack fields; raises TaskError(code). A handoff run (`origin` set) never carries
         a handoff itself: the chain is at most A → B. `on_end(task.end)` runs once the task ended (also when that happens
-        inside this call, e.g. the engine failed to start); it is never called while the scheduler lock is held."""
+        inside this call, e.g. the engine failed to start); it is never called while the scheduler lock is held.
+        `policy` (a boss.TaskPolicy) is set by connector code only (Patron Odası); no message field maps to it."""
         if origin is not None:
             handoff = None
         key = agent["key"]
@@ -285,7 +288,8 @@ class Scheduler:
                 raise TaskError("busy", "agent busy")
             if not self.check_rate("task:" + bid, self.limits["tasksPerMinute"], self.limits["tasksPerHour"]):
                 raise TaskError("rate_limited", "too many tasks")
-            run = TaskRun(self, new_task_id(), agent, prompt, fresh, peer, label, handoff, origin, on_end, cost_cap)
+            run = TaskRun(self, new_task_id(), agent, prompt, fresh, peer, label, handoff, origin, on_end, cost_cap,
+                          policy)
             self.app.precheck(run)              # workspace + budget + engine (raises TaskError)
             self.runs[run.id] = run
             self.by_agent.setdefault(key, []).append(run)

@@ -59,8 +59,8 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | A11 | Aşama 20 / Paket 6: bulut temizliği (**şimdi**, C3'ten bağımsız; push yok, Claude birleştirir) | Antigravity | ✅ Teslim edildi |
 | A12 | Aşama 20 / Paket 8b: belgeler (D1–D4, F5–F6, E7) | Antigravity | ✅ Teslim edildi |
 | P1 | Patron Odası: plan şeması ve rol kütüphanesi (ayrıntı: [`docs/PATRON_ODASI.md`](PATRON_ODASI.md) §9; §10 kararlarından sonra) | Claude | ✅ |
-| P2 | Patron Odası: Patron masası, istem → plan → onay (P1 sonrası) | Claude | 🔄 |
-| P3 | Patron Odası: iş emirlerinin yürütülmesi, değerlendirme, rapor (P2 sonrası) | Claude | ⬜ |
+| P2 | Patron Odası: Patron masası, istem → plan → onay (P1 sonrası) | Claude | ✅ |
+| P3 | Patron Odası: iş emirlerinin yürütülmesi, değerlendirme, rapor (P2 sonrası) | Claude | 🔄 |
 | P4 | Patron Odası: pixel art, Patron ve odası (P3 sonrası) | Claude | ⬜ |
 | P5 | Patron Odası: ofis haritası ve sahne (P4 sonrası) | Claude | ⬜ |
 | P6 | Patron Odası: Patron paneli ve Görev Tahtası (P5 sonrası) | Claude | ⬜ |
@@ -284,3 +284,13 @@ görüntüleri, bilinen sorunlar.
   4096 baytı aşarsa plan reddi; ayrıntı ve P2/P3 notları (Test rolünün izin listesinin `engines/claude.py`'de görev
   başına uygulanması gerekiyor) §11'de. `python3 -m unittest discover -s tests`: 896 test, OK (1 atlandı: `pwsh`);
   `build_connector.py --check` güncel.
+- **2026-10-26, Claude (Patron Odası P2: Patron masası, istem → plan → onay, Bağlayıcı/Güvenlik Mühendisi):** Teslim
+  edildi, commit/push yok (koordinatör denetleyip commit'leyecek). Yeni: `tests/test_boss_desk.py` (30 test, `git add -N`).
+  Değişen: `pixel_connector/boss.py` (P2 bölümü: `BossDesk`, `BossJob`, `TaskPolicy`, `parse_ask`, `extract_plan`; yeni
+  durum `approved`), `app.py` (`boss.*` işleyicileri, `"boss"` özelliği, Patron ajanını listeden/ofisten gizleme, revoke,
+  kapanış), `tasks.py` (`TaskRun.policy`), `config.py` (`boss.maxCostUsd`), `audit.py` (olay adları); **güvenlik çekirdeğine
+  yakın, ayrı commit önerilir:** `engines/claude.py` (`build_argv` `allow_override`/`extra_deny` + savunma, görev tur
+  tavanı) ve `engines/base.py` (`TaskContext` alanları). `pixel_connector/__init__.py` (3.7.0), `web/connector/*`
+  (`9e6c42d1…`), `README.md` (SHA satırı), sürüm testleri (yalnızca numara), `docs/PATRON_ODASI.md` §11, `docs/V3.md`
+  §20, `PROJECT.md` §6 (A10 kaydı çıkarıldı; günlükte var), günlük. Web dosyası değişmedi. Kararlar ve P3 arayüzü §11'de.
+  `python3 -m unittest discover -s tests`: 926 test, OK (1 atlandı: `pwsh`); `build_connector.py --check` güncel.

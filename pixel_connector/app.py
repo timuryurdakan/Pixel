@@ -25,6 +25,7 @@ from .agents import LABELS, AgentError, AgentStore, OfficeReporter
 from .approvals import (TOOL_ID_RE, Approvals, ControlServer, ToolApproval, ToolLimit, summary_hash,
                         validate_tool_request)
 from .audit import AuditLog
+from .boss import APPROVE_FIELDS, JOB_FIELDS, BossDesk, TaskPolicy, parse_job_msg
 from .config import (AUDIT_FILE, LEDGER_FILE, Config, claude_path_label, claude_path_refreshed, ensure_dir, find_claude,
                      remote_approvals_state)
 from .engines.base import TaskContext, clear_history
@@ -49,9 +50,10 @@ APPROVAL_RESULT = {"ok": "allow", "denied": "deny", "timeout": "expired", "withd
 APPROVAL_AUDIT = {"ok": "approval.approve", "denied": "approval.deny", "timeout": "approval.expire",
                   "withdrawn": "approval.withdraw"}
 APPROVAL_POLL_S = 0.5       # how often a waiting /ctl/approvals/tool call checks that its hook is still there
-FEATURES = ["handoff", "workflows"]   # device.info.features: optional protocol parts (v4-B handoff, v4-C workflows)
+# device.info.features: optional protocol parts (v4-B handoff, v4-C workflows, Patron Odası boss.*)
+FEATURES = ["handoff", "workflows", "boss"]
 SLOW_TYPES = {"peer.hello", "runtime.list", "runtime.start", "runtime.stop", "model.load", "model.unload",
-              "workspace.list", "agent.create", "peer.revoke", "workflow.list", "workflow.start"}
+              "workspace.list", "agent.create", "peer.revoke", "workflow.list", "workflow.start", "boss.ask"}
 
 
 class Reply(Exception):
@@ -131,6 +133,7 @@ class Connector:
                              on_peer_closed=lambda p: None)
         self.scheduler = Scheduler(self, self.cfg["limits"], clock)
         self.workflows = WorkflowEngine(self, clock)
+        self.boss = BossDesk(self, clock)
         self.reporter = OfficeReporter(self.cfg["server"], self.cfg["room"], self.cfg["key"], self.cfg["owner"],
                                        self.key.device_id, sender=office_sender, clock=clock)
         factory = relay_factory or (lambda **kw: RelayClient(**kw))
@@ -166,12 +169,14 @@ class Connector:
     def stop(self) -> None:
         self._stop.set()
         self.workflows.stop()
+        self.boss.stop()
         runs = list(self.scheduler.runs.values())
         for run in runs:
             self.scheduler.cancel(run.id)
         self._wait_runs(runs)
         for a in self.agents.list():
-            self.reporter.offline(a, self._ws_name(a))
+            if not a.get("boss"):
+                self.reporter.offline(a, self._ws_name(a))
         self.reporter.flush(3.0)
         self.reporter.stop()
         try:
@@ -316,7 +321,8 @@ class Connector:
 
     def office(self, agent: dict, state: str, tool: Optional[str], label: Optional[str], task: Optional[str]) -> None:
         self._agent_state[agent["key"]] = state
-        self.reporter.report(agent, self._ws_name(agent), state, tool, label)
+        if not agent.get("boss"):              # Patron Odası: the Patron is drawn by each client, never reported
+            self.reporter.report(agent, self._ws_name(agent), state, tool, label)
         for p in self.router.all_peers():
             if agent["key"] in p.watching:
                 try:
@@ -354,6 +360,8 @@ class Connector:
     def precheck(self, run: TaskRun) -> None:
         a = run.agent
         try:
+            if run.policy is not None and (not isinstance(run.policy, TaskPolicy) or a["engine"] != "claude"):
+                raise TaskError("internal", "bad task policy")          # Patron Odası: connector code only
             self.resolve_workspace(a)
             self._check_profile(a)
             per_task = self.cfg["engines"]["claude"]["maxBudgetUsdPerTask"] if a["engine"] == "claude" else None
@@ -374,9 +382,11 @@ class Connector:
         confirmation said no). A task waiting for confirmation is logged once it is decided (v2.md H27)."""
         a = run.agent
         ws = a.get("workspace") or {}
+        policy = run.policy
         self.audit.write(ev, bid=run.bid, peer=run.peer_label, agent=a["key"], engine=a["engine"],
-                         ws=ws.get("id"), sub=ws.get("sub"), profile=a.get("profile"), prompt=run.prompt,
-                         result=result, task=run.id, handoff=(run.handoff or {}).get("agent"), origin=run.origin)
+                         ws=ws.get("id"), sub=ws.get("sub"), profile=policy.profile if policy else a.get("profile"),
+                         prompt=run.prompt, result=result, task=run.id, handoff=(run.handoff or {}).get("agent"),
+                         origin=run.origin, role=policy.role if policy else None)
 
     def start_engine(self, run: TaskRun):
         a = self.agents.get(run.agent_key)
@@ -407,10 +417,19 @@ class Connector:
         # the run's late write is dropped or merged instead of overwriting it.
         epoch = self.agents.session_epoch(a["key"])
         key = a["key"]
-        ctx = TaskContext(run.id, copy.deepcopy(a), run.prompt, cwd, a.get("model"), a.get("profile") or "edit",
+        policy = run.policy
+        if policy is not None and (not isinstance(policy, TaskPolicy) or a["engine"] != "claude"):
+            raise TaskError("internal", "bad task policy")
+        # Patron Odası: a Boss/role task's profile, command list, denied tools and turn cap come from its role
+        # (boss.TaskPolicy), not from the agent record or the device's dev allow list.
+        ctx = TaskContext(run.id, copy.deepcopy(a), run.prompt, cwd, a.get("model"),
+                          policy.profile if policy else (a.get("profile") or "edit"),
                           run.fresh, max_budget, history_path=hist,
                           save_agent=lambda rec: self.agents.save_session(key, rec, epoch),
-                          workspace_name=self._ws_name(a))
+                          workspace_name=self._ws_name(a),
+                          allow_override=policy.allow if policy else None,
+                          extra_deny=policy.deny if policy else (),
+                          max_turns=policy.max_turns if policy else None)
         self.office(a, "thinking", None, None, run.id)
         return eng.start(ctx, run)
 
@@ -509,7 +528,7 @@ class Connector:
                               "enabled": p != "auto" or self.cfg["profiles"]["auto"]["enabled"]}
                              for p in ("readonly", "edit", "dev", "auto")],
                 "remote": dict(self.cfg["remote"]), "approvals": {"remote": self.remote_approvals()["enabled"]},
-                "features": list(FEATURES),
+                "features": list(FEATURES), "boss": {"maxCostUsd": self.boss.ceiling()},
                 "time": int(self.clock() * 1000), "tz": tz_name()}
 
     def h_peer_hello(self, peer: Peer, msg: dict) -> None:
@@ -589,7 +608,16 @@ class Connector:
         return 200, p.outcome()
 
     def h_agent_list(self, peer, msg) -> dict:
-        return {"type": "agent.list.result", "agents": [self.agent_public(a) for a in self.agents.list()]}
+        # The Patron agents are the Boss desk's (boss.*), not agents to command directly.
+        return {"type": "agent.list.result",
+                "agents": [self.agent_public(a) for a in self.agents.list() if not a.get("boss")]}
+
+    @staticmethod
+    def _not_boss(a: dict) -> dict:
+        """A Patron agent's profile, model and session are the Boss desk's: no agent.update or task.start on it."""
+        if a.get("boss"):
+            raise Reply("not_allowed", "the Patron agent is managed by the Boss desk")
+        return a
 
     def h_agent_create(self, peer, msg) -> Optional[dict]:
         if not self.cfg["remote"]["agentCreate"]:
@@ -642,7 +670,7 @@ class Connector:
             raise Reply("not_allowed", "remote budget editing disabled")
         if "profile" in fields and fields["profile"] not in PROFILE_LABELS:
             raise Reply("bad_request", "profile")
-        cur = self.agents.get(msg.get("agent"))
+        cur = self._not_boss(self.agents.get(msg.get("agent")))
 
         def update() -> dict:
             a = self.agents.update(cur["key"], fields)
@@ -691,7 +719,8 @@ class Connector:
                 self.scheduler.cancel(r.id)
         self.agents.delete(a["key"])
         clear_history(os.path.join(self.home, "history", a["key"] + ".jsonl"))
-        self.reporter.offline(a, self._ws_name(a))
+        if not a.get("boss"):
+            self.reporter.offline(a, self._ws_name(a))
         for p in self.router.all_peers():
             p.watching.discard(a["key"])
             if p is not by:
@@ -718,7 +747,7 @@ class Connector:
 
     # -- handlers: tasks -------------------------------------------------------------------------
     def h_task_start(self, peer, msg) -> dict:
-        a = self.agents.get(msg.get("agent"))
+        a = self._not_boss(self.agents.get(msg.get("agent")))
         prompt = msg.get("prompt")
         if not isinstance(prompt, str) or not prompt.strip():
             raise Reply("bad_request", "prompt")
@@ -805,6 +834,36 @@ class Connector:
         if decision not in ("approve", "deny"):
             raise Reply("bad_request", "decision")
         return self.workflows.answer(msg.get("run"), decision == "approve", by=peer.bid)
+
+    # -- handlers: Patron Odası (P2) ---------------------------------------------------------------
+    def h_boss_ask(self, peer, msg) -> Optional[dict]:
+        """Ask the Boss for a plan. The planning task counts against the browser's task rate; the run will create role
+        agents, so `remote.agentCreate` must be on and `confirm.agentCreate` asks on the computer first."""
+        if not self.scheduler.check_rate("task:" + peer.bid, self.cfg["limits"]["tasksPerMinute"],
+                                         self.cfg["limits"]["tasksPerHour"]):
+            raise Reply("rate_limited", "too many tasks")
+        prep = self.boss.prepare(peer, msg)
+        if self.cfg["confirm"]["agentCreate"]:
+            self._confirm_then(peer, msg, "boss.ask", "Patron: yeni iş", None, lambda: self.boss.launch(prep),
+                               (WorkflowError, AgentError, TaskError))
+            return None
+        return self.boss.launch(prep)
+
+    def h_boss_approve(self, peer, msg) -> dict:
+        """The plan approval from a paired browser (the computer answers on /onay or with the CLI). Strict bool."""
+        job = parse_job_msg(msg, APPROVE_FIELDS)
+        if not isinstance(msg.get("approve"), bool):
+            raise Reply("bad_request", "approve")
+        return self.boss.approve(job, msg["approve"], by=peer.bid)
+
+    def h_boss_cancel(self, peer, msg) -> dict:
+        return self.boss.cancel(parse_job_msg(msg, JOB_FIELDS), by=peer.bid)
+
+    def h_boss_get(self, peer, msg) -> dict:
+        return self.boss.get(parse_job_msg(msg, JOB_FIELDS, need_job=False))
+
+    def h_boss_reset(self, peer, msg) -> dict:
+        return self.boss.reset(peer, msg)
 
     # -- handlers: runtimes ----------------------------------------------------------------------
     def h_runtime_list(self, peer, msg) -> dict:
@@ -923,6 +982,7 @@ class Connector:
             if bid != by:
                 self.router.close_bid(bid)
             self.workflows.peer_revoked(bid)              # S26-02: first, so a run ends as `revoked`, not by its step
+            self.boss.peer_revoked(bid)                   # Patron Odası: the same for the Boss's job
             self.scheduler.cancel_for_bid(bid, CANCEL_REVOKED)   # S26-08: confirm / queued / running tasks
         return ok
 
