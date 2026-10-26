@@ -119,6 +119,7 @@ test('run shape check, change detection (tasks to follow, the A9 walk) and texts
   assert.equal(codeText('cost_cap'), 'Maliyet tavanı aşıldı');
   assert.equal(codeText('approval_timeout'), 'Onay süresi doldu (reddedildi sayıldı)');
   assert.equal(codeText('busy'), 'Ajan meşgul');
+  assert.equal(codeText('revoked'), 'Başlatan tarayıcının eşleşmesi kaldırıldı');   // S26-02
   assert.equal(progressText(run()), '1/4 adım · $0.05 / $1.00 · 3 tur');
 });
 

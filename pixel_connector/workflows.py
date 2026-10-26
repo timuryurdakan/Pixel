@@ -583,6 +583,9 @@ class WorkflowEngine:
         if run.stop_state is not None:
             self._finish(run, run.stop_state, run.stop_code)
             return
+        if run.bid is not None and self.app.peers.active(run.bid) is None:
+            self._finish(run, CANCELLED, "revoked")         # S26-02: a revoked browser starts nothing new
+            return
         nxt = next((s for s in run.steps if s.state == WAITING), None)
         if nxt is None:
             self._finish(run, DONE, None)
@@ -795,6 +798,16 @@ class WorkflowEngine:
         if self.app.approvals.answer(pid, bool(approve), None, by=by or "local") != "ok":
             raise WorkflowError("unknown_approval", "already answered or expired")
         return {"type": "workflow.ok", "run": run_id}
+
+    def peer_revoked(self, bid: str) -> None:
+        """S26-02: `peer.revoke` ends the active runs that browser started (a running step's task is cancelled)."""
+        with self._lock:
+            ids = [r.id for r in self.runs.values() if r.active and r.bid == bid]
+        for rid in ids:
+            try:
+                self._stop_run(rid, CANCELLED, "revoked", "revoke")
+            except WorkflowError:
+                pass
 
     def tick(self) -> None:
         """Total wall time: an overdue run is stopped with error `timeout` (its running task is cancelled)."""

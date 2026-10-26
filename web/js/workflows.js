@@ -33,6 +33,7 @@ export const CODE_TEXT = {
   stopped: 'Bağlayıcı kapandı',
   budget: 'Bütçe sınırına ulaşıldı',
   error: 'Adım hata verdi',
+  revoked: 'Başlatan tarayıcının eşleşmesi kaldırıldı',
 };
 
 export function codeText(code) {

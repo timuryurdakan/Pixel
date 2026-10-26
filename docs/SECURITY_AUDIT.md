@@ -342,3 +342,76 @@ Düşük bulguların hepsi **düzeltildi, her biri için önce başarısız oldu
   kullanılır, yayımlanan Worker'a girmez; sömürü `wrangler`'ın konuştuğu sunucunun kötü niyetli olmasını gerektirir.
   Düzelten ilk sürüm `wrangler` 4.152.0 (2026-10-22) henüz iki haftalık değil; 4.150.0 ve 4.151.0 hâlâ etkileniyor.
   **Durum: ertelendi.** 2026-11-05'ten sonra `wrangler` 4.152.0+'ya yükseltilip kilit yeniden üretilecek.
+
+## 12. v4 güvenlik incelemesi (2026-10-26)
+
+A9 (masadan masaya devir, `11ebe34`) ve A10 (iş akışı motoru, `fb69a08`) için bağımsız, saldırgan gözüyle inceleme.
+Taban `dda4c64..fb69a08`. Sonuç: **2 Düşük düzeltildi, 1 Düşük ve 5 Bilgi kabul/devreden; Orta ve üzeri bulgu yok.**
+Düzeltilen her bulgu için önce başarısız olduğu görülen bir regresyon testi var (`tests/test_phase26_security.py`,
+`tests/js/workflows.test.js`). Bağlayıcı **3.4.1** (`pixel-connector.pyz` SHA-256
+`dd38eae4b78ca8817bfdcd42d539d248ed518fb7e242a1337593930e1bac3f2c`), web `po-v4.0.1`. Testler 803 → 808, OK (1 atlandı: `pwsh` yok);
+`tools/build_connector.py --check` geçiyor. Gerçek Claude/Ollama çalıştırılmadı, ağ kullanılmadı.
+
+### 12.1 Kapsam ve yöntem
+
+| Alan | Yapılan |
+|---|---|
+| Yetki yükseltme | Devirde B'nin profil/klasör/bütçe/onay kuralı (`Scheduler.submit` → `precheck`, `_check_profile`, `confirm.task`), zincir sınırı (`origin`), A == B, silinmiş B; iş akışında `remote.agentCreate`, `confirm.agentCreate`, şablonla `auto` (yükleme anında ve görev başlangıcında), adım ajanlarının etiketle yeniden kullanımı (yalnızca `workflow` etiketi; etiket `agent.create`/`agent.update` ile verilemez; profil/klasör/model her akışta şablondan yeniden yazılır, oturum her adımda yeni), S23-03 ile etkileşim. |
+| Dolaylı istem enjeksiyonu | `handoff_prompt`: rastgele çit (32 bit), "veri, talimat değil" başlığı, A'nın isteminin geçmemesi, ad temizliği, UTF-8 sınırında kesme, kesme notunun bütçeye dahil olması, `maxPromptBytes`; iş akışında `usePrevious` aynı fonksiyondan geçiyor; onay önizlemesi (`prev.result[:300]`) yalnızca yerel (`/onay` `html.escape`, CLI `term_safe`). |
+| Dosya sistemi | `Workspaces.ensure_sub` (TOCTOU, sembolik bağ, `..`, mutlak yol, dosya bileşeni, izinler), `validate_sub`, son `resolve()`, kullanıcı şablon dosyası doğrulaması (izin listesi alanlar, tipler, uzunluklar, gizli karakterler, ≤ 20 şablon, gömülü kimlik değiştirilemez, geçersiz → atlanır). |
+| Maliyet ve hizmet engelleme | `cost_cap` (kalan tutar, kuruşa aşağı yuvarlama, görev başı tavan ve `block` bütçeleriyle `min`), Ollama adımları, adım sonu toplam kontrolü, tur/süre sınırları, onay zaman aşımı, tek etkin akış, hız sınırı, bitmiş akışların tutulması (son 5), şablon dosyasının her istekte okunması. |
+| Gizlilik | `workflow.state`, `workflow.list.result`, `task.handoff`, `device.info.features`, denetim kayıtları (uzunluk ve para), ofis etiketleri (sabit), Görev Tahtası (yalnızca eşleşmişken). |
+| Protokol sınırı | `task.start.handoff`, `workflow.start/cancel/answer/list` allowlist ve tip karışıklığı (bool/NaN/liste/sözlük), başka eşin akışını yönetme, iptal edilmiş (revoke) eş. |
+| Eşzamanlılık | `Scheduler._finish` → `task_handoff`/`on_end` zamanlaması (zamanlayıcı kilidi dışında), iş akışı kilidi → zamanlayıcı kilidi sırası, `Approvals.answer` çağrısının iş akışı kilidi dışında olması, `approvals.cancel`'ın `on_done` çağırmaması (yeniden giriş yok), çift tetiklenme korumaları, iptal ile bitişin yarışı. |
+| Web | `workflows.js`, `prompt.js`, `board.js`, `agents.js`, `main.js`, `control.js`, `devices.js`, `index.html`: `innerHTML`/`insertAdjacentHTML`/`href`/`eval` araması, sınıf adlarının doğrulanmış durumlardan gelmesi, CSP değişmedi. |
+| Önceki bulgular | S16/S20/S22/S23: `engines/claude.py`, `config.py`, kanca dosyaları bu aralıkta değişmedi; `Edit(./**)`, `--setting-sources project`, profil değişikliği onayı yerinde. |
+
+### 12.2 Bulgular
+
+| ID | Önem | Alan | Bulgu | Durum | Düzeltme / test |
+|---|---|---|---|---|---|
+| S26-02 | Düşük (eşleşme kaldırma sonrası yeni iş) | `workflows.py`, `app.py` `task_handoff`, `revoke` | Eşleşmesi kaldırılan bir tarayıcının başlattığı iş akışı sonraki adımlarını başlatmayı sürdürüyordu (en fazla 8 görev; kullanıcı şablonuyla 4 saate kadar) ve bekleyen bir devir A bitince B'nin görevini açıyordu. v4 öncesinde kaldırılmış bir tarayıcı hiçbir **yeni** görev başlatamıyordu (çalışan/sıradaki görevi bitiyordu). Çalınan telefon senaryosunda kaldırma sonrası iş devam ediyordu. | **düzeltildi** (3.4.1) | `peer.revoke` o tarayıcının etkin akışlarını bitirir (`cancelled`, kod `revoked`, çalışan adımın görevi iptal); `_advance` her adımdan önce başlatan tarayıcının hâlâ eşleşmiş olduğunu denetler (yarışa karşı); kaldırılmış tarayıcının görevi devretmez (`not_allowed`). Arayüz metni "Başlatan tarayıcının eşleşmesi kaldırıldı". Testler: `RevokedBrowserWorkflowTests`, `RevokedBrowserHandoffTests`, `workflows.test.js`. |
+| S26-03 | Düşük (yerel yarış) | `workspaces.ensure_sub` | Her bileşen `lstat` ile denetlenip sonraki bileşen **yol ile** oluşturuluyordu. Arada denetlenmiş bir bileşeni sembolik bağla değiştiren yerel bir süreç (ör. aynı klasörde çalışan `dev` profilli bir ajanın komutu) yolun kalanını klasör dışında oluşturtabiliyordu (boş 0700 klasörler; son `resolve()` reddettiği için içine yazılmıyordu). | **düzeltildi** (3.4.1) | POSIX'te bileşenler bir önceki bileşenin dizin tanıtıcısına göre `mkdir(dir_fd=…)` ile oluşturulup `O_NOFOLLOW \| O_DIRECTORY` ile açılıyor; bağ ya da dosya → `workspace_denied`. Windows'ta (`dir_fd` yok) eski denetim kalıyor. Testler: `EnsureSubRaceTests` (yarış benzetimi, bağ ve dosya bileşeni, 0700). |
+| S26-04 | Düşük | `workflows.parse_start` | Tarayıcı maliyet tavanını şablonun `guardrails.maxCostUsd` değerinin **üstüne** (en fazla 20 $) çıkarabilir; şablondaki değer tavan değil varsayılan. Her Claude adımı yine görev başı tavan (`maxBudgetUsdPerTask`) ve `block` bütçeleriyle sınırlı. | **kabul** (tasarım, V3.md §3.4) | Kullanıcıya görünür davranış; değiştirilmedi. Öneri: şablon tavanı kesin üst sınır olsun istenirse `parse_start`'ta `min(şablon, istek)`. |
+| S26-05 | Bilgi | `workflow.cancel/answer` | Herhangi bir eşleşmiş tarayıcı başka bir tarayıcının başlattığı akışı iptal edebilir ya da onay adımını cevaplayabilir. | **kabul** | Bütün eşleşmiş tarayıcılar aynı sahibin ve tam yetkili (V3.md §6.8, salt izleme eşleşmesi yok); `task.cancel` ile tutarlı. Denetimde `by` = tarayıcı kimliği. |
+| S26-06 | Bilgi | devir / iş akışı | Okuma profilli A'nın (ya da önceki adımın) çıktısı `dev`/`auto` profilli B'ye girdi olur; A'nın okuduğu dosya/sayfadaki enjeksiyon B'ye taşınabilir. Çit yalnızca etiketleme yardımıdır. | **kabul** (belgelenmiş tasarım) | B'nin gerçek sınırı kendi profili ve klasörü; README önerisi: B `dev`/`auto` ise `confirm.task: "always"`. Gömülü şablonda en yetkili adım `edit`. |
+| S26-07 | Bilgi | `workflow.start` | Adım ajanı oluşturma `agentCreatePerHour` sayacına girmiyor. | **kabul** | Etiketle yeniden kullanım (şablon × adım × motor) ve `maxAgents` ile sınırlı; başlatma görev hız sınırını tüketiyor. |
+| S26-08 | Bilgi (devreden, v4 öncesi) | eşleşme kaldırma | Kaldırılan tarayıcının **zaten kuyruktaki ya da yerel onay bekleyen** sıradan görevleri yine başlayabilir (kaldırma görevleri iptal etmez). | **devreden** | v4 dışı davranış; öneri: `revoke` sırasında o tarayıcının `queued`/`confirm` görevlerini iptal etmek (kullanıcıya görünür, ayrıca karar). |
+| S26-09 | Bilgi | Claude `--max-budget-usd` | Claude bütçeyi tur sonunda denetler; bir adım kalan tutarı bir tur kadar aşabilir. Akış adım sonunda toplamı görür ve `cost_cap` ile durur, sonraki adım başlamaz. | **kabul** | Belgelendi (V3.md §20 "Guardrails"). |
+
+### 12.3 Bulgusuz doğrulananlar
+
+- **Yetki.** Devir B'yi tarayıcının seçtiği ajana sabitler; A'nın çıktısı hedefi değiştiremez. B'nin görevi normal yoldan
+  geçer: B'nin klasörü (yeniden çözülür), profili (`auto` kapalıysa `not_allowed`), bütçeleri, ajan kuyruğu (1 çalışan +
+  1 sıradaki, fazlası `busy`), `confirm.task` ve tarayıcının görev hız sınırı. Zincir en fazla A → B (`origin` taşıyan görev
+  devretmez; iş akışı adımları hiç devretmez). İş akışı: `remote.agentCreate` kapalıysa `not_allowed`, `confirm.agentCreate`
+  açıksa başlatma bilgisayarda onaylanır; `auto` cihazda kapalıysa şablon yüklenmez ve görev başlangıcında da reddedilir.
+- **İstem enjeksiyonu.** Çit her devirde rastgele; A'nın istemi B'ye geçmez; kesme UTF-8 sınırında ve açıkça belirtilir;
+  istem `maxPromptBytes`'ı aşmaz (aşacaksa `too_large`, adım/devir hata ile biter).
+- **Dosya sistemi.** `..`, mutlak yol, sürücü harfi, NUL/kontrol karakteri, bağ ve dosya bileşeni reddedilir; çalışma
+  klasörünün kendisi deny/ata kurallarından geçer; görev başlangıcında klasör yeniden çözülür.
+- **Şablon dosyası.** İzin listesi alanlar, sıkı tipler (bool/NaN reddi), uzunluklar (bayt dahil), `Cc/Cf/Zl/Zp` karakter
+  reddi, ≤ 8 adım, ≤ 20 şablon, gömülü kimlik değiştirilemez; okunamayan/geçersiz dosya → yalnızca gömülü şablon.
+- **Maliyet/süre.** Claude adımına verilen tavan kalan tutarı, görev başı tavanı ve `block` bütçelerini aşmaz; 0,01 $
+  altında adım başlamaz; cihazda tek etkin akış; süre aşımında çalışan görev iptal edilir; onay zaman aşımı **reddedilmiş
+  sayılır** (fail-closed); bitmiş akışlardan yalnızca son 5'i bellekte.
+- **Gizlilik.** `workflow.state`/`workflow.list.result`/`task.handoff` yalnızca kimlik, durum, sayı ve şablon etiketi taşır
+  (testlerde kanarya ile doğrulanmış); denetim kaydı uzunluk ve para; ofis etiketleri sabit; Görev Tahtası iş akışı
+  kartlarını yalnızca eşleşmişken gösterir; eşleşmemiş tarayıcıların E2E kanalı yok.
+- **Protokol.** Yeni mesajlarda izin listesi ve tip denetimi; kimlikler regex ile; bilinmeyen alan `bad_request`.
+- **Eşzamanlılık.** `on_end` ve devir zamanlayıcı kilidi dışında çağrılır; kilit sırası yalnızca iş akışı → zamanlayıcı;
+  `answer` onayı iş akışı kilidi dışında verir; adım/onay/akış bitişleri durum denetimiyle bir kez işlenir; iptal ile bitiş
+  yarışında `stop_state` kazanır. Kilitlenme yolu bulunmadı (kod incelemesi; stres testi yapılmadı).
+- **Web.** Değişen dosyalarda HTML enjeksiyon noktası yok; cihaz metinleri `textContent`/`option.textContent`; CSP aynı.
+
+### 12.4 Değişen dosyalar
+
+`pixel_connector/{workflows.py,app.py,workspaces.py,__init__.py}` (3.4.1; `web/connector/pixel-connector.pyz`,
+`SHA256SUMS`, README özeti), `web/js/workflows.js`, `web/sw.js` + `web/js/cloud.js` (`po-v4.0.1`), `docs/V3.md` (§20
+"v4-C / A10" kaldırma maddesi), `tests/test_phase26_security.py` (yeni), `tests/js/workflows.test.js`,
+`tests/test_phase20_connector.py` + `tests/test_e2e_protocol.py` (yalnızca sürüm numarası).
+
+### 12.5 Kullanıcı eylemleri
+
+1. Push; ardından bağlayıcıyı her bilgisayarda 3.4.1'e güncelleyin (SHA-256 `dd38eae4…`).
+2. İsteğe bağlı karar: S26-04 (şablon tavanı kesin üst sınır mı?) ve S26-08 (kaldırmada kuyruktaki görevleri iptal).

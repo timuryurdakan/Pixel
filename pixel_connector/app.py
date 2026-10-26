@@ -440,6 +440,8 @@ class Connector:
         try:
             if self._stop.is_set():
                 raise TaskError("not_allowed", "connector stopping")
+            if run.bid is not None and self.peers.active(run.bid) is None:
+                raise TaskError("not_allowed", "browser revoked")   # S26-02: a revoked browser starts nothing new
             b = self.agents.get(h["agent"])                  # AgentError unknown_agent (deleted meanwhile)
             info = handoff_prompt(h["note"], result, run.agent.get("name"), self.cfg["limits"]["maxPromptBytes"])
             title = "Devredilsin mi? %s → %s" % (str(run.agent.get("name"))[:24], str(b.get("name"))[:24])
@@ -919,6 +921,7 @@ class Connector:
             self.audit.write("peer.revoke", bid=bid, by=by or "local")
             if bid != by:
                 self.router.close_bid(bid)
+            self.workflows.peer_revoked(bid)
         return ok
 
     # -- loopback control API (CLI) --------------------------------------------------------------

@@ -160,6 +160,46 @@ def validate_sub(sub) -> Optional[str]:
     return "/".join(parts)
 
 
+# S26-03: on POSIX each component is created and opened relative to the previous one's descriptor with O_NOFOLLOW, so
+# a component swapped for a symlink after it was checked cannot redirect the next mkdir outside the workspace.
+_DIR_FD_OK = (hasattr(os, "O_NOFOLLOW") and hasattr(os, "O_DIRECTORY")
+              and os.mkdir in os.supports_dir_fd and os.open in os.supports_dir_fd)
+
+
+def _make_dirs_at(base: str, parts: List[str]) -> None:
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    fd = os.open(base, flags)
+    try:
+        for part in parts:
+            try:
+                os.mkdir(part, 0o700, dir_fd=fd)
+            except FileExistsError:
+                pass
+            try:
+                nxt = os.open(part, flags, dir_fd=fd)       # ELOOP for a symlink, ENOTDIR for anything else
+            except OSError:
+                raise WorkspaceDenied("sub path is not a plain directory") from None
+            os.close(fd)
+            fd = nxt
+    finally:
+        os.close(fd)
+
+
+def _make_dirs_by_path(base: str, parts: List[str]) -> None:
+    """Fallback without dir_fd (Windows): check every component after creating it. A local process racing between
+    the check and the next mkdir is not covered here; resolve() still refuses the result."""
+    cur = base
+    for part in parts:
+        cur = os.path.join(cur, part)
+        try:
+            os.mkdir(cur, 0o700)
+        except FileExistsError:
+            pass
+        st = os.lstat(cur)
+        if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
+            raise WorkspaceDenied("sub path is not a plain directory")
+
+
 class Workspaces:
     def __init__(self, entries: List[dict], home: Optional[str] = None) -> None:
         self.home = home
@@ -208,18 +248,15 @@ class Workspaces:
             return base
         if not self.get(wid).get("children"):
             raise WorkspaceDenied("sub folders not allowed here")
-        cur = base
-        for part in s.split("/"):
-            cur = os.path.join(cur, part)
-            try:
-                os.mkdir(cur, 0o700)
-            except FileExistsError:
-                pass
-            except OSError:
-                raise WorkspaceDenied("cannot create sub folder") from None
-            st = os.lstat(cur)
-            if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
-                raise WorkspaceDenied("sub path is not a plain directory")
+        try:
+            if _DIR_FD_OK:
+                _make_dirs_at(base, s.split("/"))
+            else:
+                _make_dirs_by_path(base, s.split("/"))
+        except WorkspaceDenied:
+            raise
+        except OSError:
+            raise WorkspaceDenied("cannot create sub folder") from None
         return self.resolve(wid, s)
 
     def children(self, wid) -> Optional[List[str]]:
