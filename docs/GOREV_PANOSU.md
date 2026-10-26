@@ -58,6 +58,15 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | A10 | v4-C: iş akışı motoru ve ilk şablon (A9 sonrası) | Claude (2026-10-26, kullanıcı: "geç ve bitir") | ✅ |
 | A11 | Aşama 20 / Paket 6: bulut temizliği (**şimdi**, C3'ten bağımsız; push yok, Claude birleştirir) | Antigravity | ✅ Teslim edildi |
 | A12 | Aşama 20 / Paket 8b: belgeler (D1–D4, F5–F6, E7) | Antigravity | ✅ Teslim edildi |
+| P1 | Patron Odası: plan şeması ve rol kütüphanesi (ayrıntı: [`docs/PATRON_ODASI.md`](PATRON_ODASI.md) §9; §10 kararlarından sonra) | Claude | ⬜ |
+| P2 | Patron Odası: Patron masası, istem → plan → onay (P1 sonrası) | Claude | ⬜ |
+| P3 | Patron Odası: iş emirlerinin yürütülmesi, değerlendirme, rapor (P2 sonrası) | Claude | ⬜ |
+| P4 | Patron Odası: pixel art, Patron ve odası (P3 sonrası) | Claude | ⬜ |
+| P5 | Patron Odası: ofis haritası ve sahne (P4 sonrası) | Claude | ⬜ |
+| P6 | Patron Odası: Patron paneli ve Görev Tahtası (P5 sonrası) | Claude | ⬜ |
+| P7 | Patron Odası: QA ve belgeler (P6 sonrası) | Claude | ⬜ |
+| P8 | Patron Odası: bağımsız güvenlik incelemesi (P7 sonrası) | Claude | ⬜ |
+| P9 | Patron Odası: gerçek deneme, kullanıcı onayıyla, düşük bütçe (P8 sonrası) | Claude | ⬜ |
 
 **A6–A10'un ayrıntıları, başlama koşulları ve push yöntemi:** [`docs/V4_ANTIGRAVITY.md`](V4_ANTIGRAVITY.md).
 
