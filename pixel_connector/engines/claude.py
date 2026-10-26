@@ -86,6 +86,14 @@ BUILTIN_DENY = BUILTIN_DENY + EXEC_SENSITIVE_DENY + SECRET_READ_DENY
 # it are not allowed and `dontAsk` denies them; reads outside cwd are denied by default as well.
 EDIT_ALLOW = ["Edit(./**)"]
 FORBIDDEN_ARGS = ("--dangerously-skip-permissions", "--allow-dangerously-skip-permissions", "bypassPermissions")
+# Patron Odası (P2, docs/PATRON_ODASI.md §10/3, T4): a Boss or role task may *replace* the device's
+# `profiles.dev.allow` with its role's own list (boss.role_allow_rules) and deny further tools (the Agent/Task sub-agent
+# tool). Only connector code sets them (tasks.TaskRun.policy → TaskContext); no message field reaches them. Defence in
+# depth here: an override is a list of `Bash(<command> *)` rules (no bare `Bash`, no `Bash(*)`, no shell operators or
+# paths) and only for the dev profile, never with `auto`; extra deny entries are plain tool names. BUILTIN_DENY and the
+# profile's own deny list always stay.
+OVERRIDE_RULE_RE = re.compile(r"^Bash\([A-Za-z0-9][A-Za-z0-9 ._-]{0,63} \*\)\Z")
+EXTRA_DENY_RE = re.compile(r"^[A-Z][A-Za-z]{0,31}\Z")
 RESUME_MISSING_RE = re.compile(r"no conversation found|session[^\n]{0,40}not found|not found[^\n]{0,40}session", re.I)
 AUTH_MAP = {"claude.ai": "subscription", "oauth_token": "subscription", "api_key": "api_key",
             "api_key_helper": "api_key", "none": "unknown"}
@@ -212,14 +220,41 @@ def setting_sources_arg(sources) -> str:
     return ",".join(s for s in SETTING_SOURCES if s in sources)
 
 
+def _override_rules(profile: str, rules: Optional[Iterable[str]]) -> Optional[List[str]]:
+    """A task's allow override (None = use the device's list). Raises ValueError outside the rules above."""
+    if rules is None:
+        return None
+    if profile == "auto":
+        raise ValueError("an allow override needs a fixed profile")
+    out = list(rules)
+    if out and profile != "dev":
+        raise ValueError("only the dev profile runs commands")
+    for r in out:
+        if not isinstance(r, str) or not OVERRIDE_RULE_RE.match(r):
+            raise ValueError("bad allow override")
+    return out
+
+
+def _extra_deny(rules: Iterable[str]) -> List[str]:
+    out = list(rules)
+    for r in out:
+        if not isinstance(r, str) or not EXTRA_DENY_RE.match(r):
+            raise ValueError("bad extra deny rule")
+    return out
+
+
 def build_argv(path: str, profile: str, profiles: dict, session_id: str, resume: bool, model: Optional[str],
                max_turns: int, max_budget_usd: Optional[float], version: Optional[Tuple[int, int, int]],
                bare: bool = False, system_prompt: Optional[str] = None,
-               setting_sources: Iterable[str] = DEFAULT_SETTING_SOURCES) -> List[str]:
-    """argv for one run. Raises ValueError for an unknown/disabled profile or bad setting sources."""
+               setting_sources: Iterable[str] = DEFAULT_SETTING_SOURCES,
+               allow_override: Optional[Iterable[str]] = None, extra_deny: Iterable[str] = ()) -> List[str]:
+    """argv for one run. Raises ValueError for an unknown/disabled profile, bad setting sources or a bad override.
+    `allow_override` (Patron Odası) replaces `profiles.dev.allow`; `extra_deny` is added to the deny list."""
     if profile not in ("readonly", "edit", "dev", "auto"):
         raise ValueError("unknown profile")
     sources = setting_sources_arg(setting_sources)
+    override = _override_rules(profile, allow_override)
+    more_deny = _extra_deny(extra_deny)
     argv = [path, "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages"]
     if profile == "auto":
         if not profiles.get("auto", {}).get("enabled"):
@@ -233,10 +268,10 @@ def build_argv(path: str, profile: str, profiles: dict, session_id: str, resume:
     if profile in ("edit", "dev"):
         allow += EDIT_ALLOW
     if profile == "dev":
-        allow += list(profiles.get("dev", {}).get("allow") or [])
+        allow += override if override is not None else list(profiles.get("dev", {}).get("allow") or [])
     if allow:
         argv += ["--allowedTools"] + allow
-    deny = BUILTIN_DENY + list(profiles.get(profile, {}).get("deny") or [])
+    deny = BUILTIN_DENY + list(profiles.get(profile, {}).get("deny") or []) + more_deny
     argv += ["--disallowedTools"] + deny
     argv += ["--setting-sources", sources]
     argv += ["--resume" if resume else "--session-id", session_id]
@@ -574,10 +609,14 @@ class ClaudeRun(Running):
                       error={"code": "engine_unavailable", "message": CLAUDE_MISSING_TR})
             return None
         model = self.ctx.model or cfg.get("defaultModel")
+        max_turns = cfg.get("maxTurns", 50)
+        if self.ctx.max_turns is not None:                  # a Boss/role task's own turn cap (never above the device's)
+            max_turns = min(max_turns, self.ctx.max_turns)
         argv = build_argv(cfg["path"], self.ctx.profile, eng.profiles, agent["claudeSession"], resume, model,
-                          cfg.get("maxTurns", 50), self.ctx.max_budget_usd, version, bool(cfg.get("bare")),
+                          max_turns, self.ctx.max_budget_usd, version, bool(cfg.get("bare")),
                           system_prompt=boundary_prompt(self.ctx.profile, self.ctx.workspace_name, self.ctx.cwd),
-                          setting_sources=cfg.get("settingSources") or DEFAULT_SETTING_SOURCES)
+                          setting_sources=cfg.get("settingSources") or DEFAULT_SETTING_SOURCES,
+                          allow_override=self.ctx.allow_override, extra_deny=self.ctx.extra_deny)
         self.argv_used.append(argv)
         kwargs = {}
         if sys.platform == "win32":

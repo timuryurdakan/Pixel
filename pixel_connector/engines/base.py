@@ -14,7 +14,7 @@ import json
 import os
 import threading
 import time
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 
 class TaskContext:
@@ -24,7 +24,8 @@ class TaskContext:
     def __init__(self, task: str, agent: dict, prompt: str, cwd: Optional[str], model: Optional[str],
                  profile: str = "edit", fresh: bool = False, max_budget_usd: Optional[float] = None,
                  save_agent: Optional[Callable[[dict], None]] = None, history_path: Optional[str] = None,
-                 workspace_name: Optional[str] = None) -> None:
+                 workspace_name: Optional[str] = None, allow_override: Optional[List[str]] = None,
+                 extra_deny: Tuple[str, ...] = (), max_turns: Optional[int] = None) -> None:
         self.task = task
         self.agent = agent
         self.prompt = prompt
@@ -36,6 +37,11 @@ class TaskContext:
         self.save_agent = save_agent or (lambda a: None)
         self.history_path = history_path
         self.workspace_name = workspace_name      # display name of the workspace (Claude's boundary prompt, H39)
+        # Patron Odası (P2): set only by the connector for a Boss or role task (tasks.TaskRun.policy), never from a
+        # message. `allow_override` replaces the device's dev allow list, `extra_deny` adds denied tools.
+        self.allow_override = allow_override
+        self.extra_deny = tuple(extra_deny)
+        self.max_turns = max_turns
 
 
 class Running:
