@@ -395,6 +395,20 @@ class WorkflowFlowTests(FlowBase):
         self.assertEqual((run["code"], self.step(run, "onay")["code"]), ("approval_timeout", "approval_timeout"))
         self.assertEqual([p for p in self.conn.approvals.list() if p["kind"] == "workflow"], [])
 
+    def test_answer_may_name_the_checkpoint_step(self):
+        # Patron Odası P3 added an optional `step` to workflow.answer; for a template it can only name the checkpoint
+        rid = self.started()
+        self.wait_run(rid, lambda r: r["state"] == "approval")
+        for step, code in (("yaz", "unknown_approval"), ("plan", "unknown_approval"), (7, "bad_request"),
+                           ("x" * 33, "bad_request")):
+            r = self.req({"type": "workflow.answer", "run": rid, "decision": "approve", "step": step})
+            self.assertEqual(r["code"], code, step)
+        self.assertEqual(self.wait_run(rid, lambda r: True)["state"], "approval")
+        ok = self.req({"type": "workflow.answer", "run": rid, "decision": "approve", "step": "onay"})
+        self.assertEqual(ok["type"], "workflow.ok")
+        run = self.wait_run(rid, lambda r: r["state"] == "done")
+        self.assertEqual(self.step(run, "onay")["state"], "done")
+
     def test_step_error_stops_the_run(self):
         rid = self.started(steps={"plan": {"model": "yok:1b"}})     # the fake Ollama answers 404 → error
         run = self.wait_run(rid, lambda r: r["state"] == "error")

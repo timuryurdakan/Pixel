@@ -60,8 +60,8 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | A12 | Aşama 20 / Paket 8b: belgeler (D1–D4, F5–F6, E7) | Antigravity | ✅ Teslim edildi |
 | P1 | Patron Odası: plan şeması ve rol kütüphanesi (ayrıntı: [`docs/PATRON_ODASI.md`](PATRON_ODASI.md) §9; §10 kararlarından sonra) | Claude | ✅ |
 | P2 | Patron Odası: Patron masası, istem → plan → onay (P1 sonrası) | Claude | ✅ |
-| P3 | Patron Odası: iş emirlerinin yürütülmesi, değerlendirme, rapor (P2 sonrası) | Claude | 🔄 |
-| P4 | Patron Odası: pixel art, Patron ve odası (P3 sonrası) | Claude | ⬜ |
+| P3 | Patron Odası: iş emirlerinin yürütülmesi, değerlendirme, rapor (P2 sonrası) | Claude | ✅ |
+| P4 | Patron Odası: pixel art, Patron ve odası (P3 sonrası) | Claude | 🔄 |
 | P5 | Patron Odası: ofis haritası ve sahne (P4 sonrası) | Claude | ⬜ |
 | P6 | Patron Odası: Patron paneli ve Görev Tahtası (P5 sonrası) | Claude | ⬜ |
 | P7 | Patron Odası: QA ve belgeler (P6 sonrası) | Claude | ⬜ |
@@ -294,3 +294,14 @@ görüntüleri, bilinen sorunlar.
   (`9e6c42d1…`), `README.md` (SHA satırı), sürüm testleri (yalnızca numara), `docs/PATRON_ODASI.md` §11, `docs/V3.md`
   §20, `PROJECT.md` §6 (A10 kaydı çıkarıldı; günlükte var), günlük. Web dosyası değişmedi. Kararlar ve P3 arayüzü §11'de.
   `python3 -m unittest discover -s tests`: 926 test, OK (1 atlandı: `pwsh`); `build_connector.py --check` güncel.
+- **2026-10-26, Claude (Patron Odası P3: yürütme, değerlendirme, rapor, Bağlayıcı/İş Akışı Mühendisi):** Teslim
+  edildi, commit/push yok (koordinatör denetleyip commit'leyecek). Yeni: `tests/test_boss_run.py` (19 test, `git add -N`).
+  Değişen: `pixel_connector/workflows.py` (ekleme: `launch_plan`, `PlanRun`/`PlanStep`, `inputs_prompt`; `answer`
+  isteğe bağlı `step`; Patron işi varken `workflow.start` `busy`), `boss.py` (P3 bölümü), `app.py` (rol ajanları komut
+  almaz, açılışta ofise raporlanmaz, `workflow.answer.step`), `audit.py` (olay adları), `pixel_connector/__init__.py`
+  (3.8.0), `web/connector/*` (`cdf5bb6d…`), `README.md` (SHA satırı), sürüm testleri (yalnızca numara),
+  `tests/test_v4_workflows.py` (+1 test), `tests/test_boss_desk.py` (iki test `approved`'da bekleme yerine onay sonrası
+  yürütmeyi doğruluyor), `docs/PATRON_ODASI.md` §11, `docs/V3.md` §20, `PROJECT.md` §6 (S26 kaydı çıkarıldı; günlükte
+  var), günlük. Güvenlik çekirdeğine ve `engines/claude.py`'ye dokunulmadı; web dosyası değişmedi. Kararlar (uzman
+  hatası → iş durur, değerlendirme + rapor tek Patron görevi, paralel adımlar tavanı böler) §11'de.
+  `python3 -m unittest discover -s tests`: 946 test, OK (1 atlandı: `pwsh`); `build_connector.py --check` güncel.

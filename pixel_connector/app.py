@@ -25,7 +25,7 @@ from .agents import LABELS, AgentError, AgentStore, OfficeReporter
 from .approvals import (TOOL_ID_RE, Approvals, ControlServer, ToolApproval, ToolLimit, summary_hash,
                         validate_tool_request)
 from .audit import AuditLog
-from .boss import APPROVE_FIELDS, JOB_FIELDS, BossDesk, TaskPolicy, parse_job_msg
+from .boss import APPROVE_FIELDS, JOB_FIELDS, SPECIALIST_FIELD, BossDesk, TaskPolicy, parse_job_msg
 from .config import (AUDIT_FILE, LEDGER_FILE, Config, claude_path_label, claude_path_refreshed, ensure_dir, find_claude,
                      remote_approvals_state)
 from .engines.base import TaskContext, clear_history
@@ -163,7 +163,8 @@ class Connector:
         # Logged once the control port is bound (v2.md H27): a start that dies on a busy port is not a service start.
         self.audit.write("service.start", version=__version__, build=__build__)
         for a in self.agents.list():
-            self.office(a, "idle", None, None, None)
+            if not a.get(SPECIALIST_FIELD):        # Patron Odası role agents are in the office only during a run
+                self.office(a, "idle", None, None, None)
         self.relay.start()
 
     def stop(self) -> None:
@@ -614,9 +615,11 @@ class Connector:
 
     @staticmethod
     def _not_boss(a: dict) -> dict:
-        """A Patron agent's profile, model and session are the Boss desk's: no agent.update or task.start on it."""
-        if a.get("boss"):
-            raise Reply("not_allowed", "the Patron agent is managed by the Boss desk")
+        """A Patron agent's profile, model and session are the Boss desk's: no agent.update or task.start on it. The
+        same for the role agents (P3): their stored profile (e.g. the Test role's `dev`) is only ever used with the
+        role's task policy, never with the device's dev command list of a direct task."""
+        if a.get("boss") or a.get(SPECIALIST_FIELD):
+            raise Reply("not_allowed", "the agent is managed by the Boss desk")
         return a
 
     def h_agent_create(self, peer, msg) -> Optional[dict]:
@@ -833,7 +836,10 @@ class Connector:
         decision = msg.get("decision")
         if decision not in ("approve", "deny"):
             raise Reply("bad_request", "decision")
-        return self.workflows.answer(msg.get("run"), decision == "approve", by=peer.bid)
+        step = msg.get("step")                  # optional: which of two waiting plan steps (Patron Odası Test orders)
+        if step is not None and (not isinstance(step, str) or not 1 <= len(step) <= 32):
+            raise Reply("bad_request", "step")
+        return self.workflows.answer(msg.get("run"), decision == "approve", by=peer.bid, step=step)
 
     # -- handlers: Patron Odası (P2) ---------------------------------------------------------------
     def h_boss_ask(self, peer, msg) -> Optional[dict]:

@@ -378,19 +378,22 @@ class DeskFlowTests(DeskBase):
         self.assertIn(B.plan_markers(N1)[0], call["stdin"])
         self.assertEqual(os.path.realpath(call["cwd"]),
                          os.path.realpath(os.path.join(self.env.tmp, "dev", "projects", "pixel")))
-        # approve from the browser
+        # approve from the browser: approved, then (P3) the plan runs at once; the Test order o2 waits for its own
+        # approval, so the job stays running
         ok = self.req({"type": "boss.approve", "job": jid, "approve": True})
         self.assertEqual((ok["type"], ok["job"]), ("boss.ok", jid))
-        job = self.at(jid, "approved")
+        job = self.wait_job(jid, lambda j: j["state"] == "running" and [o["state"] for o in j["orderStates"]]
+                            == ["done", "approval"], what="running, Test order waiting")
         self.assertEqual(self.boss_approvals(), [])
         self.assertEqual(self.req({"type": "boss.approve", "job": jid, "approve": True})["code"], "unknown_approval")
         got = self.req({"type": "boss.get"})
-        self.assertEqual((got["job"]["job"], got["job"]["state"], got["plan"]["job"]), (jid, "approved", jid))
-        # an approved plan waits for P3 and holds the desk; cancel frees it
+        self.assertEqual((got["job"]["job"], got["job"]["state"], got["plan"]["job"]), (jid, "running", jid))
+        # a running job holds the desk; cancel frees it once its run has ended
         self.assertEqual(self.ask()["code"], "busy")
         self.assertEqual(self.req({"type": "boss.cancel", "job": jid})["type"], "boss.ok")
         self.assertEqual(self.at(jid, "cancelled")["code"], "cancelled")
         self.assertEqual(self.req({"type": "boss.cancel", "job": jid})["code"], "unknown_job")
+        self.wait_job(jid, lambda j: not any(r.active for r in self.conn.workflows.runs.values()), what="run ended")
         # the next job resumes the same Patron session (memory)
         self.script(self.fixture(reply(N1), cost=0.06))
         jid2 = self.asked()
@@ -402,13 +405,16 @@ class DeskFlowTests(DeskBase):
         self.at(jid2, "cancelled")
         # boss.state: ids, states, numbers only, in order
         seen = self.states(jid=jid)
-        self.assertEqual(sorted(m["state"] for m in seen), ["approval", "approved", "cancelled", "planning"])
+        phases = [m["state"] for m in seen]
+        self.assertEqual(sorted(set(phases)), ["approval", "approved", "cancelled", "planning", "running"])
+        for once in ("approval", "approved", "planning"):
+            self.assertEqual(phases.count(once), 1, phases)     # running/cancelled repeat as the run's orders change
         blob = json.dumps(self.states() + seen, ensure_ascii=False)
         for canary in (BRIEF_CANARY, PLAN_CANARY, "Koyu tema"):
             self.assertNotIn(canary, blob)
         # audit: ids, states, lengths, money; no brief, no plan text
         evs = [r["ev"] for r in self.audit()]
-        self.assertEqual(evs[:5], ["boss.ask", "boss.planned", "boss.plan", "boss.approve", "boss.cancel"])
+        self.assertEqual(evs[:6], ["boss.ask", "boss.planned", "boss.plan", "boss.approve", "boss.run", "boss.cancel"])
         ask = self.audit("boss.ask")[0]
         self.assertEqual((ask["briefLen"], ask["maxCostUsd"], ask["planCapUsd"]),
                          (len(("İstek " + BRIEF_CANARY).encode()), 1.0, 0.2))
@@ -466,8 +472,9 @@ class DeskFlowTests(DeskBase):
         (pend,) = self.boss_approvals()
         self.assertIn("Tahmini 0.90 $, tavan 1.00 $", pend["preview"])
         self.assertTrue(self.conn.approvals.resolve(pend["id"], True, by="cli"))
-        self.at(jid, "approved")
+        self.at(jid, "running")                                        # approved, then P3 runs the plan
         self.assertEqual(self.audit("boss.approve")[0]["by"], "cli")
+        self.assertIn("approved", [m["state"] for m in self.states(jid=jid)])
 
     def test_one_retry_then_a_valid_plan(self):
         self.nonces = [N1, N2]

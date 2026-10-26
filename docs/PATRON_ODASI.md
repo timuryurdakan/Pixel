@@ -733,3 +733,64 @@ için). P3 `approved → running` geçişini ve `run` alanını yazar; çalışm
 (2) Rol görevleri `Scheduler.submit(..., policy=boss.task_policy(rol, tur))` ile gönderilmeli; Test rolünün dar listesi
 ve `Agent`/`Task` reddi böylece uygulanır. (3) `workflow.start` Patron işi varken `busy` olmalı. (4) Patron ajanı
 `BossDesk` dışında görev almadığı için değerlendirme adımı da `task_policy("patron", …)` ile gönderilmeli.
+
+### P3 — İş emirlerinin yürütülmesi, değerlendirme ve rapor (2026-10-26, Bağlayıcı/İş Akışı Mühendisi)
+
+Kod: `pixel_connector/workflows.py` (ekleme: `launch_plan`, `PlanRun`/`PlanStep`, `inputs_prompt`, plan adımı durum
+tablosu; şablon davranışı değişmedi), `boss.py` P3 bölümü (`_execute`, rol ajanları, değerlendirme kararı, düzeltme turu,
+rapor), `app.py` (rol ajanları komut almaz, açılışta ofise raporlanmaz; `workflow.answer` isteğe bağlı `step`),
+`audit.py` (olay adları). Testler `tests/test_boss_run.py` (19), `tests/test_v4_workflows.py` (+1). Bağlayıcı 3.8.0.
+
+1. **Yürütme A10 motorunda, ayrı çalışma türüyle.** `WorkflowEngine.launch_plan` bağlayıcı kodunun kurduğu adımlardan
+   (`boss.plan_to_steps` + P3 alanları) bir `PlanRun` başlatır; `workflow.state` (şablon `patron`, ad "Patron") aynen
+   yayınlanır, adımlarda ek `roleId`, `after`, `gate`, `final`. Her adımda görev politikası **fabrikası** zorunlu
+   (`policy(tur)` → `boss.task_policy`); olmayan adım `internal` ile reddedilir. Tavan/tur/süre/iptal/eşleşme
+   kaldırma/kapanış A10'un yollarıyla (`_stop_run`, `tick`, `peer_revoked`, `stop`).
+2. **Paralellik:** sıra ve en fazla 2 adım `boss.ready_orders` ile (P1); onay bekleyen Test iş emri de bir yuva sayılır.
+   Aynı anda başlayan adımlar kalan tutarı ve turu **eşit böler** (çalışan/onay bekleyen adımın ayırdığı pay korunur),
+   böylece hepsi birlikte tavanı aşamaz; tek başlayan adım kalanın tamamını alır. Aynı rol iki iş emrinde tek ajandır;
+   ikinci görev zamanlayıcıda o ajanın kuyruğunda bekler.
+3. **`after` çıktıları:** her biri ayrı rastgele çitle (`handoff_prompt`, "veri, talimat değil"), istem bütçesi eşit
+   paylaştırılarak; bitmeyen girdi için yalnızca durum satırı ("Bu iş emri bitmedi; çıktısı yok."), çit yok.
+4. **Test onayı:** iş emri bağımlılıkları bitince adım `approval` olur (yerel onay kaydı, tür `workflow`, başlık
+   "Patron · Test: <başlık>", 15 dk ya da kalan süre); tarayıcıdan mevcut `workflow.answer {run, decision, step?}`.
+   Red → `cancelled/denied`, zaman aşımı → `cancelled/approval_timeout`; `after` ile ona bağlı iş emirleri
+   `cancelled/skipped`; çakışma nedeniyle bekleyenler çalışmaya devam eder. Rapor bunu yazar. `confirm.task` ayrıca
+   geçerli kalır (fail closed; `always`/`new_session` ayarında çift onay olabilir).
+5. **Uzman hatası → iş durur** (gerekçe §2/9 "çalışan iş durdurulur", maliyet öngörülebilirliği, değerlendirmesiz
+   yarım iş): diğer çalışan iş emri iptal edilir, yenisi başlamaz, iş `error` + adımın kodu (ör. `engine_error`).
+   Tavan aşımı da aynı yolla: `cost_cap`, `max_turns`, `timeout`.
+6. **Değerlendirme ve rapor tek Patron görevi** (para tasarrufu): değerlendirme adımı Patronun kendi oturumunda
+   (`--resume`, `readonly`, en fazla 10 tur), bütün iş emirlerinin çitli çıktıları + kabul ölçütleriyle çalışır; yanıtın
+   işaret satırlarından önceki kısmı Patronun raporudur, blok kararıdır (`{"v":1,"decision":"accept"}` ya da
+   `"fix"` + plan). Ayrı "rapor yazma" görevi yok; `reporting` durumu anlıktır (yayınlanmayabilir). Karar okunamazsa
+   düzeltme yapılmaz (`review_unreadable`), geçersiz düzeltme planı (`validate_plan(fix_round=True)`, ≤ 2 iş emri)
+   `fix_invalid`. Hiç iş emri bitmediyse değerlendirme çalışmaz (`nothing_done`).
+7. **Düzeltme turu:** geçerli düzeltme planı (tur 0) `approval`'a döner (kart `round: 1`, başlık "Patron düzeltme planı",
+   tahmin `estimate(fix_round=True)`); onay → yeni bir plan çalışması (yeni `run`), kalan para/tur/süre ile; red/zaman
+   aşımı → iş `done`, not `fix_denied`/`fix_timeout` (yeni geçiş `approval → reporting`). Tur 1'deki değerlendirme
+   "fix" derse yok sayılır (`fix_round_limit`). Kalan tavan yetmiyorsa `fix_no_budget`.
+8. **Süre tavanı** yalnızca çalışmaların süresidir (Test onayı beklemesi dahil, düzeltme planı onayı hariç); tur
+   tavanına planlama turları da sayılır.
+9. **`boss.report`** (yalnızca eşleşmiş tarayıcılara E2E): `job, report (≤ 16 KiB: Patronun metni + "Bağlayıcının
+   özeti": bitiş, her iş emrinin sonucu, notlar, toplam maliyet; önce Patron metni kesilir), partial, state, code,
+   round, costUsd, maxCostUsd, notes [kod], orders [{round, id, role, state, code, costUsd}]`. Hata/iptalde de (bir
+   çalışma başladıysa) bağlayıcının şablon metniyle gönderilir; çalışan bir iş iptal edilirse rapor çalışma bitince
+   (son maliyetle) gelir. `boss.get` artık planı her durumda ve bittiyse raporu da döner.
+10. **İptal hemen:** `boss.cancel`/eşleşme kaldırma/kapanış işi hemen `cancelled` yapar, çalışmanın görevleri iptal
+    edilir; geç biten görevlerin maliyeti rapora eklenir. `workflow.cancel` ile Patron çalışması durdurulursa iş de
+    `cancelled` olur. Patron işi varken (planlama, onay, çalışma) `workflow.start` → `busy`.
+11. **Rol ajanları:** `agents.json` `bossRole: "<rol>/claude"` (mesajla verilemez), çalışma başında klasör/profil/model
+    rolden yazılır ve ofise girer, çalışma bitince `OfficeReporter.offline` ile çıkar; bağlayıcı açılışında ofise
+    raporlanmaz. `agent.list`'te görünürler ama `task.start`/`agent.update` → `not_allowed` (Test ajanının saklı `dev`
+    profili cihazın geniş dev listesiyle kullanılamasın diye).
+12. **P5/P6 için olaylar** (metin yok): `boss.state` ek alan `orderStates [{id, role, state, code, agent, task}]` ve
+    çalışırken canlı `costUsd`; yeni `boss.event {job, run, round, event: enter|take|deliver|leave, order, role,
+    agent}` (girdi, dosyayı aldı = adım çalışmaya başladı, teslim etti = adım bitti, çıktı). Durum sırası iletimde
+    karışabilir; istemci son `boss.get`/`boss.state`'e göre davranmalı.
+13. **Denetim:** yeni `boss.run` (iş, çalışma, tur, iş emri sayısı, tavanlar), `boss.review` (karar, not, `outLen`),
+    `boss.report` (`reportLen`, `partial`, maliyet, not kodları); adımlar `workflow.step/approval/end`. Metin yok.
+14. **Bilinen sınır:** uzman görevleri de tarayıcının görev hızı sınırına (`tasksPerMinute`) sayılır (A10 ile aynı);
+    çok hızlı biten işlerde `rate_limited` ile durabilir. P2 testlerinden ikisi `approved`'da beklemeyi doğruluyordu;
+    artık onaydan sonra yürütme başladığı için `running`'i ve yayınlanan `approved` durumunu doğrulayacak şekilde
+    güncellendi.

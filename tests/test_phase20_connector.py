@@ -192,9 +192,9 @@ class ConnectorCase(unittest.TestCase):
 
 class VersionAndBuild(unittest.TestCase):
     def test_version_and_dev_build_from_source(self):
-        self.assertEqual(pixel_connector.__version__, "3.7.0")
+        self.assertEqual(pixel_connector.__version__, "3.8.0")
         self.assertEqual(pixel_connector.__build__, "dev")
-        self.assertEqual(pixel_connector.version_string(), "3.7.0 (build dev)")
+        self.assertEqual(pixel_connector.version_string(), "3.8.0 (build dev)")
         self.assertFalse((ROOT / "pixel_connector" / "_build.py").exists(), "_build.py is generated, never committed")
 
     def test_cli_version_flag(self):
@@ -202,7 +202,7 @@ class VersionAndBuild(unittest.TestCase):
         with redirect_stdout(out), self.assertRaises(SystemExit) as cm:
             CLI.main(["--version"])
         self.assertEqual(cm.exception.code, 0)
-        self.assertEqual(out.getvalue().strip(), "pixel-connector 3.7.0 (build dev)")
+        self.assertEqual(out.getvalue().strip(), "pixel-connector 3.8.0 (build dev)")
 
     def test_build_id_is_deterministic_and_tracks_content(self):
         files = build_connector.sources()
@@ -222,7 +222,7 @@ class VersionAndBuild(unittest.TestCase):
         self.assertIn('BUILD = "%s"' % bid, mod)
         r = subprocess.run([sys.executable, str(PYZ), "--version"], capture_output=True, text=True, timeout=60)
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(r.stdout.strip(), "pixel-connector 3.7.0 (build %s)" % bid)
+        self.assertEqual(r.stdout.strip(), "pixel-connector 3.8.0 (build %s)" % bid)
         code = ("import sys; sys.path.insert(0, sys.argv[1]); import pixel_connector.app as a; "
                 "print(a.running_pyz_sha256())")
         r = subprocess.run([sys.executable, "-I", "-c", code, str(PYZ)], capture_output=True, text=True, timeout=60)
@@ -286,13 +286,13 @@ class VersionOnTheWire(ConnectorCase):
     def test_device_info_and_ctl_status(self):
         conn = self.make()
         info = conn.device_info()
-        self.assertEqual((info["connector"], info["build"], info["pyz"]), ("3.7.0", "dev", None))
+        self.assertEqual((info["connector"], info["build"], info["pyz"]), ("3.8.0", "dev", None))
         st, d = conn.ctl_routes()[("GET", "/ctl/status")]({}, {})
         self.assertEqual(st, 200)
         self.assertEqual((d["version"], d["build"], d["relayError"], d["relayErrorAt"]),
-                         ("3.7.0", "dev", "ticket:401", 1700000000500))
+                         ("3.8.0", "dev", "ticket:401", 1700000000500))
         line = CLI.running_status_line(self.home)                        # through the real control server
-        self.assertIn("3.7.0 (build dev)", line)
+        self.assertIn("3.8.0 (build dev)", line)
         self.assertIn("Son röle hatası: ticket:401", line)
 
 
