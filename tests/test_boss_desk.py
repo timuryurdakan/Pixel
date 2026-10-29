@@ -645,7 +645,13 @@ class DeskFlowTests(DeskBase):
         self.assertEqual(self.at(jid, "cancelled")["code"], "revoked")
         self.assertEqual(self.audit("boss.cancel")[0]["code"], "revoked")
         self.wait_job(jid, lambda j: not self.conn.scheduler.runs, what="planning task cancelled")
-        task_end = [r for r in self.conn.audit.read() if r["ev"] == "task.end"]
+        # The run leaves scheduler.runs before its task.end is audited (tasks.py → app.py): wait for the record.
+        task_end = []
+        deadline = time.time() + 10
+        while time.time() < deadline and not task_end:
+            task_end = [r for r in self.conn.audit.read() if r["ev"] == "task.end"]
+            time.sleep(0.02)
+        self.assertTrue(task_end, "no task.end audited")
         self.assertEqual(task_end[-1]["status"], "cancelled")
         phone.close()
         # a plan waiting for approval
