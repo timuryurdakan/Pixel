@@ -2,7 +2,7 @@
 
     pixel-connector setup --server https://… --room <rid> --key <writeKey> --name Timur [--no-default-workspace]
     pixel-connector run
-    pixel-connector pair
+    pixel-connector pair [--no-qr] [--qr-key]
     pixel-connector peers [list|revoke <bid>|revoke-all]
     pixel-connector agents [list|delete <key>]
     pixel-connector runtimes [list|start <id>|stop <id>]
@@ -288,10 +288,55 @@ def ask_yes_no(prompt: str, timeout: float = 60.0) -> bool:
     return line.strip().lower() in ("e", "evet", "y", "yes")
 
 
-def _print_code(info: dict) -> None:
+def pair_link(cfg: dict, code: str, with_key: bool = False) -> str:
+    """G4: the page link a phone opens from the QR. Room id in the query (the room page needs it; it is not a secret),
+    the pairing code in the fragment, which browsers never send to a server; the page strips it at once. The room
+    write key (long-lived) only with `--qr-key`: by default the phone must already have joined the room. Raises
+    ValueError for a malformed code."""
+    from .crypto import normalize_code
+    frag = "pair=" + normalize_code(code)
+    if with_key:
+        frag = "key=%s&%s" % (cfg["key"], frag)
+    return "%s/?room=%s#%s" % (cfg["server"], cfg["room"], frag)
+
+
+def _pair_qr(args, info: dict) -> Optional[str]:
+    """The terminal QR of pair_link, or None (`--no-qr`, no valid connector.json, a terminal that cannot print the
+    half blocks). Never fails the pairing: the code above it is enough."""
+    if getattr(args, "no_qr", False):
+        return None
+    from . import qr
+    try:
+        cfg = CFG.load_config(_home(args))
+        if not cfg.ok:
+            return None
+        link = pair_link(cfg.data, info.get("code") or "", bool(getattr(args, "qr_key", False)))
+        text = qr.render_half_blocks(qr.encode(link.encode("ascii")), ansi=_isatty())
+        enc = getattr(sys.stdout, "encoding", None)
+        if enc:
+            text.encode(enc)                    # e.g. a cp1252 console cannot print the half blocks
+    except (ValueError, KeyError, OSError, UnicodeError):
+        return None
+    return text
+
+
+def _isatty() -> bool:
+    try:
+        return sys.stdout.isatty()
+    except (AttributeError, ValueError):
+        return False
+
+
+def _print_code(info: dict, args=None) -> None:
     OUT("")
     OUT("Eşleştirme kodu:  %s   (10 dk geçerli, tek deneme)" % info["code"])
     OUT("Tarayıcıda: Cihazlar → Cihaz ekle → bu kodu girin.")
+    text = _pair_qr(args, info) if args is not None else None
+    if text is not None:
+        OUT("Ya da telefonun kamerasıyla okutun (kod kutuya kendiliğinden yazılır; onay yine burada):")
+        if getattr(args, "qr_key", False):
+            OUT("Dikkat: bu QR oda anahtarını da içerir. Ekran paylaşırken ya da kayıttayken göstermeyin.")
+        OUT(text)
     OUT("Bekleniyor…")
 
 
@@ -333,7 +378,7 @@ def cmd_pair(args, ask: Callable[[str], bool] = ask_yes_no) -> int:
             break
         except OSError:
             if attempt == PAIR_CTL_ATTEMPTS - 1:
-                return _pair_inprocess(home, ask)
+                return _pair_inprocess(home, ask, args=args)
             time.sleep(PAIR_CTL_SLEEP_S)
     if st == 503:
         return _err("bağlayıcı röleye bağlı değil. Ağ bağlantısını ve `pixel-connector doctor` çıktısını kontrol edin.")
@@ -341,7 +386,7 @@ def cmd_pair(args, ask: Callable[[str], bool] = ask_yes_no) -> int:
         return _err("denetim jetonu geçersiz (control.json eski). Servisi yeniden başlatın: " + _restart_cmd())
     if st != 200 or not isinstance(info, dict):
         return _err("eşleştirme başlatılamadı (%s)." % st)
-    _print_code(info)
+    _print_code(info, args)
     while True:
         try:
             st, info = ctl_request(home, "GET", "/ctl/pair/status?wait=25&until=confirm,done,failed,expired",
@@ -373,7 +418,8 @@ def _restart_cmd(platform: Optional[str] = None) -> str:
     return "pixel-connector run (yeniden başlatın)"
 
 
-def _pair_inprocess(home: str, ask: Callable[[str], bool], service_status: Optional[Callable[[], str]] = None) -> int:
+def _pair_inprocess(home: str, ask: Callable[[str], bool], service_status: Optional[Callable[[], str]] = None,
+                    args=None) -> int:
     """No service answering: a temporary in-process session that only pairs. Refused while the service is running or
     (re)starting (Linux/macOS), because taking the run lock then keeps the service from starting (v2.md H4)."""
     if sys.platform != "win32":                     # Windows: status() only says whether the task exists
@@ -399,7 +445,7 @@ def _pair_inprocess(home: str, ask: Callable[[str], bool], service_status: Optio
         if not conn.relay.connected.wait(20):
             return _err("röleye bağlanılamadı (%s)." % (conn.relay.last_error or conn.relay.status))
         p = conn.router.start_pairing()
-        _print_code(p.info())
+        _print_code(p.info(), args)
         state = p.wait({"confirm", "done", "failed", "expired"}, p.expires - time.time() + 5)
         if state == "confirm":
             p.confirm(ask(_confirm_text(p.info())))
@@ -996,7 +1042,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--no-default-workspace", action="store_true",
                    help="~/PixelOfficeIsler varsayılan çalışma klasörünü oluşturma")
     sub.add_parser("run")
-    sub.add_parser("pair")
+    s = sub.add_parser("pair")
+    s.add_argument("--no-qr", action="store_true", help="QR kodu basma")
+    s.add_argument("--qr-key", action="store_true",
+                   help="QR'a oda anahtarını da koy (telefon odaya hiç katılmadıysa); ekran paylaşırken kullanmayın")
     s = sub.add_parser("peers")
     s.add_argument("action", nargs="?", default="list", choices=["list", "revoke", "revoke-all"])
     s.add_argument("target", nargs="?")

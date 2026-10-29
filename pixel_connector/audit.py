@@ -22,7 +22,7 @@ EVENTS = {"pair.ok", "pair.fail", "peer.revoke", "hs.ok", "hs.fail", "tamper", "
           "approval.request", "approval.approve", "approval.deny", "approval.expire", "approval.withdraw", "task.handoff",
           "workflow.start", "workflow.step", "workflow.approval", "workflow.cancel", "workflow.timeout", "workflow.end",
           "boss.ask", "boss.planned", "boss.retry", "boss.plan", "boss.approve", "boss.deny", "boss.expire",
-          "boss.cancel", "boss.end", "boss.reset", "boss.run", "boss.review", "boss.report"}
+          "boss.cancel", "boss.end", "boss.reset", "boss.run", "boss.review", "boss.report", "boss.retry_step"}
 
 
 def iso_now(t: Optional[float] = None) -> str:

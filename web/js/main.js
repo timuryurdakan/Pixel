@@ -575,10 +575,12 @@ function bootCloud(config) {
     cloud.showLanding({ config, error: 'Bağlantıdaki oda kimliği geçersiz.' });
     return;
   }
+  // G4: `pixel-connector pair` QR → #pair=<code>; read before takeKeyFromHash strips the whole fragment.
+  const pairParam = new URLSearchParams((location.hash || '').slice(1)).get('pair');
   const key = cloud.takeKeyFromHash(roomParam);   // also strips #key= from the address bar
   cloud.rememberRoom(roomParam, {});
   if (params.get('new') === '1') markGuideSeen();      // the room creator has already been through the landing
-  else if (!viewMini && !guideSeen()) { location.replace(`/rehber.html?room=${roomParam}&ilk=1`); return; }
+  else if (!viewMini && !guideSeen() && !pairParam) { location.replace(`/rehber.html?room=${roomParam}&ilk=1`); return; }
   ui.setMode('cloud');
   // Fast first appearance (CLOUD.md §17.10): poll every 5 s while the "Ajan bağla" dialog is open and for
   // 3 min after it closes, and for the first 3 min after opening a room while it is still empty.
@@ -601,7 +603,7 @@ function bootCloud(config) {
   setupMiniButton();
   cloud.enableInstallButton();
   if (!viewMini) cloud.registerServiceWorker();
-  if (key && config && config.relay && !viewMini) setupV3(roomParam, key).catch((e) => console.warn('[pixel-office] v3 controls unavailable', e));
+  if (key && config && config.relay && !viewMini) setupV3(roomParam, key, pairParam).catch((e) => console.warn('[pixel-office] v3 controls unavailable', e));
   if (params.get('new') === '1') {
     // Just created: drop the marker and open the invite dialog once.
     try { history.replaceState(history.state, '', `/?room=${roomParam}`); } catch { /* ignore */ }
@@ -610,7 +612,7 @@ function bootCloud(config) {
 }
 
 // --- v3: device control (V3.md §11) ---------------------------------------------------------------------
-async function setupV3(roomId, key) {
+async function setupV3(roomId, key, pairParam = null) {
   const [{ DeviceHub }, { PromptPanel }, { DevicesPage, PairWizard, NewAgentDialog }, { fmtCompact: fmtTok },
     { ApprovalCenter }, { WorkflowStore, WorkflowDialog, supportsWorkflows }, { UpdateBanner }, { BossStore, BossPanel }] =
     await Promise.all([import('./control.js'), import('./prompt.js'), import('./devices.js'), import('./usage.js'),
@@ -693,6 +695,7 @@ async function setupV3(roomId, key) {
   v3 = { hub, panel, devices, wizard, newAgent, approvals, workflows, wfDialog, supportsWorkflows, updateBanner,
     bossStore, boss, pendingSelect: null, setTab };
   window.pixelOffice.v3 = v3;
+  if (pairParam) wizard.openWithCode(pairParam);
 
   ui.ctlInfo = (a) => {
     if (!a.control || !hub.isReady(a.control.device)) return null;

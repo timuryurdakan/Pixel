@@ -93,8 +93,9 @@ TERMINAL = frozenset({DONE, ERROR, CANCELLED})
 # Used with workflows.check_transition. A failed or cancelled run may skip `reporting`: its report is the connector's
 # own template text, not a Boss task (§4.3). `approved` (P2): the user approved the plan and it waits for the P3
 # executor (`approved → running`); P3 may also go `approval → running` directly. `approval → reporting` (P3): a fix
-# plan the user did not approve ends the job with the report of the work already done.
-BOSS_TRANSITIONS = {IDLE: {PLANNING}, PLANNING: {APPROVAL, ERROR, CANCELLED},
+# plan the user did not approve ends the job with the report of the work already done. `error → running` (G4): only
+# `BossDesk.retry`, which re-runs one failed order of the job's last run under what is left of its caps.
+BOSS_TRANSITIONS = {IDLE: {PLANNING}, PLANNING: {APPROVAL, ERROR, CANCELLED}, ERROR: {RUNNING},
                     APPROVAL: {APPROVED, RUNNING, REPORTING, ERROR, CANCELLED}, APPROVED: {RUNNING, ERROR, CANCELLED},
                     RUNNING: {REVIEWING, REPORTING, ERROR, CANCELLED},
                     REVIEWING: {APPROVAL, REPORTING, ERROR, CANCELLED}, REPORTING: {DONE, ERROR, CANCELLED}}
@@ -419,6 +420,9 @@ JOB_ID_RE = re.compile(r"^b_[A-Za-z0-9_-]{10}\Z")
 ASK_FIELDS = frozenset({"type", "id", "workspace", "brief", "maxCostUsd"})
 APPROVE_FIELDS = frozenset({"type", "id", "job", "approve"})
 JOB_FIELDS = frozenset({"type", "id", "job"})
+RETRY_FIELDS = frozenset({"type", "id", "job", "order"})
+MAX_RETRIES_PER_ORDER = 1       # G4: per order and round; the caps bound the money, this bounds the user's surprise
+USER_CODES = ("denied", "approval_timeout")   # the user's own "no" to a Test order: a retry never overrides it
 RESET_FIELDS = frozenset({"type", "id", "workspace"})
 WORKSPACE_FIELDS = frozenset({"id", "sub"})
 RESULT_MAX = 64 * 1024          # UTF-8 bytes of the Boss's whole reply; more is refused, not cut
@@ -755,6 +759,9 @@ class BossJob:
         self.review_text: Optional[str] = None    # the Boss's report part of its last review (paired browsers only)
         self.notes: List[str] = []                # NOTE_TEXT codes for the report
         self.specialists: List[str] = []          # role agents in the office for the current run
+        self.outputs: Dict[str, str] = {}         # G4: done orders' outputs of the last run (memory only, prompts)
+        self.retried: Dict[tuple, int] = {}       # G4: (round, order id) → retries started
+        self.retrying = False                     # G4: the live run replaces the last round's outcomes
         self.report: Optional[dict] = None
         self.started = now
         self.ended: Optional[float] = None
@@ -1074,9 +1081,10 @@ class BossDesk:
         return {"type": "boss.ok", "job": job_id}
 
     # -- P3: running the plan --------------------------------------------------------------------------------------
-    def _execute(self, job: BossJob) -> None:
+    def _execute(self, job: BossJob, priors: Optional[Dict[str, dict]] = None) -> None:
         """`approved → running` (caller holds the lock): reserve the role agents and start the plan run with what is
-        left of the job's caps (money, turns, time). Anything that prevents the start ends the job with its code."""
+        left of the job's caps (money, turns, time). Anything that prevents the start ends the job with its code.
+        `priors` (G4 retry): orders that keep their outcome from the last run instead of running again."""
         job.set_state(RUNNING)
         try:
             if job.bid is not None and self.app.peers.active(job.bid) is None:
@@ -1086,7 +1094,7 @@ class BossDesk:
             job.review_nonce = self.nonce()
             run = self.app.workflows.launch_plan({
                 "name": BOSS_NAME, "peer": job.peer, "label": job.label, "workspace": dict(job.workspace),
-                "limits": limits, "steps": self._plan_steps(job, agents),
+                "limits": limits, "steps": self._plan_steps(job, agents, priors or {}),
                 "ready": lambda finished, running, p=job.plan: ready_orders(p, finished, running),
                 "on_step": lambda r, st, j=job: self._on_step(j, r, st),
                 "on_end": lambda r, j=job: self._run_ended(j, r)})
@@ -1102,6 +1110,7 @@ class BossDesk:
                              timeoutS=limits["timeoutS"])
 
     def _abort_run(self, job: BossJob, code: str) -> None:
+        job.retrying = False
         self._leave(job)
         self._finish(job, CANCELLED if code == "revoked" else ERROR, code)
 
@@ -1155,7 +1164,7 @@ class BossDesk:
             self._event(job, "enter", None, rid, a["key"])
         return out
 
-    def _plan_steps(self, job: BossJob, agents: Dict[str, dict]) -> List[dict]:
+    def _plan_steps(self, job: BossJob, agents: Dict[str, dict], priors: Dict[str, dict]) -> List[dict]:
         """plan_to_steps + what the run needs: the role agent, the `after` orders' outputs as inputs, the Test role's
         approval, a fresh session per order, the task policy (always `task_policy`: role profile, own command list,
         Agent/Task denied) and, last, the Boss's review in its own session with every order's output."""
@@ -1168,6 +1177,8 @@ class BossDesk:
                        "gateTimeoutS": GATE_TIMEOUT_S, "gatePreview": GATE_WARNING if role["confirm"] else None,
                        "fresh": True, "maxTurns": role["maxTurns"], "final": False,
                        "policy": lambda turns, r=o["role"]: task_policy(r, turns)})
+            if o["id"] in priors:
+                st["prior"] = priors[o["id"]]
         steps[-1].update({"roleId": BOSS_ROLE["id"], "agent": job.agent, "agentName": BOSS_NAME,
                           "prompt": review_prompt(plan, job.review_nonce, job.round < MAX_FIX_ROUNDS),
                           "inputs": [o["id"] for o in plan["orders"]], "gate": False, "gateTitle": "",
@@ -1212,9 +1223,15 @@ class BossDesk:
             job.turns += run.turns
             job.run_time += max(0.0, (run.ended or self.clock()) - run.started)
             titles = {o["id"]: o["title"] for o in job.plan["orders"]}         # still this run's plan
-            job.rounds.append([{"id": st.id, "role": st.spec["roleId"], "title": titles.get(st.id, ""),
-                                "state": st.state, "code": st.code, "agent": st.agent, "task": st.task,
-                                "costUsd": round(st.cost, 6)} for st in run.orders()])
+            outcome = [{"id": st.id, "role": st.spec["roleId"], "title": titles.get(st.id, ""), "state": st.state,
+                        "code": st.code, "agent": st.agent, "task": st.task, "costUsd": round(st.cost, 6)}
+                       for st in run.orders()]
+            if job.retrying:                      # G4: the retried run's outcomes stand for its round
+                job.rounds[-1] = outcome
+                job.retrying = False
+            else:
+                job.rounds.append(outcome)
+            job.outputs = {st.id: st.result or "" for st in run.orders() if st.state == "done"}
             self._leave(job)
             review = run.final()
             if not job.active:
@@ -1335,6 +1352,59 @@ class BossDesk:
                 self._stop(jid, CANCELLED, "stopped", "service")
             except BossError:
                 pass
+
+    # -- G4: re-run one failed order ------------------------------------------------------------------------------
+    def retry(self, peer, msg: dict) -> dict:
+        """boss.retry_step {job, order}: the latest job ended in error and that order of its last run failed (state
+        `error`: engine error, timeout, budget, …). It runs again as approved (same role, task policy, Test approval)
+        with whatever never got to run because the run stopped; done orders keep their outputs and the user's own
+        "no" to a Test order stands. Same caps: money, turns and time of the whole job (planning and every run so
+        far included); at most MAX_RETRIES_PER_ORDER per order. Paired browsers only; the retry belongs to the
+        browser that asked (its revoke cancels it). → boss.ok. BossError otherwise; nothing changes on a refusal."""
+        job_id = parse_job_msg(msg, RETRY_FIELDS)
+        oid = msg.get("order")
+        if not isinstance(oid, str) or not ORDER_ID_RE.match(oid):
+            raise BossError("bad_request", "order")
+        bid = getattr(peer, "bid", None)
+        with self._lock:
+            if not isinstance(bid, str) or self.app.peers.active(bid) is None:
+                raise BossError("not_allowed", "paired browsers only")
+            job = self._job(job_id)
+            if job.active:
+                raise BossError("not_retryable", "the job is still active")
+            self._check_free()
+            latest = max(self.jobs.values(), key=lambda j: j.started)
+            if job is not latest or job.state != ERROR or job.live_run is not None or not job.rounds:
+                raise BossError("not_retryable", "only the latest job that ended in error")
+            last = job.rounds[-1]
+            target = next((o for o in last if o["id"] == oid), None)
+            if target is None or target["state"] != "error":
+                raise BossError("not_retryable", "that order did not fail")
+            key = (job.round, oid)
+            if job.retried.get(key, 0) >= MAX_RETRIES_PER_ORDER:
+                raise BossError("retry_used", "this order was already retried")
+            limits = self._run_limits(job)        # cost_cap / max_turns / timeout before anything changes
+            priors = {}
+            for o in last:
+                if o["id"] == oid:
+                    continue
+                if o["state"] == "done":
+                    priors[o["id"]] = {"state": "done", "code": None, "result": job.outputs.get(o["id"], ""),
+                                       "costUsd": o["costUsd"], "task": o["task"]}
+                elif o["state"] == "error" or o["code"] in USER_CODES:
+                    priors[o["id"]] = {"state": o["state"], "code": o["code"], "result": None,
+                                       "costUsd": o["costUsd"], "task": o["task"]}
+            job.retried[key] = job.retried.get(key, 0) + 1
+            job.peer, job.bid = peer, bid
+            job.label = getattr(peer, "label", None) or job.label
+            job.code, job.ended, job.report, job.retrying = None, None, None, True
+            self.app.audit.write("boss.retry_step", by=bid, job=job.id, order=oid, round=job.round,
+                                 rerun=len(last) - len(priors), costUsd=round(job.cost, 6),
+                                 maxCostUsd=round(limits["maxCostUsd"], 6), maxTurns=limits["maxTurns"],
+                                 timeoutS=limits["timeoutS"])
+            self._execute(job, priors)
+            self._emit(job)
+            return {"type": "boss.ok", "job": job.id, "order": oid}
 
     # -- other requests -----------------------------------------------------------------------------------------------
     def get(self, job_id: Optional[str]) -> dict:

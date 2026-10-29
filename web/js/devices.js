@@ -631,6 +631,18 @@ export class DevicesPage {
 // =====================================================================================================
 // Pairing wizard (§11.5)
 // =====================================================================================================
+// G4: `pixel-connector pair` also shows a QR of /?room=<id>#pair=<code>. main.js reads `pair` before the fragment is
+// stripped from the address bar. Only the exact form the connector writes (12 Crockford characters) is accepted, and
+// it is only filled in: the user still presses "Eşleştir" (a link from someone else must not pair this browser in
+// one tap) and still confirms the SAS on the computer.
+export const PAIR_LINK_RE = /^[0-9A-HJKMNP-TV-Z]{12}$/;
+export const PAIR_LINK_TEXT = 'Kod QR\'dan yazıldı. Bilgisayarınızın terminalinde aynı kod görünüyorsa Eşleştir\'e basın.';
+
+/** `#pair=` value → the formatted code, or null when it is not exactly a pairing code. */
+export function pairCodeFromLink(raw) {
+  return typeof raw === 'string' && PAIR_LINK_RE.test(raw) ? formatCode(raw) : null;
+}
+
 export class PairWizard {
   /**
    * @param {object} o
@@ -710,6 +722,16 @@ export class PairWizard {
     this.hub.need('pairdlg', true);
     if (!this.dialog.open) this.dialog.showModal();
     if (step === 3) this.input.focus();
+  }
+
+  /** Open step 3 with a code from the QR link (pairCodeFromLink). → false (and nothing opens) for a bad value. */
+  openWithCode(raw) {
+    const code = pairCodeFromLink(raw);
+    if (!code) return false;
+    this.open(3);
+    this.input.value = code;
+    this._status(PAIR_LINK_TEXT);
+    return true;
   }
 
   go(n) {

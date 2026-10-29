@@ -69,7 +69,7 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | P9 | Patron Odası: gerçek deneme, kullanıcı onayıyla, düşük bütçe (P8 sonrası) | Claude | ✅ |
 | G1 | Faz 1 (`docs/EVRENSEL_PLATFORM_ARASTIRMA_RAPORU.md` §1.2): sahne kontrolleri (yakınlaştır/uzaklaştır/sığdır, Ctrl+tekerlek, mobilde iki parmak), atmosfer seçici (gündüz/gün batımı/gece/otomatik), tıklanabilir kahve makinesi ve su sebili, Patron üzerine gelince "Patron" ipucu. Kedi zaten var, yeni kedi çizilmez. Dosyalar: `web/js/renderer.js`, `web/js/fx.js`, `web/js/sprites.js`, yeni `web/js/scene_controls.js`, `tests/js/scene_controls.test.js` | Antigravity | ⬜ |
 | G3 | Faz 1 (§1.5): tarayıcı bildirimi + sekme başlığında onay sayısı (izin yalnızca kullanıcı tıklayınca istenir, bildirimde istem/çıktı metni yok), yanıt ve Patron raporu için "Kopyala" ve ".md indir" (yalnızca `textContent`/Blob). Dosyalar: `web/js/prompt.js`, `web/js/approvals.js`, `web/js/boss.js`, yeni `web/js/notify.js`, `tests/js/notify.test.js`. G1'den sonra | Antigravity | ⬜ |
-| G4 | Faz 1 (§1.3/2, §1.6): Patron'da başarısız tek iş emrini yeniden deneme (`boss.retry_step`, tavan ve onay kuralları aynen) ve eşleştirme kodunu QR ile telefona taşıma (SAS onayı aynen). Dosyalar: `pixel_connector/*`, `web/js/devices.js`, `web/js/boss.js` (yalnızca G3 birleştikten sonra) | Claude | ⬜ |
+| G4 | Faz 1 (§1.3/2, §1.6): Patron'da başarısız tek iş emrini yeniden deneme (`boss.retry_step`, tavan ve onay kuralları aynen) ve eşleştirme kodunu QR ile telefona taşıma (SAS onayı aynen). Dosyalar: `pixel_connector/*`, `web/js/devices.js`, `web/js/boss.js` (yalnızca G3 birleştikten sonra) | Claude | ✅ (bağlayıcı + QR; yeniden deneme düğmesi G3'ten sonra) |
 | G2 | Faz 1 (§1.1): ilk ziyarette rehber yerine canlı demo ofisi + üst bant, demoda Patron senaryosu. Dosyalar: `web/js/main.js`, `web/index.html`, `web/tanitim.html`. G1–G4 birleştikten sonra (ortak dosyalar) | Claude | ⬜ |
 
 **A6–A10'un ayrıntıları, başlama koşulları ve push yöntemi:** [`docs/V4_ANTIGRAVITY.md`](V4_ANTIGRAVITY.md).
@@ -358,7 +358,7 @@ görüntüleri, bilinen sorunlar.
   `web/sw.js` + `web/js/cloud.js` (`po-v4.0.7`), `tests/test_phase20_connector.py` + `tests/test_e2e_protocol.py`
   (yalnızca sürüm), `docs/SECURITY_AUDIT.md` §13, `docs/PATRON_ODASI.md` §11 P8, `PROJECT.md` §6 (P3 kaydı çıkarıldı;
   günlükte var), günlük. Güvenlik çekirdeğine (`crypto.py`, `session.py`, `e2e.js`) dokunulmadı.
-  `python3 -m unittest discover -s tests`: TESTS_LINE; tarayıcı testleri Brave ile. Kullanıcı: push sonrası
+  `python3 -m unittest discover -s tests`: 964 test, OK (1 atlandı: `pwsh`); tarayıcı testleri Brave ile. Kullanıcı: push sonrası
   `pixel-connector update`.
 - **2026-10-29, Claude (Patron Odası P9: gerçek deneme, Koordinatör + kullanıcı):** Kullanıcı tabletten canlı sitede gerçek
   Claude ile denedi: `~/PixelOfficeIsler`, toplam 0,30 $, akış baştan sona çalıştı. Klasör dışı yazma yok (deneme
@@ -373,3 +373,5 @@ görüntüleri, bilinen sorunlar.
   `antigravity/gorevler` dalında çalışır; `web/sw.js` `VERSION`'ı ve `web/js/cloud.js` `APP_VERSION`'ı Claude
   birleştirirken artırır, Antigravity dokunmaz. Ortak dosyalar (`web/css/style.css`, `web/index.html`): yalnızca sona
   ekleme, mevcut kurallar değişmez.
+
+- **2026-10-29, Claude (G4: eşleştirme QR'ı + Patron tek iş emri yeniden deneme, bağlayıcı tarafı):** `pixel-connector pair` QR'ı (`<sunucu>/?room=<oda>#pair=<kod>`; oda anahtarı yalnızca `--qr-key` ile), sayfa kodu yalnızca doldurur, SAS + `e` aynen. `boss.retry_step {job, order}`: yalnızca `error` ile biten son iş, iş emri başına 1, §10 tavanları işin tamamı için, Test onayı yeniden. **Açık:** arayüz düğmesi `web/js/boss.js`'te, G3 birleştikten sonra (mesaj ve hata kodları `docs/V3.md` §20 G4). Değişen: `pixel_connector/{qr (yeni, git add -N),__main__,boss,workflows,app,audit,__init__}.py` (3.9.0, `.pyz`, `SHA256SUMS`, README özeti), `web/js/{devices,main}.js` (main.js: yalnızca `#pair` okuma ve rehber yönlendirmesini atlama), `web/sw.js` + `web/js/cloud.js` (`po-v4.0.8`), sürüm testleri, yeni `tests/test_g4_{qr,boss_retry,pair_link_ui}.py` (`git add -N`), belgeler. Antigravity dosyalarına (`boss.js` dahil) dokunulmadı. `python3 -m unittest discover -s tests`: 987 test, OK (skipped=1; tarayıcı testleri Brave ile).

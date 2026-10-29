@@ -532,3 +532,18 @@ kodunda yapılan değişiklikler. v4 (§12) ve Patron Odası (§13) ayrı incele
 **Kullanıcı eylemleri:** Yok. Süregelen öneriler aynen geçerli: ilk ay haftada bir Cloudflare/Vercel/Upstash
 kullanımına bakmak (`PROJECT.md` kontrol listesi), bağlayıcıyı `pixel-connector update` ile güncel tutmak, Test iş
 emrinden önce değişikliklere bakmak (S29-03).
+
+## 15. G4 notu: eşleştirme QR'ı ve tek iş emrini yeniden deneme (2026-10-29)
+
+Tehdit modeline etkisi (bağımsız inceleme değil; uygulayıcının notu, `tests/test_g4_*.py`):
+
+- **QR içeriği:** `<sunucu>/?room=<oda>#pair=<kod>`. Kod terminalde zaten yazılı olanla aynı (10 dk, tek deneme,
+  PAKE + SAS, §7.3 değişmedi); URL parçasında (`#`) durur, sunucuya ya da röleye gitmez, sayfa hemen adres çubuğundan
+  ve geçmişten siler. Oda kimliği gizli değil. **Uzun ömürlü oda yazma anahtarı varsayılan olarak QR'da yok:** QR ekranda
+  ve terminal geçmişinde kalır, ekran paylaşımı ya da kayıtla sızabilir; kod 10 dakikada ölür, anahtar ölmez.
+  `--qr-key` bilinçli seçimle ekler ve uyarı basar (anahtar zaten katılım bağlantısında taşınan şeydir).
+- **Bağlantıyla eşleştirmeye zorlama:** Başkasının gönderdiği bir `#pair=` bağlantısı tarayıcıyı tek dokunuşla
+  saldırganın cihazına eşleştiremez: sayfa kodu yalnızca kutuya yazar, "Eşleştir"e kullanıcı basar; kodu sesle
+  söyletmekle aynı sosyal mühendislik düzeyi. Biçim dışı değer (tam 12 Crockford karakteri değil) hiçbir şey açmaz.
+- **Yeniden deneme:** Yeni yetki yok: yalnızca eşleşmiş tarayıcı, yalnızca `error` ile biten son iş, iş emri başına 1,
+  aynı görev politikası ve Test onayı, işin toplam tavanlarından kalan; kullanıcının Test "hayır"ı aşılamaz.

@@ -325,7 +325,7 @@ içine kurar, `~/.pixel-office/bin/pixel-connector` kısayolunu ve ayar dosyası
 Ekrana yazdığı özeti bu sürümün özetiyle karşılaştırın:
 
 ```
-pixel-connector.pyz SHA-256: 1263e5d721a0b54442eab9293a5b520e66795742c09753281fed499c7d3841b5
+pixel-connector.pyz SHA-256: 555fa4577cabcf542082ecf246b3a244199eef8f80c13c3e2fca3d52e5d8e28b
 ```
 
 Windows (PowerShell): komut kutusundaki **Windows** sekmesini kullanın (`irm …/install.ps1 -OutFile install.ps1`, sonra
@@ -446,7 +446,9 @@ korunur. Sonraki güncellemeler için `pixel-connector update` yeterlidir.
 3. Terminalde tarayıcının adı ve 6 haneli bir **doğrulama kodu** görünür; tarayıcıda da aynı kod çıkar. **Aynıysa** `e`
    yazıp Enter. Farklıysa ya da tanımadığınız bir tarayıcıysa yalnızca Enter: eşleşme olmaz.
 4. **Telefon için ayrı bir kod** üretin (`pixel-connector pair`'i yeniden çalıştırın) ve aynısını telefonda yapın (uygulama
-   olarak yüklediyseniz uygulamanın içinden).
+   olarak yüklediyseniz uygulamanın içinden). Daha kolayı: terminalde kodun altındaki **QR**'ı telefonun kamerasıyla
+   okutun; kod kutuya kendiliğinden yazılır, **Eşleştir**'e basıp 3. adımdaki gibi terminalde doğrulayın. QR oda
+   anahtarını içermez; telefon odaya hiç katılmadıysa `pixel-connector pair --qr-key` (ekran paylaşırken kullanmayın).
 
 Eşleşmeleri görmek: `pixel-connector peers`. Bir tarayıcıyı kaldırmak: `pixel-connector peers revoke <bid>` ya da başka bir
 eşleşmiş tarayıcıda **Cihazlar** → cihazın kartındaki eşleşen tarayıcılar listesi → **Kaldır**. Kayıp telefon için hemen bunu yapın.

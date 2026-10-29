@@ -51,9 +51,10 @@ APPROVAL_AUDIT = {"ok": "approval.approve", "denied": "approval.deny", "timeout"
                   "withdrawn": "approval.withdraw"}
 APPROVAL_POLL_S = 0.5       # how often a waiting /ctl/approvals/tool call checks that its hook is still there
 # device.info.features: optional protocol parts (v4-B handoff, v4-C workflows, Patron Odası boss.*)
-FEATURES = ["handoff", "workflows", "boss"]
+FEATURES = ["handoff", "workflows", "boss", "bossRetry"]
 SLOW_TYPES = {"peer.hello", "runtime.list", "runtime.start", "runtime.stop", "model.load", "model.unload",
-              "workspace.list", "agent.create", "peer.revoke", "workflow.list", "workflow.start", "boss.ask"}
+              "workspace.list", "agent.create", "peer.revoke", "workflow.list", "workflow.start", "boss.ask",
+              "boss.retry_step"}
 
 
 class Reply(Exception):
@@ -874,6 +875,13 @@ class Connector:
 
     def h_boss_reset(self, peer, msg) -> dict:
         return self.boss.reset(peer, msg)
+
+    def h_boss_retry_step(self, peer, msg) -> dict:
+        """G4: re-run one failed order of the latest job (BossDesk.retry). Counts against the task rate like boss.ask."""
+        if not self.scheduler.check_rate("task:" + peer.bid, self.cfg["limits"]["tasksPerMinute"],
+                                         self.cfg["limits"]["tasksPerHour"]):
+            raise Reply("rate_limited", "too many tasks")
+        return self.boss.retry(peer, msg)
 
     # -- handlers: runtimes ----------------------------------------------------------------------
     def h_runtime_list(self, peer, msg) -> dict:

@@ -78,7 +78,10 @@ PLAN_STEP_TRANSITIONS = {WAITING: {RUNNING, APPROVAL, CANCELLED}, APPROVAL: {RUN
                          RUNNING: {DONE, ERROR, CANCELLED}}
 PLAN_STEP_FIELDS = frozenset({"id", "type", "role", "roleId", "engine", "profile", "model", "prompt", "agent",
                               "agentName", "inputs", "gate", "gateTitle", "gateTimeoutS", "gatePreview", "fresh",
-                              "policy", "maxTurns", "final"})
+                              "policy", "maxTurns", "final", "prior"})
+# G4 (boss.retry_step): an order step may come with the outcome of the run it is resumed from; it starts in that
+# terminal state and is not run again (its output still feeds later steps).
+PLAN_PRIOR_FIELDS = frozenset({"state", "code", "result", "costUsd", "task"})
 PLAN_MAX_PARALLEL = 2
 SKIPPED = "skipped"         # step code: an input step did not finish, or no order was done before the final step
 INPUT_NOTE = "Girdi %d/%d: %s iş emrinin (%s) çıktısı. Durum: %s."
@@ -506,6 +509,10 @@ class PlanStep(StepRun):
         self.agent = spec["agent"]
         self.agent_name = spec["agentName"]
         self.turn_cap: Optional[int] = None       # this step's share of the run's remaining turns
+        prior = spec.get("prior")
+        if prior is not None:
+            self.state, self.code, self.result = prior["state"], prior["code"], prior["result"]
+            self.cost, self.task = prior["costUsd"], prior["task"]
 
     def wire(self) -> dict:
         out = super().wire()
@@ -554,7 +561,15 @@ def _check_plan_steps(steps) -> None:
             raise WorkflowError("internal", "plan step %d" % i)
         if s["id"] in seen or any(x not in seen for x in s["inputs"]) or (s["final"] and i != len(steps) - 1):
             raise WorkflowError("internal", "plan step %d" % i)
+        prior = s.get("prior")
+        if prior is not None and (s["final"] or not isinstance(prior, dict) or set(prior) != PLAN_PRIOR_FIELDS
+                                  or prior["state"] not in TERMINAL
+                                  or (prior["state"] == DONE) != isinstance(prior["result"], str)):
+            raise WorkflowError("internal", "plan step %d prior" % i)
         seen.append(s["id"])
+    orders = [s for s in steps if not s["final"]]
+    if orders and all(s.get("prior") is not None for s in orders):
+        raise WorkflowError("internal", "nothing to run")
 
 
 class WorkflowEngine:

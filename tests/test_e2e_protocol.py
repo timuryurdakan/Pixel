@@ -355,7 +355,7 @@ class FullStackTests(unittest.TestCase):
         self.assertRegex(sas, r"^\d{3} \d{3}$")
         chan, info = br.connect_device(dev)
         self.assertEqual(info["name"], "Test Cihazı")
-        self.assertEqual(info["connector"], "3.8.1")
+        self.assertEqual(info["connector"], "3.9.0")
         self.assertEqual(info["build"], "dev")              # source checkout; the .pyz carries its build id
         self.assertIsNone(info["pyz"])
         self.assertEqual([p["id"] for p in info["profiles"]], ["readonly", "edit", "dev", "auto"])

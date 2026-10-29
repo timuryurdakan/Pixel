@@ -1014,3 +1014,21 @@ Davranış değişiklikleri:
 4. **S29-03:** Test iş emri onayının metni (panel) ve yerel onay kartının açıklaması (`/onay`, CLI): test komutları
    uzmanların yazdığı kodu kullanıcının yetkileriyle çalıştırır; bu kod klasörle ve işin tavanlarıyla sınırlı değildir.
    Onay akışı aynı (§10/3). Plan adımına bağlayıcı içi `gatePreview` alanı eklendi (mesajla verilemez).
+
+### G4 — Tek iş emrini yeniden deneme, bağlayıcı tarafı (2026-10-29, Bağlayıcı/Güvenlik Mühendisi)
+
+Protokol ve hata kodları: [`docs/V3.md`](V3.md) §20 G4. Bağlayıcı 3.9.0. Arayüz düğmesi yok (`boss.js` G3'ten sonra).
+
+1. **Ne zaman:** Yalnızca son iş, `error` ile bittiyse ve seçilen iş emri son çalıştırmada `error` durumundaysa
+   (motor hatası, zaman aşımı, bütçe…). İptal, eşleşme kaldırma, onay reddi ile biten iş ya da başarılı iş yeniden
+   denenmez; kullanıcının Test onayına "hayır"ı (`denied`, `approval_timeout`) hiçbir zaman aşılmaz.
+2. **Ne çalışır:** Seçilen iş emri ve çalıştırma durduğu için hiç çalışamayanlar, onaylanan plandaki hâlleriyle; bitmiş
+   iş emirleri tekrar çalışmaz, çıktıları sonraki iş emirlerine ve değerlendirmeye gider; sonra Patron değerlendirmesi
+   ve rapor. Kesintiye uğrayan paralel iş emri de (kendi hatası değil) yeniden çalışır.
+3. **§10 tavanları aynen:** Para, tur ve 45 dk işin tamamı içindir (planlama ve önceki çalıştırmalar dahil); yeni
+   çalıştırma yalnızca kalanı alır, kalmadıysa istek reddedilir ve iş değişmez. İş emri sayısı artmaz (plan aynı).
+   Test iş emri yine kullanıcı onayı bekler.
+4. **İş emri başına en fazla 1 deneme:** Tavanlar parayı sınırlıyor; bu sınır kullanıcının görmediği art arda
+   denemeleri ve aynı hatanın döngüsünü önler. Gerekirse sonraki karar arayüzle birlikte verilir.
+5. **Kimin:** Yalnızca eşleşmiş, etkin bir tarayıcı; deneme, isteyen tarayıcıya bağlanır (eşleşmesi kaldırılırsa
+   çalıştırma `revoked` ile durur). Denetim kaydı `boss.retry_step` (kimlikler ve sayılar, metin yok).
