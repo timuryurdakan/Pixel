@@ -7,10 +7,13 @@ import { TILE, SCALE, CAT_TILE, BOSS_SEAT, BOSS_DESK, BOSS_DOOR, inBossRoom } fr
 import { bossPose } from './boss_scene.js';
 import { ParticleSystem, LightingEngine, AgentReactions, STEP_DUST_PER_S, CODE_SPARKLE_PER_S } from './fx.js';
 import { drawBoardOverlay, BOARD_X, BOARD_Y, BOARD_W, BOARD_H } from './board.js';
+import { SceneControls, ZOOM_MIN, ZOOM_MAX, ZOOM_STEP } from './scene_controls.js';
 
 const DESK_ON_STATES = new Set(['working', 'thinking']);
 export const CAT_ID = 'mascot-cat';
 export const BOARD_ID = 'board';
+export const COFFEE_ID = 'prop:coffee_counter';
+export const WATER_ID = 'prop:water_cooler';
 export const LABEL_MAX = 18;
 
 /**
@@ -66,7 +69,11 @@ export class Renderer {
       h: 16,
       wakeTime: 0,
     };
+    this.hoverBoss = false;
+    this.hoverProp = null;
+    this._lastCharacters = [];
     this._lastTime = 0;
+    this.sceneControls = new SceneControls(this);
   }
 
   _applySize(s, cssScale) {
@@ -102,11 +109,23 @@ export class Renderer {
   }
 
   setZoom(level) {
-    this.zoomLevel = Math.max(0.8, Math.min(2.5, level));
+    this.zoomLevel = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, level));
     if (this._availW && this._availH) {
       this._fitKey = null;
       this.fit(this._availW, this._availH);
     }
+  }
+
+  zoomIn(step = ZOOM_STEP) {
+    return this.sceneControls ? this.sceneControls.zoomIn(step) : (this.setZoom(this.zoomLevel + step), this.zoomLevel);
+  }
+
+  zoomOut(step = ZOOM_STEP) {
+    return this.sceneControls ? this.sceneControls.zoomOut(step) : (this.setZoom(this.zoomLevel - step), this.zoomLevel);
+  }
+
+  resetZoom() {
+    return this.sceneControls ? this.sceneControls.resetZoom() : (this.setZoom(1.0), this.zoomLevel);
   }
 
   _buildBackground() {
@@ -169,9 +188,10 @@ export class Renderer {
 
   /**
    * @param {import('./agents.js').Character[]} characters
-   * @param {{selectedId:string|null, hoverId:string|null, time:number}} opts
+   * @param {{selectedId?:string|null, hoverId?:string|null, hoverBoss?:boolean, time?:number, boardData?:object|null, boss?:object|null}} [opts]
    */
-  render(characters, { selectedId = null, hoverId = null, time = 0, boardData = null, boss = null } = {}) {
+  render(characters, { selectedId = null, hoverId = null, hoverBoss = this.hoverBoss, time = 0, boardData = null, boss = null } = {}) {
+    this._lastCharacters = characters;
     if (boardData !== null) this.boardData = boardData;
     const dt = this._lastTime ? Math.min(0.1, Math.max(0, time - this._lastTime)) : 0.016;
     this._lastTime = time;
@@ -311,6 +331,19 @@ export class Renderer {
       if (img) ctx.drawImage(img, Math.round(cat.x + 8 - img.width / 2), Math.round(cat.y - 12 + catHop));
     }
 
+    // Interactive office props (coffee machine & water cooler) reaction bubbles (G1)
+    for (const [kind, propId] of [['coffee_counter', COFFEE_ID], ['water_cooler', WATER_ID]]) {
+      const emote = this.reactions.getEmote(propId);
+      if (!emote) continue;
+      const f = this.office.furniture.find((it) => it.kind === kind);
+      if (!f) continue;
+      const img = getBubbleSprite(emote, Math.floor(time * 2));
+      const bob = Math.round(Math.sin(time * Math.PI * 4));
+      const bx = f.x * TILE + Math.round(f.w / 2);
+      const by = f.y * TILE + TILE - f.h - 6 + bob;
+      if (img) ctx.drawImage(img, Math.round(bx - img.width / 2), Math.round(by - img.height / 2));
+    }
+
     // World atmosphere & window lighting
     this.lighting.drawAtmosphere(ctx, this.office, time);
 
@@ -337,6 +370,15 @@ export class Renderer {
       ctx.strokeText(text, X, Y);
       ctx.fillStyle = sel ? '#ffd84a' : '#ffffff';
       ctx.fillText(text, X, Y);
+    }
+    if (bossNow && (hoverBoss || hoverId === 'boss')) {
+      const bx = Math.round((BOSS_SEAT.x * TILE + 8) * s);
+      const by = Math.round(((BOSS_DESK.y + 1) * TILE + 2) * s);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#000';
+      ctx.strokeText('Patron', bx, by);
+      ctx.fillStyle = '#ffd84a';
+      ctx.fillText('Patron', bx, by);
     }
     ctx.globalAlpha = 1;
   }
@@ -382,6 +424,36 @@ export class Renderer {
     const wx = (canvasX * this.worldW) / rect.width;
     const wy = (canvasY * this.worldH) / rect.height;
     return wx >= BOARD_X && wx < BOARD_X + BOARD_W && wy >= BOARD_Y && wy < BOARD_Y + BOARD_H;
+  }
+
+  /** CSS px relative to the canvas → 'coffee_counter' | 'water_cooler' | null (G1). */
+  pickProp(canvasX, canvasY) {
+    const rect = this.canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    const wx = (canvasX * this.worldW) / rect.width;
+    const wy = (canvasY * this.worldH) / rect.height;
+    for (const f of this.office.furniture) {
+      if (f.kind !== 'coffee_counter' && f.kind !== 'water_cooler') continue;
+      const fx = f.x * TILE;
+      const fy = f.y * TILE + TILE - f.h;
+      if (wx >= fx && wx < fx + f.w && wy >= fy && wy < fy + f.h) return f.kind;
+    }
+    return null;
+  }
+
+  /** Trigger visual & audio reaction for an interactive office prop (G1). */
+  triggerProp(kind, soundPlayer = null) {
+    const f = this.office.furniture.find((it) => it.kind === kind);
+    if (!f) return;
+    if (kind === 'coffee_counter') {
+      this.reactions.trigger(COFFEE_ID, 'coffee');
+      this.particles.spawnSteam(f.x * TILE + Math.round(f.w / 2), f.y * TILE);
+      if (soundPlayer && typeof soundPlayer.playCoffee === 'function') soundPlayer.playCoffee();
+    } else if (kind === 'water_cooler') {
+      this.reactions.trigger(WATER_ID, 'happy');
+      this.particles.spawnWaterSplash(f.x * TILE + Math.round(f.w / 2), f.y * TILE + 4);
+      if (soundPlayer && typeof soundPlayer.playBlip === 'function') soundPlayer.playBlip();
+    }
   }
 }
 

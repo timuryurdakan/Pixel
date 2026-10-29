@@ -7,6 +7,7 @@
 
 import { ControlError, errorText } from './control.js';
 import { BOSS_FEATURE } from './boss_scene.js';
+import { makeExportActions, defaultNotifier } from './notify.js';
 
 export const BRIEF_MAX = 4096;               // = pixel_connector/workflows.py BRIEF_MAX (UTF-8 bytes)
 export const COST_MIN = 0.10;                // = pixel_connector/boss.py RUN_COST_MIN
@@ -196,12 +197,14 @@ export function readReport(m) {
  * not ready are forgotten.
  */
 export class BossStore {
-  /** @param {{hub: import('./control.js').DeviceHub}} o */
-  constructor({ hub }) {
+  /** @param {{hub: import('./control.js').DeviceHub, notifier?: import('./notify.js').Notifier}} o */
+  constructor({ hub, notifier = defaultNotifier }) {
     this.hub = hub;
+    this.notifier = notifier;
     this.entries = new Map();           // device → {jobId, job, plan, report}
     this.loaded = new Set();
     this._listeners = new Set();
+    this._lastApprovalCount = 0;
     hub.on('event', (dev, m) => this._onEvent(dev, m));
     hub.on('change', () => this._sweep());
     hub.on('resync', (dev) => { this.loaded.delete(dev); this._sweep(); });
@@ -209,7 +212,28 @@ export class BossStore {
   }
 
   onChange(fn) { this._listeners.add(fn); }
-  _changed() { for (const fn of this._listeners) fn(); }
+  _changed() {
+    if (this.notifier) {
+      const prev = this._lastApprovalCount || 0;
+      const next = this.approvalCount();
+      this._lastApprovalCount = next;
+      this.notifier.setSourceCount('boss', next);
+      if (next > prev) this.notifier.notifyApproval();
+    }
+    for (const fn of this._listeners) fn();
+  }
+
+  approvalCount() {
+    let n = 0;
+    for (const e of this.entries.values()) {
+      if (!e || !e.job) continue;
+      if (e.job.state === 'approval') n += 1;
+      else if (Array.isArray(e.job.orderStates)) {
+        for (const o of e.job.orderStates) if (o && o.state === 'approval') n += 1;
+      }
+    }
+    return n;
+  }
 
   _ok(dev) { return supportsBoss(this.hub.devices.get(dev)); }
 
@@ -277,7 +301,10 @@ export class BossStore {
   putReport(dev, raw) {
     const report = readReport(raw);
     if (!report) return false;
-    this._entry(dev, report.job).report = report;
+    const entry = this._entry(dev, report.job);
+    const isNew = !entry.report;      // a resync re-delivers the same report: notify only once
+    entry.report = report;
+    if (isNew && this.notifier) { try { this.notifier.notifyDone(); } catch { /* notifications are best effort */ } }
     return true;
   }
 
@@ -575,6 +602,10 @@ export class BossPanel {
       if (rep) {
         card.appendChild(el('h4', null, rep.partial ? 'Rapor (iş yarım kaldı)' : 'Rapor'));
         card.appendChild(el('pre', 'boss-report', rep.report));
+        card.appendChild(makeExportActions(() => rep.report, `patron-rapor-${job.job}`, {
+          btnClass: 'btn small ghost',
+          containerClass: 'boss-report-actions export-actions',
+        }));
       }
     } else {
       const actions = el('div', 'wf-run-actions');

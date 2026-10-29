@@ -13,8 +13,14 @@ export const CODE_SPARKLE_PER_S = 4.8;
 /** How often the day/sunset/night phase is re-read from the clock. */
 const PHASE_RECHECK_MS = 30000;
 
+/** Allowed atmosphere lighting modes and localStorage persistence key (G1). */
+export const ATMOSPHERE_MODES = ['auto', 'day', 'sunset', 'night'];
+export const ATMOSPHERE_STORAGE_KEY = 'po-atmosphere-mode';
+
 const DUST_COLORS = ['#d29a68', '#c68b59', '#e8cbb0'];
 const SPARK_COLORS = ['#8fd3ff', '#ffd84a', '#4caf50', '#ffffff'];
+const STEAM_COLORS = ['rgba(255, 255, 255, 0.85)', '#f5e6d3', 'rgba(235, 235, 245, 0.75)'];
+const WATER_COLORS = ['#5dade2', '#85c1e9', '#d6eaf8'];
 const STAR_ON_1 = 'rgba(255, 255, 255, 0.9)';
 const STAR_OFF_1 = 'rgba(255, 255, 255, 0.2)';
 const STAR_ON_2 = 'rgba(210, 230, 255, 0.8)';
@@ -150,6 +156,32 @@ export class ParticleSystem {
     p.init(x, y, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, 2.5, 1, 'rgba(255,255,220,0.6)');
   }
 
+  /** Spawn rising warm steam wisps above the coffee machine (G1). */
+  spawnSteam(x, y, count = 3) {
+    const rnd = this.random;
+    for (let i = 0; i < count; i++) {
+      const p = this._acquire();
+      if (!p) break;
+      const vx = (rnd() - 0.5) * 4;
+      const vy = -rnd() * 8 - 6;
+      const col = STEAM_COLORS[Math.floor(rnd() * STEAM_COLORS.length)];
+      p.init(x + (rnd() - 0.5) * 6, y + (rnd() - 0.5) * 2, vx, vy, 0.65, 1, col);
+    }
+  }
+
+  /** Spawn cool water droplets around the water cooler (G1). */
+  spawnWaterSplash(x, y, count = 3) {
+    const rnd = this.random;
+    for (let i = 0; i < count; i++) {
+      const p = this._acquire();
+      if (!p) break;
+      const vx = (rnd() - 0.5) * 10;
+      const vy = -rnd() * 8 - 3;
+      const col = WATER_COLORS[Math.floor(rnd() * WATER_COLORS.length)];
+      p.init(x + (rnd() - 0.5) * 4, y, vx, vy, 0.5, 1, col);
+    }
+  }
+
   update(dt) {
     for (const p of this.pool) {
       if (p.active) p.update(dt);
@@ -175,14 +207,36 @@ export class LightingEngine {
    * @param {() => number} [o.now]   epoch ms (tests)
    */
   constructor({ isReduced = prefersReduced, now = Date.now } = {}) {
+    let saved = 'auto';
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(ATMOSPHERE_STORAGE_KEY) : null;
+      if (raw && ATMOSPHERE_MODES.includes(raw)) saved = raw;
+    } catch {}
     /** @type {'auto' | 'day' | 'sunset' | 'night'} */
-    this.mode = 'auto';
+    this.mode = saved;
     this.isReduced = isReduced;
     this.now = now;
     this._autoPhase = 'day';
     this._phaseAt = -Infinity;
     /** Gradients are built once per phase/position and reused every frame (v2.md H15). */
     this._gradients = new Map();
+  }
+
+  /** Set atmosphere mode (allowlisted) and persist in localStorage. */
+  setMode(mode) {
+    const next = ATMOSPHERE_MODES.includes(mode) ? mode : 'auto';
+    this.mode = next;
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(ATMOSPHERE_STORAGE_KEY, next);
+    } catch {}
+    return this.mode;
+  }
+
+  /** Cycle through auto -> day -> sunset -> night -> auto. */
+  cycleMode() {
+    const idx = ATMOSPHERE_MODES.indexOf(this.mode);
+    const next = ATMOSPHERE_MODES[(idx + 1) % ATMOSPHERE_MODES.length];
+    return this.setMode(next);
   }
 
   /** Determine effective ambient lighting phase (the clock is re-read at most every 30 s). */

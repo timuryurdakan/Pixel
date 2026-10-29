@@ -8,6 +8,7 @@ import {
   fmtClock, fmtDuration, fmtCompact, liveTokensText, costLabel, totalCostLabel, gaugeEl, claudeLimitText,
   weightedTokens, WEIGHT_NOTE, PERIOD_NOUN,
 } from './usage.js';
+import { makeExportActions, defaultNotifier } from './notify.js';
 
 const MAX_TASK_BLOCKS = 12;      // older task blocks are dropped from the output log
 const MAX_OUT_NODES = 3000;      // per task block (very long outputs keep their tail)
@@ -222,10 +223,15 @@ export class TaskBlock {
     this.md = null;
     this.thinking = null;
     this.tools = [];
+    this.rawText = '';
     this.sawText = false;
     this.ended = false;
     this.scope = null;             // {folder, profile} for the denial line (set by the panel)
     this.denyGroup = null;         // open group of consecutive denials (H39)
+  }
+
+  getOutputText() {
+    return this.rawText || (this.body ? this.body.textContent : '') || '';
   }
 
   _md() {
@@ -244,6 +250,7 @@ export class TaskBlock {
     switch (p.k) {
       case 'text':
         this.sawText = true;
+        this.rawText += v;
         this.denyGroup = null;
         this._md().append(v);
         break;
@@ -347,6 +354,7 @@ export class TaskBlock {
 
   result(text, truncated) {
     if (typeof text === 'string' && text && !this.sawText) {
+      this.rawText += text;
       this._md().append(text);
       this.sawText = true;
     }
@@ -366,6 +374,15 @@ export class TaskBlock {
       e.appendChild(c);
     }
     this.el.appendChild(e);
+    if (this.sawText || this.rawText) {
+      this.el.appendChild(makeExportActions(() => this.getOutputText(), `gorev-${this.task || 'cikti'}`, {
+        btnClass: 'btn small ghost',
+        containerClass: 'out-actions export-actions',
+      }));
+    }
+    if (m && m.status === 'success') {
+      try { defaultNotifier.notifyDone(); } catch {}
+    }
   }
 }
 

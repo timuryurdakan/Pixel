@@ -1207,3 +1207,58 @@ body.mini .update-banner { display: none; }
   .boss-dlg .wf-run-actions .btn { min-width: 88px; }
   .boss-gate { padding-left: 0; }
 }
+
+/* ---- Scene Controls & Atmosphere Toolbar (G1) -------------------------- */
+#stage { position: relative; }
+.scene-controls {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px;
+  background: rgba(22, 22, 31, 0.88);
+  border: 2px solid var(--line);
+  box-shadow: 0 2px 0 #101018;
+}
+body.mini .scene-controls,
+body.pip-open .scene-controls,
+body.landing-open .scene-controls {
+  display: none;
+}
+.scene-ctl-btn {
+  font: bold 11px/1 var(--font);
+  color: var(--text);
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  padding: 5px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.scene-ctl-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.scene-ctl-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+@media (max-width: 600px) {
+  .scene-controls { right: 8px; bottom: 8px; }
+  .scene-ctl-btn { min-height: 44px; min-width: 44px; padding: 6px 10px; }
+}
+
+/* ---- Notifications & Export Actions (G3) ------------------------------- */
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.apv-notify {
+  margin-left: auto;
+}
+
+
