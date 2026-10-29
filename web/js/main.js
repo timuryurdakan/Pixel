@@ -720,8 +720,27 @@ async function setupV3(roomId, key, pairParam = null) {
   refreshUI();
 }
 
+// G2: /?demo=1 → the demo office, simulated in this browser (demo.js); nothing is fetched or sent.
+const DEMO_TICK_MS = 250;
+async function bootDemo() {
+  const { DemoOffice, DEMO_DEVICE } = await import('./demo.js');
+  const demo = new DemoOffice();
+  ui.setMode('demo');
+  ui.setConnection('live');
+  document.getElementById('demo-banner').hidden = false;
+  document.body.classList.add('demo-on');
+  handlers.onSnapshot({ mode: 'demo', serverTime: Date.now(), agents: demo.start(Date.now()) });
+  setInterval(() => {
+    const { upserts, boss } = demo.step(Date.now());
+    for (const a of upserts) handlers.onUpsert(a);
+    if (boss.job !== undefined) bossScene.setJob(DEMO_DEVICE, boss.job);
+    for (const e of boss.events) bossScene.onEvent(DEMO_DEVICE, e);
+  }, DEMO_TICK_MS);
+}
+
 async function boot() {
   bootCommon();
+  if (params.get('demo') === '1') { await bootDemo(); return; }
   backend = await cloud.detectBackend({ onRetry: () => ui.setConnection('reconnecting') });
   if (backend.kind === 'cloud') bootCloud(backend.config);
   else await bootLocal();

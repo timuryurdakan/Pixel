@@ -1262,3 +1262,18 @@ body.landing-open .scene-controls {
 }
 
 
+/* G2: live demo banner (/?demo=1) */
+.demo-banner {
+  order: 99;
+  flex: 1 0 100%;
+  min-width: 0;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+  padding: 6px 8px 6px 12px;
+  background: #1d2b3a;
+  border: 2px solid var(--accent);
+  box-shadow: 3px 3px 0 #000;
+}
+.demo-banner[hidden] { display: none; }
+.demo-banner-text { flex: 1 1 260px; }
+body.mini .demo-banner { display: none; }
+body.demo-on #topbar { flex-wrap: wrap; }
