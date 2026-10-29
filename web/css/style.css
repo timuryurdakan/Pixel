@@ -1250,3 +1250,15 @@ body.landing-open .scene-controls {
   .scene-ctl-btn { min-height: 44px; min-width: 44px; padding: 6px 10px; }
 }
 
+/* ---- Notifications & Export Actions (G3) ------------------------------- */
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.apv-notify {
+  margin-left: auto;
+}
+
+

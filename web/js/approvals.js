@@ -6,6 +6,8 @@
 // page, the CLI, expiry) removes the card on every device. All device text is rendered with textContent only.
 // There is deliberately no "approve all" control.
 
+import { defaultNotifier } from './notify.js';
+
 export const APPROVAL_TICK_MS = 1000;
 export const VIBRATE_MS = 180;
 const ID_RE = /^a[A-Za-z0-9_-]{16}$/;
@@ -70,17 +72,19 @@ export class ApprovalCenter {
    * @param {object} [o.sound]            audio.js engine (alert only when the user unmuted it)
    * @param {() => number} [o.now]
    */
-  constructor({ hub, banner, pageSlot = null, badges = [], sound = null, now = () => Date.now() }) {
-    Object.assign(this, { hub, banner, pageSlot, badges, sound, now });
+  constructor({ hub, banner, pageSlot = null, badges = [], sound = null, notifier = defaultNotifier, now = () => Date.now() }) {
+    Object.assign(this, { hub, banner, pageSlot, badges, sound, notifier, now });
     this.items = new Map();            // `${deviceId}:${id}` → {deviceId, a, el, parts, busy, sel}
     this.collapsed = false;
     this.list = el('div', 'apv-list');
     this.head = el('div', 'apv-bar');
     this.title = el('b', 'apv-title');
+    this.notifyBtn = this.notifier ? this.notifier.createToggleButton('btn small ghost apv-notify') : null;
     this.toggle = el('button', 'btn small apv-toggle', 'Gizle');
     this.toggle.type = 'button';
     this.toggle.addEventListener('click', () => { this.collapsed = !this.collapsed; this._chrome(); });
-    this.head.append(this.title, this.toggle);
+    if (this.notifyBtn) this.head.append(this.title, this.notifyBtn, this.toggle);
+    else this.head.append(this.title, this.toggle);
     this.banner.replaceChildren(this.head, this.list);
     this._timer = 0;
     hub.on('event', (dev, m) => this._onEvent(dev, m));
@@ -131,6 +135,7 @@ export class ApprovalCenter {
   _alert() {
     try { if (navigator.vibrate) navigator.vibrate(VIBRATE_MS); } catch { /* not allowed without a gesture */ }
     try { if (this.sound && !this.sound.muted && this.sound.playAlert) this.sound.playAlert(); } catch { /* ignore */ }
+    try { if (this.notifier) this.notifier.notifyApproval(); } catch { /* ignore */ }
   }
 
   _build(it) {
@@ -242,6 +247,7 @@ export class ApprovalCenter {
 
   _chrome() {
     const n = this.items.size;
+    if (this.notifier) this.notifier.setSourceCount('approvals', n);
     const onPage = !!(this.pageSlot && this.list.parentNode === this.pageSlot);
     this.banner.hidden = n === 0 || onPage;
     if (this.pageSlot) this.pageSlot.hidden = n === 0;

@@ -68,7 +68,7 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | P8 | Patron Odası: bağımsız güvenlik incelemesi (P7 sonrası) | Claude | ✅ |
 | P9 | Patron Odası: gerçek deneme, kullanıcı onayıyla, düşük bütçe (P8 sonrası) | Claude | ✅ |
 | G1 | Faz 1 (`docs/EVRENSEL_PLATFORM_ARASTIRMA_RAPORU.md` §1.2): sahne kontrolleri (yakınlaştır/uzaklaştır/sığdır, Ctrl+tekerlek, mobilde iki parmak), atmosfer seçici (gündüz/gün batımı/gece/otomatik), tıklanabilir kahve makinesi ve su sebili, Patron üzerine gelince "Patron" ipucu. Kedi zaten var, yeni kedi çizilmez. Dosyalar: `web/js/renderer.js`, `web/js/fx.js`, `web/js/sprites.js`, yeni `web/js/scene_controls.js`, `tests/js/scene_controls.test.js` | Antigravity | ✅ Teslim edildi |
-| G3 | Faz 1 (§1.5): tarayıcı bildirimi + sekme başlığında onay sayısı (izin yalnızca kullanıcı tıklayınca istenir, bildirimde istem/çıktı metni yok), yanıt ve Patron raporu için "Kopyala" ve ".md indir" (yalnızca `textContent`/Blob). Dosyalar: `web/js/prompt.js`, `web/js/approvals.js`, `web/js/boss.js`, yeni `web/js/notify.js`, `tests/js/notify.test.js`. G1'den sonra | Antigravity | ⬜ |
+| G3 | Faz 1 (§1.5): tarayıcı bildirimi + sekme başlığında onay sayısı (izin yalnızca kullanıcı tıklayınca istenir, bildirimde istem/çıktı metni yok), yanıt ve Patron raporu için "Kopyala" ve ".md indir" (yalnızca `textContent`/Blob). Dosyalar: `web/js/prompt.js`, `web/js/approvals.js`, `web/js/boss.js`, yeni `web/js/notify.js`, `tests/js/notify.test.js`. G1'den sonra | Antigravity | ✅ Teslim edildi |
 | G4 | Faz 1 (§1.3/2, §1.6): Patron'da başarısız tek iş emrini yeniden deneme (`boss.retry_step`, tavan ve onay kuralları aynen) ve eşleştirme kodunu QR ile telefona taşıma (SAS onayı aynen). Dosyalar: `pixel_connector/*`, `web/js/devices.js`, `web/js/boss.js` (yalnızca G3 birleştikten sonra) | Claude | ⬜ |
 | G2 | Faz 1 (§1.1): ilk ziyarette rehber yerine canlı demo ofisi + üst bant, demoda Patron senaryosu. Dosyalar: `web/js/main.js`, `web/index.html`, `web/tanitim.html`. G1–G4 birleştikten sonra (ortak dosyalar) | Claude | ⬜ |
 
@@ -380,3 +380,9 @@ görüntüleri, bilinen sorunlar.
   ipucu ve kanvas etiketi), `web/css/style.css` (sona `.scene-controls` eklendi), `web/sw.js` (`SHELL` listesine
   `/js/scene_controls.js` eklendi, `VERSION` değiştirilmedi) ve `tests/js/scene_controls.test.js` (5 test) tamamlandı.
   Mevcut kedi (`CAT_ID`) korundu, `innerHTML` kullanılmadı.
+- **2026-10-29, Antigravity (G3: tarayıcı bildirimi, sekme başlığında onay sayısı, Kopyala ve .md indir):**
+  `web/js/notify.js` (`Notifier`: sekme başlığında `(N Onay) Pixel Office`, yalnızca kullanıcı tıkladığında izin isteyen
+  tarayıcı bildirimi, istem/çıktı sızdırmayan sabit `"Onay bekliyor"` / `"Görev tamamlandı"` metinleri; `copyText`,
+  `downloadMarkdown`, `makeExportActions`), `web/js/approvals.js`, `web/js/prompt.js`, `web/js/boss.js`, `web/css/style.css`
+  (sona `.export-actions` eklendi), `web/sw.js` (`SHELL` listesine `/js/notify.js` eklendi, `VERSION` değiştirilmedi) ve
+  `tests/js/notify.test.js` (4 test) tamamlandı. Yalnızca `textContent` ve `Blob` kullanıldı; `.boss-report` yapısı korundu.
