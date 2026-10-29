@@ -547,3 +547,20 @@ Tehdit modeline etkisi (bağımsız inceleme değil; uygulayıcının notu, `tes
   söyletmekle aynı sosyal mühendislik düzeyi. Biçim dışı değer (tam 12 Crockford karakteri değil) hiçbir şey açmaz.
 - **Yeniden deneme:** Yeni yetki yok: yalnızca eşleşmiş tarayıcı, yalnızca `error` ile biten son iş, iş emri başına 1,
   aynı görev politikası ve Test onayı, işin toplam tavanlarından kalan; kullanıcının Test "hayır"ı aşılamaz.
+
+## 16. Faz 1 kapanış taraması: G1, G2, G3 ve yeniden deneme düğmesi (2026-10-30)
+
+Kısa tarama (uygulayıcının notu; Faz 1'in yeni web yüzeyleri, `0d198a4..HEAD`). Yeni bulgu yok; bir hata düzeltildi.
+
+- **G3 bildirimleri:** izin yalnızca kullanıcı tıklamasıyla istenir; bildirim başlığı ve gövdesi sabit metindir
+  (`notifyApproval` / `notifyDone` argüman almaz), istem, çıktı, proje ya da rapor metni işletim sistemine gitmez;
+  yalnızca sekme gizliyken gönderilir. Düzeltme: yeniden eşitlemede (`boss.get`) aynı Patron raporu için tekrar
+  bildirim gelmesi (`da1ee08`, güvenlik değil, gürültü).
+- **Kopyala / .md indir:** metin `textContent` / `Blob` ile; HTML olarak hiçbir yere yazılmaz. Dosya adı izin listesiyle
+  temizlenir (`[a-zA-Z0-9._-]`, 64 karakter, `.md` zorunlu); içerik `text/markdown`, sayfa kökeninde çalıştırılmaz.
+- **G1 sahne:** `localStorage` atmosfer değeri izin listesinden okunur; etkileşimler yalnızca çizim ve ses, ağ yok.
+- **Yeniden dene düğmesi:** yalnızca `bossRetry` ilan eden bağlayıcıda, `error` ile biten işte; tüm kontroller
+  bağlayıcıda (§15), arayüz yalnızca `{job, order}` gönderir. Hata kodları sabit Türkçe metne çevrilir.
+- **G2 demo:** `/?demo=1` yalnızca sabit değerle eşleşir, URL'den başka veri okunmaz; `demo.js` ağ isteği, depolama ya
+  da oda anahtarı kullanmaz, `DEMO_DEVICE` hiçbir merkeze bağlanmaz. Bant statik işaretleme, satır içi işleyici yok.
+- Riskli kalıp taraması (`innerHTML`, `eval`, `Function(`, `insertAdjacentHTML`, `document.write`) yeni kodda temiz.
