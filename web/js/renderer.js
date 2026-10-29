@@ -366,6 +366,16 @@ export class Renderer {
     return null;
   }
 
+  /** CSS px relative to the canvas → true on the Boss or his desk (opens the Boss's panel). */
+  pickBoss(canvasX, canvasY) {
+    const rect = this.canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height || !this._hasBoss()) return false;
+    const wx = (canvasX * this.worldW) / rect.width;
+    const wy = (canvasY * this.worldH) / rect.height;
+    const x = BOSS_DESK.x * TILE, top = BOSS_SEAT.y * TILE + TILE - CHAR_H, bottom = (BOSS_DESK.y + 1) * TILE;
+    return wx >= x && wx < x + BOSS_DESK.w && wy >= top && wy < bottom;
+  }
+
   pickBoard(canvasX, canvasY) {
     const rect = this.canvas.getBoundingClientRect();
     if (!rect.width || !rect.height) return false;

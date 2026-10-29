@@ -888,3 +888,63 @@ kapıdan ulaşılabilir; odada nokta yok; oda duvarlı, tek giriş kapı; kedi v
 poz eşlemesi; azaltılmış hareket; yürüyüş, iki uzman farklı kare, sıraya alma, bekleyen olayın düşmesi, `connectBossScene`).
 Mevcut handoff testleri (9) değişmeden geçiyor. Demo odasında 1280, 390, 360 px ve `?view=mini` başsız tarayıcı ekran
 görüntüleri: konsol hatası yok, yatay kaydırma yok.
+
+### P6 — Patron paneli ve Görev Tahtası (2026-10-29, Frontend Mühendisi)
+
+Kod: yeni `web/js/boss.js` (`BossStore`, `BossPanel`, mesaj okuyucuları `readState`/`readPlan`/`readReport`,
+`parseCost`, `costCeiling`), `web/js/board.js` ("Plan onayı · Siz" kartı, kartın `target` ile paneli açması),
+`web/js/main.js` (bağlantı), `web/js/renderer.js` (yalnızca `pickBoss`), `web/index.html` (`#dlg-boss`),
+`web/css/style.css`. Testler: yeni `tests/js/boss.test.js` (17, başsız tarayıcı, sahte hub + gerçek DOM) ve
+`tests/test_boss_ui.py` (gerçek sayfa ⇄ `dev_relay` ⇄ gerçek bağlayıcı, sahte `claude`). Web `po-v4.0.5`
+(`web/sw.js` kabuğuna `boss.js`).
+
+1. **Panel her zaman Patrona tıklanınca açılır, içeriği bağlama göre değişir.** Cihaz kontrolü yoksa (izleme
+   bağlantısı, yerel mod, röle yok ya da v3 henüz yükleniyor) aynı iletişim kutusu yalnızca bilgi metniyle açılır
+   (`boss.js` tembel yüklenir); eşleşmemiş tarayıcıda "Patrona iş vermek için önce bir bilgisayar eşleştirin.",
+   izleyicide davet bağlantısı açıklaması, eşleşmiş ama "boss" özelliği olan bağlı cihaz yoksa "bağlı değil ya da
+   bağlayıcı 3.8.0 ve üstü değil" metni. Bu durumlarda form, plan, kart ve hiçbir eylem düğmesi yok; `boss.*` isteği
+   gönderilmez. Mini pencerede Patrona tıklamak bir şey açmaz. Araç çubuğuna ayrı düğme eklenmedi (§2/2: Patrona tıklanır).
+2. **Tavan alanı yalnızca düşürür, kırpmaz:** üst sınır `device.info.boss.maxCostUsd` (0,10–3,00 $ dışı ya da yoksa
+   1,00 $, bağlayıcının varsayılanı), alt sınır 0,10 $; aralık dışı değer sayfada Türkçe hatayla reddedilir ve istek
+   gitmez (bağlayıcı da `bad_request` ile reddeder, S26-04). Form `novalidate`: tarayıcının kendi balonu yerine aynı
+   Türkçe hata. Alan varsayılanı cihazın tavanı.
+3. **Klasör kaynağı Şablonlar/Yeni ajan ile aynı:** `workspace.list`; varsayılan `isler`. Alt klasör yalnızca
+   `children` olan klasörde ve **var olmalı** (bağlayıcı `boss.ask`'te klasörü yalnızca okur, oluşturmaz; A10 şablonu
+   oluşturuyordu). Bu yüzden etiket "isteğe bağlı, var olmalı".
+4. **Durum kaynağı:** `BossStore` her bağlanan "boss" cihazı için bir `boss.get` (sekme yeniden açılınca/yeniden
+   bağlanınca), sonra `boss.state`/`boss.plan`/`boss.report` olayları; `re` taşıyan yanıtlar, bilinmeyen türler ve
+   biçimi bozuk mesajlar yok sayılır, alanlar izin listesiyle okunur (iş/çalışma kimliği deseni, bilinen durumlar, sayı
+   alanları, en fazla 8 iş emri, metin uzunluk sınırları). Biten bir işin geç gelen "etkin" durumu yok sayılır (iletim
+   sırası karışabilir, P3 notu 12). P5'in `connectBossScene`'i kendi `boss.get`'ini yapmaya devam ediyor; cihaz başına
+   bağlantıda iki küçük `boss.get` gider (P5 dosyasına dokunmamak için kabul edildi).
+5. **İlerleme ve Test onayı `boss.state.orderStates`'ten:** iş emri adları plan kartındaki başlıklardan (plan aynı işe
+   aitse), yoksa kimlik. Durumu `approval` olan iş emrinde (Test, §10/3) Onayla/Reddet → `workflow.answer {run, decision,
+   step}`; Şablonlar penceresi plan adımlarında onay düğmesi göstermediği için tek yer burası. Değerlendirme adımı
+   "Patronun değerlendirmesi" diye görünür.
+6. **Rapor düz metin:** `<pre>` + `textContent` (satır sonları korunur, çocuk öğe yok). Rapor başlığı "Rapor" (metnin
+   kendisi "Patronun raporu:" ile başlıyor); yarımsa "Rapor (iş yarım kaldı)". İş bitince form yeniden görünür.
+7. **"Hafızayı sıfırla" panel içinde onay ister** (`window.confirm` yerine satır içi "Evet, sıfırla / Vazgeç"),
+   seçili klasör (+ alt klasör) için `boss.reset`; `busy` → "Patron çalışırken hafızası sıfırlanamaz".
+8. **Uçuştaki istek:** her eylemin (Patrona ver, plan onay/red, İptal, Test onayı, sıfırlama) düğmeleri istek dönene
+   kadar devre dışı; ikinci tıklama istek göndermez. Hata kodları Türkçe (`busy`, `not_allowed`, `workspace_denied`,
+   `engine_unavailable`, `too_large`, `bad_request`, `unknown_job`, diğerleri `control.js` metinleri, bilinmeyen kod →
+   genel metin, ham kod asla). Kalıcı iletişim kutusu toast'ların üstünde kaldığı için sonuçlar panelin içinde de
+   gösterilir.
+9. **Görev Tahtası kartı yalnızca sayı taşır:** "Siz" / "Plan onayı" / "Patron planı · N iş emri · tahmini $x / tavan
+   $y" (plan metni tahtaya yazılmaz), yalnızca eşleşmiş tarayıcıda; karta tıklamak tahtayı kapatıp paneli açar
+   (`TaskBoard` yeni `onOpenTarget` seçeneği). Test onayı tahtada mevcut iş akışı kartıyla ("Onayınız bekleniyor")
+   görünür.
+10. **`pickBoss`:** Patronun başından masanın alt kenarına, masa genişliğinde dikdörtgen; ajanlar önce seçilir (teslim
+    karesindeki uzmana tıklamak uzmanı seçer). Harita Patronu içermiyorsa hiç isabet yok.
+11. **Telefonda** iletişim kutusunun ✕ düğmesi bu panelde 44 × 44 px (diğer pencerelerde 26 px; kapsam dışı olduğu için
+    değiştirilmedi), bütün düğme ve alanlar ≥ 44 px, 360/390 px'te yatay kaydırma yok.
+
+Doğrulama: `tests/js/boss.test.js` (özellik kapısı, tavan sınırı, mesaj okuyucuları ve bozuk mesajlar, depo + `boss.get`
++ geç durum, izleyici/eşleşmemiş/özelliksiz bilgi metni, form doğrulaması ve `boss.ask` alanları, uçuştaki kilit, hata
+metinleri, plan kartı + XSS kanaryası, onay/red, Test onayı, İptal, rapor, yeniden yükleme, sıfırlama onayı, tahta
+kartı, `pickBoss`, işaretlemede satır içi işleyici yok). `tests/test_boss_ui.py`: eşleşmemiş → bilgi; eşleştirme →
+form (tavan 1,00 $), 1,50 $ sayfada reddedilir (sahte `claude` hiç çağrılmaz), 0,50 $ ile `boss.ask` (planlama görevine
+`--max-budget-usd 0.20`), plan kartı ve tahta kartı, yeniden yükleme sonrası plan geri gelir ve tahta kartından panel
+açılır, Onayla → Belge → Test onayı → rapor (4 Claude çağrısı), sıfırlama Patronun oturumunu siler, mini pencere ve
+izleyici; kanarya hiçbir aşamada işaretlemeye dönüşmez; 1280/390/360 px yatay kaydırma yok, telefonda düğmeler ≥ 44 px;
+konsol hatası yok.

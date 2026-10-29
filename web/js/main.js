@@ -40,6 +40,7 @@ const overrides = new Map();
 /** v3 device control (V3.md §11): set up only for a cloud room with the write key and a configured relay. */
 let v3 = null;              // {hub, panel, devices, wizard, newAgent, pendingSelect, setTab}
 let board = null;           // TaskBoard (Kanban whiteboard - A8)
+let bossInfoPanel = null;   // Patron Odası without device control (viewer, local mode): the info text only
 
 cloud.captureInstallPrompt();
 
@@ -65,6 +66,7 @@ function updateBoard(list = sortedAgents()) {
     views: v3 && v3.panel ? v3.panel.views : null,
     approvals: v3 && v3.approvals ? v3.approvals : null,
     workflows: v3 && v3.workflows ? v3.workflows.active() : null,
+    bossPlans: v3 && v3.bossStore ? v3.bossStore.pendingPlans() : null,
     isPaired,
   });
   if (renderer) renderer.boardData = boardData;
@@ -110,6 +112,22 @@ function officeIdOf(dev, key) {
 }
 
 const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Patron Odası P6: the Boss's panel. With device control (v3) the full panel; otherwise (viewer link, local mode, no
+ * relay, or while v3 is still loading) the same dialog with its info text only. Never in the mini window.
+ */
+async function openBoss() {
+  if (viewMini || document.body.classList.contains('mini')) return;
+  if (v3 && v3.boss) { v3.boss.open(); return; }
+  const dialog = document.getElementById('dlg-boss');
+  if (!dialog) return;
+  if (!bossInfoPanel) {
+    const { BossPanel } = await import('./boss.js');
+    bossInfoPanel = new BossPanel({ dialog, viewer: !(room && room.key) });
+  }
+  bossInfoPanel.open();
+}
 
 /** v4-B handoff on a paired device: A walks to B's desk with a sheet of paper (bubbles only with reduced motion). */
 function animateHandoff(dev, m) {
@@ -445,6 +463,10 @@ function bootCommon() {
       }
       return;
     }
+    if (!picked && renderer.pickBoss(x, y)) {
+      openBoss().catch((err) => reportError(err));
+      return;
+    }
     select(picked);
     if (picked) {
       sound.playHop();
@@ -454,7 +476,7 @@ function bootCommon() {
   canvas.addEventListener('mousemove', (e) => {
     const [x, y] = canvasPoint(e);
     hoverId = renderer.pickCharacter(manager.list(), x, y);
-    canvas.style.cursor = hoverId ? 'pointer' : 'default';
+    canvas.style.cursor = hoverId || renderer.pickBoss(x, y) ? 'pointer' : 'default';
   });
   canvas.addEventListener('mouseleave', () => { hoverId = null; });
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape') select(null); });
@@ -468,6 +490,7 @@ function bootCommon() {
       onSelectAgent: (id) => select(id, { blip: true }),
       sound,
       isPaired: () => !!(v3 && v3.hub && v3.hub.pairedCount > 0),
+      onOpenTarget: (target) => { if (target === 'boss') openBoss().catch((err) => reportError(err)); },
     });
   }
   const btnBoard = document.getElementById('btn-board');
@@ -589,9 +612,9 @@ function bootCloud(config) {
 // --- v3: device control (V3.md §11) ---------------------------------------------------------------------
 async function setupV3(roomId, key) {
   const [{ DeviceHub }, { PromptPanel }, { DevicesPage, PairWizard, NewAgentDialog }, { fmtCompact: fmtTok },
-    { ApprovalCenter }, { WorkflowStore, WorkflowDialog, supportsWorkflows }, { UpdateBanner }] = await Promise.all([
-    import('./control.js'), import('./prompt.js'), import('./devices.js'), import('./usage.js'), import('./approvals.js'),
-    import('./workflows.js'), import('./update_banner.js')]);
+    { ApprovalCenter }, { WorkflowStore, WorkflowDialog, supportsWorkflows }, { UpdateBanner }, { BossStore, BossPanel }] =
+    await Promise.all([import('./control.js'), import('./prompt.js'), import('./devices.js'), import('./usage.js'),
+      import('./approvals.js'), import('./workflows.js'), import('./update_banner.js'), import('./boss.js')]);
   const $ = (id) => document.getElementById(id);
   const hub = new DeviceHub({ roomId, writeKey: key,
     isVisible: () => document.visibilityState !== 'hidden' || !!(mini && mini.window) });
@@ -662,8 +685,12 @@ async function setupV3(roomId, key) {
     onInstall: () => wizard.open(1), onLayout: () => fitCanvas() });
   // Patron Odası P5: boss.state / boss.event from paired computers drive the Boss and the specialists' file walks.
   connectBossScene(bossScene, hub);
+  // Patron Odası P6: the Boss's panel (click the Boss) and the "Plan onayı · Siz" card on the Task Board.
+  const bossStore = new BossStore({ hub });
+  const boss = new BossPanel({ dialog: $('dlg-boss'), hub, store: bossStore, toast });
+  bossStore.onChange(() => updateBoard());
   v3 = { hub, panel, devices, wizard, newAgent, approvals, workflows, wfDialog, supportsWorkflows, updateBanner,
-    pendingSelect: null, setTab };
+    bossStore, boss, pendingSelect: null, setTab };
   window.pixelOffice.v3 = v3;
 
   ui.ctlInfo = (a) => {

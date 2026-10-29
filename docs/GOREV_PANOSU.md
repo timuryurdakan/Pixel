@@ -63,7 +63,7 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | P3 | Patron Odası: iş emirlerinin yürütülmesi, değerlendirme, rapor (P2 sonrası) | Claude | ✅ |
 | P4 | Patron Odası: pixel art, Patron ve odası (P3 sonrası) | Claude | ✅ |
 | P5 | Patron Odası: ofis haritası ve sahne (P4 sonrası) | Claude | ✅ |
-| P6 | Patron Odası: Patron paneli ve Görev Tahtası (P5 sonrası) | Claude | ⬜ |
+| P6 | Patron Odası: Patron paneli ve Görev Tahtası (P5 sonrası) | Claude | ✅ |
 | P7 | Patron Odası: QA ve belgeler (P6 sonrası) | Claude | ⬜ |
 | P8 | Patron Odası: bağımsız güvenlik incelemesi (P7 sonrası) | Claude | ⬜ |
 | P9 | Patron Odası: gerçek deneme, kullanıcı onayıyla, düşük bütçe (P8 sonrası) | Claude | ⬜ |
@@ -323,3 +323,13 @@ görüntüleri, bilinen sorunlar.
   günlük. Bağlayıcıya ve panel arayüzüne dokunulmadı (P6). Bu makinede Chrome yok (format sonrası); tarayıcı testleri
   PATH'e geçici `chromium` → Brave bağlantısıyla çalıştırıldı. Demo odasında 1280/390/360 px ve mini pencere ekran
   görüntüleri: konsol hatası yok.
+- **2026-10-29, Claude (Patron Odası P6: Patron paneli ve Görev Tahtası, Frontend Mühendisi):** Teslim edildi,
+  commit/push yok (koordinatör denetleyip commit'leyecek). Yeni: `web/js/boss.js`, `tests/js/boss.test.js` (17 test),
+  `tests/test_boss_ui.py` (gerçek röle + bağlayıcı + sahte `claude`, başsız tarayıcı). Değişen: `web/js/board.js` ("Plan
+  onayı · Siz" kartı, `onOpenTarget`), `web/js/main.js` (bağlantı), `web/js/renderer.js` (yalnızca `pickBoss`),
+  `web/index.html` (`#dlg-boss`), `web/css/style.css`, `web/sw.js` + `web/js/cloud.js` (`po-v4.0.5`, SHELL'e `boss.js`),
+  `docs/PATRON_ODASI.md` §11 P6, `PROJECT.md` §6 (P1 kaydı çıkarıldı; günlükte var), günlük. Bağlayıcıya, haritaya,
+  `boss_scene.js`'e ve güvenlik çekirdeğine dokunulmadı. Kararlar (tavan kırpılmaz, alt klasör var olmalı, sıfırlama satır
+  içi onay, iki `boss.get`, ✕ düğmesi yalnızca bu panelde 44 px) §11'de. `python3 -m unittest discover -s tests`: 947 test,
+  OK (1 atlandı: `pwsh`); tarayıcı testleri PATH'e geçici `chromium` → Brave bağlantısıyla. Ekran görüntüleri (1280/390/360
+  px: form, plan, Test onayı, rapor; izleyici 390 px) oturumun geçici klasöründe; konsol hatası yok.

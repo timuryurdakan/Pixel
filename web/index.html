@@ -168,6 +168,30 @@
   </form>
 </dialog>
 
+<!-- Patron Odası (docs/PATRON_ODASI.md §2, §9 P6): opened by clicking the Boss; filled by js/boss.js -->
+<dialog id="dlg-boss" class="dlg wide boss-dlg" aria-labelledby="dlg-boss-title">
+  <form method="dialog" class="dlg-head"><h2 id="dlg-boss-title">Patron Odası</h2><button class="close" value="close" aria-label="Kapat">✕</button></form>
+  <p id="boss-info" class="boss-info">Patrona iş vermek için önce bir bilgisayar eşleştirin.</p>
+  <label id="boss-device-row" class="boss-device" hidden>Bilgisayar <select id="boss-device"></select></label>
+  <section id="boss-job" class="boss-job" aria-live="polite" aria-label="Patron işi" hidden></section>
+  <form id="boss-form" class="agent-form boss-form" autocomplete="off" novalidate hidden>
+    <h3>Patrona yeni iş</h3>
+    <label>Patrona ne yaptırmak istiyorsunuz? <textarea name="brief" class="wf-brief" rows="4" spellcheck="false" placeholder="ör. Sayfaya koyu tema ekle ve testini yaz"></textarea></label>
+    <label>Çalışma klasörü <select name="workspace"></select></label>
+    <label id="boss-sub-row" hidden>Alt klasör (isteğe bağlı, var olmalı) <input name="sub" maxlength="200" placeholder="ör. statik-site"></label>
+    <label>Maliyet tavanı ($) <input name="cost" type="number" min="0.10" max="1" step="0.01" inputmode="decimal"></label>
+    <p id="boss-cap-hint" class="muted small"></p>
+    <p class="muted small">Patron klasörü yalnızca okur ve en fazla 4 iş emrinden oluşan bir plan yazar. Planı siz onaylamadan hiçbir uzman çalışmaz.</p>
+    <p id="boss-error" class="form-error" role="alert" hidden></p>
+    <p id="boss-note" class="muted small" role="status" hidden></p>
+    <div id="boss-reset-confirm" class="boss-confirm" hidden>
+      <p class="small">Patron bu klasörle ilgili önceki konuşmalarını unutur; bir sonraki iş sıfırdan başlar. Emin misiniz?</p>
+      <div class="dlg-actions"><button type="button" class="btn ghost" data-boss-reset-no>Vazgeç</button><button type="button" class="btn danger" data-boss-reset-yes>Evet, sıfırla</button></div>
+    </div>
+    <div class="dlg-actions"><button type="button" class="btn ghost" data-boss-reset>Hafızayı sıfırla</button><button type="submit" name="ask" class="btn accent">Patrona ver</button></div>
+  </form>
+</dialog>
+
 <!-- Cloud landing (CLOUD.md §9.3): create / join / recent rooms -->
 <section id="landing" class="landing" hidden aria-labelledby="landing-title">
   <div class="landing-card">

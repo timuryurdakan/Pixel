@@ -1175,3 +1175,35 @@ body.update-banner-on #topbar { flex-wrap: wrap; }
 .update-banner .btn { min-height: 44px; }
 .ub-close { min-width: 44px; font-size: 18px; line-height: 1; }
 body.mini .update-banner { display: none; }
+
+/* ---- Patron Odası P6 (2026-10-29): the Boss's panel (boss.js); job card reuses the .wf-run look ---- */
+.boss-dlg [hidden] { display: none; }
+.boss-info { padding: 8px 10px; background: var(--panel-2); border: 2px solid var(--line); overflow-wrap: anywhere; }
+.boss-device { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.boss-job { margin-bottom: 12px; }
+.boss-card { min-width: 0; }
+.boss-plan { margin-top: 8px; padding: 8px 10px; background: #16161f; border: 2px solid var(--warn); min-width: 0; }
+.boss-plan h4 { margin-top: 0; }
+.boss-summary { overflow-wrap: anywhere; white-space: pre-wrap; }
+.boss-plan-orders { margin: 6px 0 0; padding: 0 0 0 1.4em; display: flex; flex-direction: column; gap: 8px; }
+.boss-plan-order { min-width: 0; overflow-wrap: anywhere; }
+.boss-order-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.boss-role { font-size: 11px; padding: 1px 6px; border: 1px solid currentColor; color: #8fd3ff; overflow-wrap: anywhere; }
+.boss-order-title { min-width: 0; overflow-wrap: anywhere; }
+.boss-goal { margin: 4px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.boss-accept { margin: 2px 0 4px; padding-left: 1.2em; }
+.boss-accept li, .boss-order-meta { overflow-wrap: anywhere; }
+.boss-cost { margin: 8px 0 0; color: var(--accent); font-weight: bold; }
+.boss-gate { flex-basis: 100%; padding: 4px 0 2px 1.6em; }
+.boss-report { margin: 4px 0 0; padding: 8px 10px; max-height: 50vh; overflow: auto; background: #16161f; border: 2px solid var(--line);
+  white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.45 var(--font); color: var(--text); }
+.boss-confirm { padding: 6px 10px; background: #3a1f24; border: 2px solid var(--bad); }
+.boss-confirm .dlg-actions { margin-top: 6px; }
+.boss-form input[name="cost"] { width: 8em; }
+@media (max-width: 600px) {
+  .boss-form select, .boss-form input, .boss-device select { min-height: 44px; font-size: 16px; }
+  .boss-dlg .btn { min-height: 44px; }
+  .boss-dlg .dlg-head .close { width: 44px; height: 44px; }
+  .boss-dlg .wf-run-actions .btn { min-width: 88px; }
+  .boss-gate { padding-left: 0; }
+}

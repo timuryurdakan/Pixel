@@ -22,6 +22,8 @@ const WORKFLOW_TITLE = {
   done: 'İş akışı: bitti', error: 'İş akışı: hata', cancelled: 'İş akışı: iptal',
 };
 
+const money = (v) => `$${(Number.isFinite(v) ? v : 0).toFixed(2)}`;
+
 function el(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -71,8 +73,11 @@ export function stateLabel(state, tool = '') {
  * - NO task prompt, command, or approval summary text is ever exposed.
  * - Only public agent names and public state labels appear.
  * - Workflow steps (v4-C, `workflows` = [{device, run}] of active runs) are only used when paired.
+ * - Boss plans waiting for approval (Patron Odası, `bossPlans` = boss.js BossStore.pendingPlans()) likewise; the
+ *   card shows numbers only, never the plan's text.
  */
-export function categorizeTasks({ agents = [], views = null, approvals = null, isPaired = false, workflows = null } = {}) {
+export function categorizeTasks({ agents = [], views = null, approvals = null, isPaired = false, workflows = null,
+  bossPlans = null } = {}) {
   const result = {
     queued: [],
     working: [],
@@ -154,6 +159,24 @@ export function categorizeTasks({ agents = [], views = null, approvals = null, i
     }
   }
 
+  // 2c. Patron Odası (paired only): a plan waiting for the user's approval → "Plan onayı · Siz"; the card opens the
+  //     Boss's panel (target).
+  if (isPaired && Array.isArray(bossPlans)) {
+    for (const { job, plan } of bossPlans) {
+      if (!job || !plan) continue;
+      const n = plan.orders.length;
+      result.waiting.push({
+        id: `boss-${job.job}`,
+        agentId: null,
+        agentName: 'Siz',
+        title: 'Plan onayı',
+        detail: `${plan.round ? 'Patron düzeltme planı' : 'Patron planı'} · ${n} iş emri · tahmini ${money(plan.estimateUsd)} / tavan ${money(plan.maxCostUsd)}`,
+        isApproval: true,
+        target: 'boss',
+      });
+    }
+  }
+
   // 3. Process remaining/all agents from the public room snapshot.
   for (const ag of agents) {
     if (!ag || ag.phase === 'gone' || seenAgentIds.has(ag.id)) continue;
@@ -227,10 +250,12 @@ export class TaskBoard {
    * @param {(agentId: string) => void} opts.onSelectAgent
    * @param {object} [opts.sound]
    * @param {() => boolean} [opts.isPaired]
+   * @param {(target: string) => void} [opts.onOpenTarget]   a card with a `target` (e.g. 'boss': the Boss's panel)
    */
-  constructor({ dialog, onSelectAgent, sound = null, isPaired = () => false }) {
+  constructor({ dialog, onSelectAgent, sound = null, isPaired = () => false, onOpenTarget = null }) {
     this.dialog = dialog;
     this.onSelectAgent = onSelectAgent;
+    this.onOpenTarget = onOpenTarget;
     this.sound = sound;
     this.isPaired = isPaired;
     this.isOpen = false;
@@ -358,7 +383,10 @@ export class TaskBoard {
           }
 
           const onCardAction = () => {
-            if (it.agentId && this.onSelectAgent) {
+            if (it.target && this.onOpenTarget) {
+              this.close();
+              this.onOpenTarget(it.target);
+            } else if (it.agentId && this.onSelectAgent) {
               this.onSelectAgent(it.agentId);
               this.close();
             }
