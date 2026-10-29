@@ -68,6 +68,11 @@ const REQUEST_TEXT = {
   too_large: 'İstek çok uzun (en fazla 4 KB).',
   bad_request: 'Bilgisayar isteği geçersiz buldu (metin ya da maliyet tavanı).',
   unknown_job: 'Bu iş bulunamadı ya da zaten bitti.',
+  not_retryable: 'Bu iş emri artık yeniden denenemez (iş sürüyor ya da daha yeni bir iş var).',
+  retry_used: 'Bu iş emri bu turda zaten bir kez yeniden denendi.',
+  cost_cap: 'İşin maliyet tavanı doldu; yeniden deneme için bütçe kalmadı.',
+  max_turns: 'İşin tur tavanı doldu; yeniden deneme yapılamaz.',
+  timeout: 'İşin süre tavanı doldu; yeniden deneme yapılamaz.',
 };
 /** S29-03: the approval before each Test order (§10/3); the same warning is the local approval item's preview. */
 export const GATE_TEXT = 'Test uzmanı test komutlarını çalıştıracak. Bu komutlar uzmanların yazdığı kodu (test dosyaları, '
@@ -110,6 +115,12 @@ const bytes = (s) => new TextEncoder().encode(s).length;
 /** A device whose connector understands boss.* and is connected. */
 export function supportsBoss(dev) {
   return !!(dev && dev.ready && dev.info && Array.isArray(dev.info.features) && dev.info.features.includes(BOSS_FEATURE));
+}
+
+/** G4: the connector accepts boss.retry_step (connector 3.9.0+). */
+export const BOSS_RETRY_FEATURE = 'bossRetry';
+export function supportsBossRetry(dev) {
+  return supportsBoss(dev) && dev.info.features.includes(BOSS_RETRY_FEATURE);
 }
 
 /** The device's run cost ceiling (device.info.boss.maxCostUsd); anything invalid → the connector's default. */
@@ -667,6 +678,7 @@ export class BossPanel {
 
   _orders(job, plan) {
     const ol = el('ol', 'wf-step-list boss-orders');
+    const canRetry = job.state === 'error' && supportsBossRetry(this._device());
     for (const o of job.orderStates) {
       const li = el('li', `wf-step boss-order st-${o.state}`);
       const known = plan ? plan.orders.find((x) => x.id === o.id) : null;
@@ -676,9 +688,20 @@ export class BossPanel {
       if (o.code && o.state !== 'done') extra += ` · ${codeText(o.code)}`;
       li.appendChild(el('span', 'wf-step-meta muted small', extra));
       if (o.state === 'approval' && job.run) li.appendChild(this._gate(job, o));
+      if (canRetry && o.state === 'error' && o.id !== 'patron') li.appendChild(this._retry(job, o));
       ol.appendChild(li);
     }
     return ol;
+  }
+
+  /** G4: one more try of a failed order; the connector checks the caps, the round and the job again. */
+  _retry(job, o) {
+    const key = `retry:${o.id}`;
+    const actions = el('div', 'wf-run-actions');
+    actions.appendChild(button('btn small boss-retry', 'Yeniden dene',
+      () => this._act(key, { type: 'boss.retry_step', job: job.job, order: o.id }, 'İş emri yeniden deneniyor'),
+      this.inflight.has(key)));
+    return actions;
   }
 
   /** §10/3: every Test order waits for the user's approval before it starts (workflow.answer with the step). */

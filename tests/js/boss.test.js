@@ -405,6 +405,39 @@ test('progress: order states with plan titles, the Test order approval (workflow
   } finally { s.done(); }
 });
 
+test('retry: "Yeniden dene" only on a failed order of a job that ended in error, only with the bossRetry feature', async () => {
+  const failed = state('error', { code: 'engine_error', run: RUN, endedAt: Date.now(), orderStates: [
+    { id: 'o1', role: 'docs', state: 'done', code: null, agent: 'k1', task: 't1' },
+    { id: 'o2', role: 'test', state: 'error', code: 'timeout', agent: 'k2', task: 't2' },
+    { id: 'patron', role: 'patron', state: 'error', code: 'engine_error', agent: null, task: null }] });
+  let s = await setup({ features: ['handoff', 'workflows', 'boss'] });
+  try {
+    s.hub.emit('event', 'd1', planMsg());
+    s.hub.emit('event', 'd1', failed);
+    s.panel.open();
+    assert.equal(s.dlg.querySelector('.boss-retry'), null);           // an older connector: no button
+  } finally { s.done(); }
+  s = await setup({ features: ['handoff', 'workflows', 'boss', 'bossRetry'] });
+  try {
+    s.hub.emit('event', 'd1', planMsg());
+    s.hub.emit('event', 'd1', state('running', { run: RUN, orderStates: [
+      { id: 'o2', role: 'test', state: 'error', code: 'timeout', agent: 'k2', task: 't2' }] }));
+    s.panel.open();
+    assert.equal(s.dlg.querySelector('.boss-retry'), null);           // the job is still active
+    s.hub.emit('event', 'd1', failed);
+    await until(() => s.dlg.querySelectorAll('.boss-retry').length === 1);
+    const btn = s.dlg.querySelector('.boss-retry');
+    assert.ok(btn.closest('.boss-order').classList.contains('st-error'));
+    assert.ok(btn.closest('.boss-order').textContent.includes('Test yaz'));   // o2, never the Boss's own review
+    s.hub.replies['boss.retry_step'] = new CodeError('retry_used');
+    btn.click();
+    await until(() => s.hub.calls.some((m) => m.type === 'boss.retry_step'));
+    assert.deepEqual(s.hub.calls.find((m) => m.type === 'boss.retry_step'), { type: 'boss.retry_step', job: JOB, order: 'o2' });
+    await until(() => s.toasts.some(([, o]) => o && o.error));
+    assert.match(s.toasts.find(([, o]) => o && o.error)[0], /bir kez/);
+  } finally { s.done(); }
+});
+
 test('report: plain text with its line breaks, partial note, the form comes back for a new job', async () => {
   const s = await setup();
   try {
