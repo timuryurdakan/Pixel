@@ -6,9 +6,10 @@ Bu klasör, Claude Code'un bu proje için tuttuğu hafıza notlarının **yedeğ
 Formattan sonra geri yüklemek için (proje yine `~/Desktop/Pixel` klasörüne klonlandıysa):
 
 ```bash
-mkdir -p ~/.claude/projects/-home-timur-Desktop-Pixel/memory
-cp ~/Desktop/Pixel/docs/claude-hafiza/*.md ~/.claude/projects/-home-timur-Desktop-Pixel/memory/
-rm ~/.claude/projects/-home-timur-Desktop-Pixel/memory/README.md
+MEM=~/.claude/projects/$(printf '%s' "$HOME/Desktop/Pixel" | tr / -)/memory
+mkdir -p "$MEM"
+cp ~/Desktop/Pixel/docs/claude-hafiza/*.md "$MEM"/
+rm "$MEM"/README.md
 ```
 
-Proje başka bir klasöre klonlanırsa hedef klasör adı değişir (yoldaki `/` yerine `-`).
+Proje başka bir klasöre klonlanırsa `MEM` satırındaki `$HOME/Desktop/Pixel` kısmını o klasörle değiştirin (yoldaki `/` yerine `-`).

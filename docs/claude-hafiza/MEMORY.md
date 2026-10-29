@@ -1,4 +1,4 @@
 - [Assistant name: Dilek](assistant-name-dilek.md) — user calls me Dilek, backend agent, Turkish
 - [Sequential specialist agents](sequential-specialist-agents.md) — split builds into phases, one specialist subagent at a time, track in PROJECT.md
-- [Pixel Office project](pixel-office-project.md) — v1–v4 (A8–A10) done, connector 3.5.0 (`pixel-connector update`)
+- [Pixel Office project](pixel-office-project.md) — Patron Odası P1–P5 done (2026-10-29), P6 next; no Chrome/git identity after format
 - [Finish before new ideas](finish-before-new-ideas.md) — close current scope + security scan before any new feature
