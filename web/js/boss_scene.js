@@ -167,11 +167,13 @@ export class BossScene {
 const supportsBoss = (d) => !!(d && d.ready && d.info && Array.isArray(d.info.features) && d.info.features.includes(BOSS_FEATURE));
 
 /**
- * Feed a BossScene from the device hub: `boss.state` events, `boss.event`, and one `boss.get` per connection of a
- * ready device whose connector has the "boss" feature (state after a reload / reconnect). Devices that went away or
- * stopped being ready are forgotten.
+ * Feed a BossScene from the device hub: `boss.event`, and the job state either from `store` (the panel's BossStore,
+ * web/js/boss.js: its `boss.get` per connection is the only one, P7) or, without a store, from `boss.state` events and
+ * one `boss.get` per connection of a ready device whose connector has the "boss" feature (state after a reload /
+ * reconnect). Devices that went away or stopped being ready are forgotten.
  */
-export function connectBossScene(scene, hub) {
+export function connectBossScene(scene, hub, store = null) {
+  if (store) { followStore(scene, hub, store); return; }
   const loaded = new Set();
   const load = (dev) => {
     loaded.add(dev);
@@ -194,4 +196,31 @@ export function connectBossScene(scene, hub) {
   hub.on('change', sweep);
   hub.on('resync', (dev) => { loaded.delete(dev); sweep(); });
   sweep();
+}
+
+/**
+ * The job state from the store's entries ({job} read through its allow-list; a finished job never turns active
+ * again there). A device's job is handed to the scene only when the store's object changed, so the "most recently
+ * updated" choice between devices stays right. `boss.event` still comes straight from the hub.
+ */
+function followStore(scene, hub, store) {
+  const shown = new Map();      // device → the store's job object last given to the scene
+  const sync = () => {
+    for (const id of [...scene.jobs.keys(), ...shown.keys()]) {
+      if (!store.entry(id)) { shown.delete(id); scene.setJob(id, null); }
+    }
+    for (const id of store.entries.keys()) {
+      const e = store.entry(id);
+      if (e && shown.get(id) !== e.job) { shown.set(id, e.job); scene.setJob(id, e.job); }
+    }
+  };
+  hub.on('event', (dev, m) => { if (m && !m.re && m.type === 'boss.event') scene.onEvent(dev, m); });
+  hub.on('change', () => {
+    for (const id of [...scene.jobs.keys(), ...scene.pending.map((p) => p.device)]) {
+      const d = hub.devices.get(id);
+      if (!d || !d.ready) { shown.delete(id); scene.clear(id); }
+    }
+  });
+  store.onChange(sync);
+  sync();
 }

@@ -683,10 +683,11 @@ async function setupV3(roomId, key) {
   // connector 3.5.0: "Bilgisayarınızdaki bağlayıcı eski." strip (paired + connected devices only; never in ?view=mini)
   const updateBanner = new UpdateBanner({ root: $('update-banner'), hub, toast, copy: (t) => cloud.copyText(t),
     onInstall: () => wizard.open(1), onLayout: () => fitCanvas() });
-  // Patron Odası P5: boss.state / boss.event from paired computers drive the Boss and the specialists' file walks.
-  connectBossScene(bossScene, hub);
   // Patron Odası P6: the Boss's panel (click the Boss) and the "Plan onayı · Siz" card on the Task Board.
   const bossStore = new BossStore({ hub });
+  // Patron Odası P5/P7: the store's job state and boss.event drive the Boss and the specialists' file walks (one
+  // boss.get per connection, the store's).
+  connectBossScene(bossScene, hub, bossStore);
   const boss = new BossPanel({ dialog: $('dlg-boss'), hub, store: bossStore, toast });
   bossStore.onChange(() => updateBoard());
   v3 = { hub, panel, devices, wizard, newAgent, approvals, workflows, wfDialog, supportsWorkflows, updateBanner,

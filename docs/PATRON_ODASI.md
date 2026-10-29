@@ -948,3 +948,48 @@ form (tavan 1,00 $), 1,50 $ sayfada reddedilir (sahte `claude` hiç çağrılmaz
 açılır, Onayla → Belge → Test onayı → rapor (4 Claude çağrısı), sıfırlama Patronun oturumunu siler, mini pencere ve
 izleyici; kanarya hiçbir aşamada işaretlemeye dönüşmez; 1280/390/360 px yatay kaydırma yok, telefonda düğmeler ≥ 44 px;
 konsol hatası yok.
+
+### P7 — QA ve belgeler (2026-10-29, QA Mühendisi)
+
+Kod: `web/js/boss_scene.js` (`connectBossScene(scene, hub, store)`), `web/js/main.js` (sahne paneldeki `BossStore`'a
+bağlandı). Testler: yeni `tests/test_boss_e2e.py` (7 senaryo, gerçek sayfa ⇄ `dev_relay` ⇄ gerçek bağlayıcı, P3'ün
+yöne göre yanıt veren sahte `claude`'u ve zamanlama kaydı; sayfa yardımcıları `test_boss_ui.py`'den paylaşılır) ve
+`tests/js/boss_shared_state.test.js` (2). Belgeler: `README.md` "Patron Odası" bölümü, `web/rehber.html` 8. adım,
+`docs/V3.md` §20 (P4–P7 özeti). Web `po-v4.0.6`. Bağlayıcı değişmedi (3.8.0).
+
+Senaryolar (sahte motor, başsız tarayıcı) ve sonuçları:
+
+| Senaryo | Doğrulanan | Sonuç |
+|---|---|---|
+| Mutlu yol (P6, `test_boss_ui.py`) | istek → plan → yeniden yükleme → Onayla → Belge → Test onayı → rapor, sıfırlama, izleyici, mini pencere | geçti |
+| İki iş emri aynı anda | dosyaları çakışmayan 2 iş emri panelde aynı anda "Çalışıyor", çalışma süreleri örtüşüyor, değerlendirme ikisinden sonra, rapor tam (`partial: false`), sahne Patronu `BossStore`'dan "çalışıyor", bağlantı başına tek `boss.get` | geçti |
+| Plan reddedildi | Reddet → iş `cancelled/denied`, "İş durdu: Reddedildi.", yalnızca planlama çağrısı, hiç rol ajanı oluşmadı, form yeniden açık | geçti |
+| Çalışırken İptal | çalışan iş emrinin görevi kesildi (sinyal), sıradaki ve değerlendirme başlamadı, "Rapor (iş yarım kaldı)" | geçti |
+| Maliyet tavanı | iş emri kalan tutarı aşınca iş `error/cost_cap`, "İş durdu: Maliyet tavanı doldu.", sonraki iş emri başlamadı, yarım rapor | geçti |
+| Sayfa kendi eşleşmesini kaldırdı | iş `cancelled/revoked`, çalışan görev kesildi; panelde yalnızca "önce bir bilgisayar eşleştirin" bilgisi, form/kart/eylem düğmesi ve tahta kartı yok | geçti |
+| Bilgisayarda kaldırıldı (`peers revoke`) | iş `cancelled/revoked`, çalışan görev kesildi; sayfa yenilenince el sıkışma reddedilir, panelde eylem yok | geçti (aşağıda not 3) |
+| Test onayı bilgisayarda verildi | panel açıkken onay kartı yenilemeden kalkar, Test iş emri "Çalışıyor" (görev bitmeden) | geçti |
+
+1. **P6 açığı (a), Test onayı başka yerden yanıtlanınca kart eski kalıyor: yeniden üretilemedi.** Bağlayıcı her iş emri
+   adımı değişiminde (`_gate_done` → `_start_plan_agent`/red/zaman aşımı → `_notify_step` → `_on_step`) bir `boss.state`
+   gönderiyor; açık panel bunu `BossStore` üzerinden hemen işliyor. Davranışı sabitlemek için regresyon testi eklendi
+   (`test_test_approval_answered_on_the_computer_updates_the_open_panel`; kartın, Test görevi bitmeden kalktığını da
+   denetler). Kod değişikliği gerekmedi. Not: bir çalışma başlarken (`launch_plan` içinde) gelen ilk adım `boss.state`'leri
+   henüz `run` ve `orderStates` taşımıyor (`job.live_run` daha atanmadı); hemen ardından `_approval_done`'ın gönderdiği
+   `boss.state` bunları taşıdığı için arayüzde görünür bir etkisi yok (sondaj ile doğrulandı).
+2. **P6 açığı (b), bağlantı başına iki `boss.get`: düzeltildi.** `connectBossScene` artık isteğe bağlı üçüncü parametre
+   olarak paneldeki `BossStore`'u alır; verilirse kendi `boss.get`'ini yapmaz, iş durumunu deponun izin listesiyle
+   okunmuş kayıtlarından alır (yalnızca deponun nesnesi değiştiğinde sahneye verir, böylece cihazlar arası "en son
+   güncellenen" seçimi bozulmaz) ve biten bir işin geç gelen "etkin" durumunu da artık sahne de yok sayar. `boss.event`
+   yine doğrudan hub'dan; hazır olmayan cihazın işi ve bekleyen yürüyüşleri silinir. Depo olmadan eski davranış aynen
+   (P5 testleri değişmeden geçiyor). Önce başarısız test: `tests/js/boss_shared_state.test.js` (iki `boss.get` görüldü)
+   ve uçtan uca senaryoda `self.gets` sayacı (2 ≠ 1).
+3. **Bilgisayarda yapılan eşleşme kaldırma tarayıcıya bildirilmiyor (P8'e not).** `peer.revoke` (CLI ya da
+   `/ctl/peers/revoke`) tarayıcının kanalını yalnızca bağlayıcı tarafında kapatır; o sayfa yeniden bağlanana kadar son
+   görünümünü (ör. "Çalışıyor" ve İptal düğmesi) korur, gönderdikleri bağlayıcıda sessizce yok sayılır ve istek zaman
+   aşımıyla biter. Güvenlik açısından kapalı başarısızlık (hiçbir istek işlenmez), ama kullanıcı yanıltıcı bir panel
+   görür. Düzeltme protokol/oturum çekirdeği (`session.py`) değişikliği gerektirdiği için P7 kapsamında yapılmadı.
+4. **Ayrım:** sayfanın kendi "Eşleşmeyi kaldır" düğmesi önce bağlayıcıya `peer.revoke` gönderir, sonra cihazı yerelde
+   unutur; bu yolda panel hemen bilgi metnine döner (test edildi).
+5. **Belgelerde `$` uyarısı (§10/4):** README ve rehberde "abonelikle eşdeğer maliyet, API anahtarıyla gerçek ücret"
+   açıkça yazıyor; panelin tavan ipucu P6'dan beri aynı uyarıyı taşıyor.

@@ -64,7 +64,7 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | P4 | Patron Odası: pixel art, Patron ve odası (P3 sonrası) | Claude | ✅ |
 | P5 | Patron Odası: ofis haritası ve sahne (P4 sonrası) | Claude | ✅ |
 | P6 | Patron Odası: Patron paneli ve Görev Tahtası (P5 sonrası) | Claude | ✅ |
-| P7 | Patron Odası: QA ve belgeler (P6 sonrası) | Claude | ⬜ |
+| P7 | Patron Odası: QA ve belgeler (P6 sonrası) | Claude | ✅ |
 | P8 | Patron Odası: bağımsız güvenlik incelemesi (P7 sonrası) | Claude | ⬜ |
 | P9 | Patron Odası: gerçek deneme, kullanıcı onayıyla, düşük bütçe (P8 sonrası) | Claude | ⬜ |
 
@@ -333,3 +333,14 @@ görüntüleri, bilinen sorunlar.
   içi onay, iki `boss.get`, ✕ düğmesi yalnızca bu panelde 44 px) §11'de. `python3 -m unittest discover -s tests`: 947 test,
   OK (1 atlandı: `pwsh`); tarayıcı testleri PATH'e geçici `chromium` → Brave bağlantısıyla. Ekran görüntüleri (1280/390/360
   px: form, plan, Test onayı, rapor; izleyici 390 px) oturumun geçici klasöründe; konsol hatası yok.
+- **2026-10-29, Claude (Patron Odası P7: QA ve belgeler, QA Mühendisi):** Teslim edildi, commit/push yok (koordinatör
+  denetleyip commit'leyecek). Yeni: `tests/test_boss_e2e.py` (7 uçtan uca senaryo: iki paralel iş emri, plan reddi,
+  çalışırken İptal, maliyet tavanı, sayfadan ve bilgisayardan eşleşme kaldırma, Test onayının bilgisayarda verilmesi;
+  gerçek sayfa + röle + bağlayıcı + P3'ün yönlendirmeli sahte `claude`'u), `tests/js/boss_shared_state.test.js` (2)
+  (ikisi `git add -N`). Değişen: `web/js/boss_scene.js` (`connectBossScene(scene, hub, store)`: sahne `BossStore`'dan
+  okur, bağlantı başına tek `boss.get`), `web/js/main.js` (bağlantı), `web/sw.js` + `web/js/cloud.js` (`po-v4.0.6`),
+  `web/rehber.html` (8. adım "Patrona iş ver"), `README.md` ("Patron Odası" bölümü, tavanlar, `$` uyarısı),
+  `docs/V3.md` §20 (P4–P7 özeti), `docs/PATRON_ODASI.md` §11 P7 (senaryo tablosu, iki P6 açığı, P8 notu),
+  `PROJECT.md` §6 (P2 kaydı çıkarıldı; günlükte var), günlük. Bağlayıcıya ve güvenlik çekirdeğine dokunulmadı.
+  P6 açığı (a) yeniden üretilemedi (bağlayıcı zaten `boss.state` gönderiyor; regresyon testi eklendi), (b) düzeltildi.
+  `python3 -m unittest discover -s tests`: 954 test, OK (1 atlandı: `pwsh`); tarayıcı testleri Brave ile.

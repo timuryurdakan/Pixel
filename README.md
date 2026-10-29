@@ -26,7 +26,7 @@ Pixel Office, tarayıcıda çalışan pixel-art bir sanal ofistir. Bilgisayarın
    - [Gizlilik ve güvenlik](#gizlilik-ve-güvenlik)
    - [Ücretsiz plan limitleri](#ücretsiz-plan-limitleri)
 4. [Ajan Kontrol Merkezi (v3, deneme)](#ajan-kontrol-merkezi-v3-deneme)
-   - [Bağlayıcıyı kurma](#bağlayıcıyı-kurma) · [Güncelleme](#bağlayıcıyı-güncelleme) · [Eşleştirme](#masaüstü-ve-telefonu-eşleştirme) · [Görev verme](#görev-verme) · [Bütçeler](#token-göstergesi-ve-bütçeler) · [Sorun giderme (v3)](#sorun-giderme-v3)
+   - [Bağlayıcıyı kurma](#bağlayıcıyı-kurma) · [Güncelleme](#bağlayıcıyı-güncelleme) · [Eşleştirme](#masaüstü-ve-telefonu-eşleştirme) · [Görev verme](#görev-verme) · [Bütçeler](#token-göstergesi-ve-bütçeler) · [Patron Odası](#patron-odası-bağlayıcı-380) · [Sorun giderme (v3)](#sorun-giderme-v3)
    - [Yayına alma kontrol listesi (v3)](#yayına-alma-kontrol-listesi-v3)
 5. [Ajanları yeniden adlandırma](#ajanları-yeniden-adlandırma)
 6. [Durumlar nasıl belirleniyor?](#durumlar-nasıl-belirleniyor)
@@ -532,6 +532,57 @@ polkit.addRule(function(action, subject) {
 Sonra runtime kaydında `"start": ["systemctl", "start", "ollama.service"]`, `"stop": ["systemctl", "stop", "ollama.service"]`,
 `pixel-connector config-check`, `systemctl --user restart pixel-connector`. Deneme: `pixel-connector runtimes stop ollama`,
 sonra `pixel-connector runtimes start ollama`.
+
+### Patron Odası (bağlayıcı 3.8.0)
+
+Ofisin sağ üst köşesindeki odada bir **Patron** oturur. Ona bir iş verirsiniz; Patron seçtiğiniz klasörü **yalnızca
+okuyarak** inceler, işi en fazla 4 **iş emrine** böler ve planı size onaylatır. Onaydan sonra uzmanlar (Frontend,
+Backend, Test, Belge, İnceleme) kapıdan girer, Patronun masasından dosyalarını alır, kendi masalarında çalışır, bitince
+dosyayı geri götürür ve çıkar. Patron sonuçları kontrol eder ve kısa bir rapor yazar. Yalnızca Claude Code ile çalışır;
+bağlayıcının 3.8.0 ve üstü olması gerekir. Ayrıntılı tasarım: [`docs/PATRON_ODASI.md`](docs/PATRON_ODASI.md).
+
+1. **Patrona tıklayın.** "Patron Odası" paneli açılır: "Patrona ne yaptırmak istiyorsunuz?" (en fazla 4 KB), çalışma
+   klasörü (ve varsa var olan bir alt klasör), maliyet tavanı ve **Patrona ver**. Eşleşmiş bir bilgisayar yoksa panel
+   yalnızca bilgi metni gösterir; oda bağlantısıyla izleyenler Patronu hep boşta görür, plan ve rapora erişemez.
+2. **Planı okuyun.** Kartta özet, her iş emrinin uzmanı, hedefi, "bitti sayılması için" ölçütleri, dokunacağı dosyalar,
+   hangi iş emrinden sonra başlayacağı, **tahmini maliyet** ve **kesin tavan** yan yana. **Onayla** ya da **Reddet**.
+   Onaylamazsanız hiçbir uzman çalışmaz; 15 dakika yanıt vermezseniz plan reddedilmiş sayılır. Plan beklerken Görev
+   Tahtası'nda "Plan onayı · Siz" kartı da görünür. Onayı bilgisayarda da verebilirsiniz (onay sayfası ya da
+   `pixel-connector approve|deny <id>`).
+3. **Uzmanlar çalışır.** Dosyaları çakışmayan iş emirlerinden en fazla 2'si aynı anda, diğerleri sırayla çalışır. Her
+   uzman kendi rolünün izin profiliyle çalışır (İnceleme sadece okuma, diğerleri düzenleyebilir); hiçbiri alt ajan
+   açamaz. **Test uzmanı** yalnızca `python3 -m unittest`, `pytest`, `npm test` gibi test komutlarını çalıştırabilir ve
+   her Test iş emri başlamadan önce sizden onay ister (panelde ya da bilgisayarda); reddederseniz o iş emri atlanır.
+4. **Rapor.** Patron sonuçları kabul ölçütlerine göre kontrol eder; eksik varsa **bir kez** düzeltme planı önerir (yine
+   sizin onayınızla). Son rapor panelde düz metin olarak görünür: ne yapıldı, her iş emrinin sonucu, toplam maliyet.
+   **İptal** her an mümkündür; çalışan iş emri durdurulur, sıradaki başlamaz ve rapor işin yarım kaldığını söyler.
+5. **Hafızayı sıfırla.** Patron aynı klasördeki önceki işleri hatırlar (sürekli Claude oturumu). Paneldeki
+   **Hafızayı sıfırla** bu klasör için oturumu siler (iş sürerken yapılamaz).
+
+**Tavanlar.** Her işin bir tavanı vardır; tavana gelince iş durur, sonraki adım başlamaz ve rapor nedenini yazar:
+
+| Tavan | Değer |
+|---|---|
+| Maliyet (planlama + iş emirleri + değerlendirme + düzeltme) | varsayılan **1,00 $**; panelden yalnızca düşürülebilir (en az 0,10 $), üst sınırı yalnızca bilgisayardaki `connector.json → boss.maxCostUsd` yükseltebilir (en fazla 3,00 $) |
+| Planlama | 0,20 $ ve 10 tur |
+| İş emri | en fazla 4; düzeltme turu en fazla 1 (en fazla 2 iş emri) |
+| Süre ve tur | toplam 45 dakika, 100 tur |
+| Onay bekleme | plan ve Test onayı 15 dakika (cevapsız = red) |
+
+> **Dolar tutarları hakkında:** Claude Code'a Claude aboneliğinizle giriş yaptıysanız panelde görünen tutarlar ek ücret
+> değil, abonelik kullanım kotanızdan düşen **eşdeğer maliyettir** (Claude Code'un kendi tahmini). **Claude Code'u API
+> anahtarıyla kullanıyorsanız bu tutarlar gerçek ücrettir.** Bağlayıcı API anahtarı ya da ek kullanım faturası açacak
+> hiçbir ayarı değiştirmez. Claude bütçeyi tur sonunda denetlediği için tek bir adım kalan tutarı bir tur kadar aşabilir;
+> iş o adımın sonunda durur.
+
+**Güvenlik notları.** Patronu yalnızca eşleşmiş tarayıcılar yönetebilir; isteğiniz, plan ve rapor yalnızca uçtan uca
+şifreli kanaldan gider (ofis sunucusu, röle ve denetim kaydı metni görmez). Patron dosya yazamaz ve komut çalıştıramaz;
+plan, izin listeli bir JSON olarak doğrulanır ve her zaman size gösterilir. Uzmanların okuduğu dosyalar ve birbirlerine
+aktardıkları çıktılar talimat içerebilir; asıl sınır uzmanın izin profili ve çalışma klasörüdür, bu yüzden Patronu
+önemli verilerin olmadığı bir çalışma klasöründe (ör. `~/PixelOfficeIsler`) kullanın. Bir tarayıcının eşleşmesini
+kaldırmak onun başlattığı Patron işini hemen durdurur. `remote.agentCreate: false` ise Patrona iş verilemez
+(uzmanlar ajan oluşturur); `confirm.agentCreate: true` ise her iş önce bilgisayarda onaylanır. Aynı anda bir Patron
+işi (ve o sırada iş akışı şablonu yok) çalışır.
 
 ### Sorun giderme (v3)
 
