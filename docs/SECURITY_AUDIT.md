@@ -509,3 +509,26 @@ README özeti), `web/js/{control.js,boss.js}`, `web/sw.js` + `web/js/cloud.js` (
 2. Alışkanlık önerisi (S29-03): Test iş emrini onaylamadan önce önceki iş emirlerinin değişikliklerine (`git diff`,
    özellikle test dosyaları, `conftest.py`, `package.json` betikleri) bilgisayarda bakın; emin değilseniz Reddet (iş
    emri atlanır, rapor bunu söyler). §10/3 kararı değişmedi.
+
+## 14. Genel güvenlik taraması (2026-10-29, Patron Odası yayından sonra)
+
+**Kapsam:** Canlı site ve röle (yalnızca okuma isteği, yük yok, oda oluşturulmadı), depo ve git geçmişinin tamamı,
+röle bağımlılıkları, web istemcisindeki DOM yazma noktaları, 23 Ekim taramasından (§11) sonra sunucu, bulut ve röle
+kodunda yapılan değişiklikler. v4 (§12) ve Patron Odası (§13) ayrı incelendiği için yeniden yapılmadı.
+
+**Sonuç: yeni bulgu yok.**
+
+| Kontrol | Sonuç |
+|---|---|
+| Canlı başlıklar (`/`, `/api/config`) | CSP (`default-src 'self'`, `script-src 'self'`, `connect-src` yalnızca röle, `frame-ancestors 'none'`, `base-uri 'none'`, `object-src 'none'`, `form-action 'self'`), HSTS 2 yıl, `nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy`. §4'teki eksikler (S16-10) canlıda kapalı. `Access-Control-Allow-Origin: *` S16-18 gereği kabul (çerez yok, yazma bearer anahtarla). |
+| Açıkta dosya | `.git/config`, `.env`, `AGENTS.md`, `PROJECT.md`, `docs/`, `api/`, `pixel_cloud/`, `tests/`, `vercel.json`, `relay/wrangler.toml` → 404. Yalnızca `web/` yayında (`connector/SHA256SUMS` bilerek açık). |
+| API hata yanıtları | Bozuk JSON → `{"error":"bad_request",…}`; yol geçişi denemesi → Vercel 403. Yığın izi ya da iç yol yok. |
+| Röle | `/health` → `{"ok":true,"v":1}`; WS yükseltme, sahte bilet (kaynaksız, `https://evil.example`, doğru kaynak) → 401 `bad_ticket`. Kaynak denetimi bilet doğrulamasından sonra (§4, testli). |
+| Gizli bilgi | İzlenen dosyalar ve tüm dalların git geçmişi: AWS, GitHub, Anthropic/OpenAI, Slack, Google anahtarı, özel anahtar ve `UPSTASH_REDIS_REST_TOKEN`/`RELAY_SECRET`/`PIXEL_SECRET` değeri deseni → 0 eşleşme. Depoda `.env`, `.pem`, `.key`, `.dev.vars` yok. |
+| Bağımlılıklar | Python yalnızca stdlib. `relay/package-lock.json` (91 paket, `wrangler` 4.145.0, `undici` 7.30.1 ve `sharp` 0.35.5 sabit) OSV toplu sorgusu → bilinen açık 0 (`npm` bu makinede yok; `npm audit` yerine). |
+| Web DOM yazma noktaları | `innerHTML` yalnızca `ui.js`'te (`replaceMarkup`, durum özeti): bütün dış alanlar `esc()`, sayılar `num()`, renkler sabit tablodan. URL'ye giren oda kimlikleri `ROOM_RE` (`^[a-z2-7]{26}$`) ile doğrulanıyor (`main.js`, `cloud.js` son odalar, `guide.js`). `eval`, `new Function`, `document.write`, `srcdoc` yok. |
+| §11 sonrası kod | `pixel_cloud/`, `api/`, `vercel.json`, `pixel_office/`: 23 Ekim'den beri değişmedi. `relay/`: yalnızca kilit dosyası ve sabitlemeler (S26-01, §12'de incelendi). |
+
+**Kullanıcı eylemleri:** Yok. Süregelen öneriler aynen geçerli: ilk ay haftada bir Cloudflare/Vercel/Upstash
+kullanımına bakmak (`PROJECT.md` kontrol listesi), bağlayıcıyı `pixel-connector update` ile güncel tutmak, Test iş
+emrinden önce değişikliklere bakmak (S29-03).
