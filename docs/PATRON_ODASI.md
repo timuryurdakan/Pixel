@@ -87,7 +87,7 @@ ve halı. Sağ alt oda zaten duvarlı ve kapılı olduğu için Patron Odası'na
 > **Geçersiz (2026-10-26):** Kullanıcı Patron Odası'nı **sağ üst köşede** istedi; kitaplıklar ve saksılar kaldırılıp
 > kahve tezgâhı, su sebili ve Görev Tahtası üst duvarın sol/orta kısmına taşınacak, dinlenme odası yerinde kalacak.
 > Bağlayıcı karar: §10/1. Aşağıdaki sağ alt çizim yalnızca tarihçedir; P4/P5 yeni haritayı §10/1'e göre çizer ve bu
-> bölüme işler.
+> bölüme işler. **Gerçek harita (P5, 2026-10-29): §11 → P5.**
 
 ```
      x: 0         1         2
@@ -827,3 +827,64 @@ Kod: `web/js/sprites.js` (yalnızca ekleme: Patron bölümü, kayıt girdileri, 
    `BOSS_CHAR_PAL`, `PAL_BUBBLE_FOLDER`) mevcut paletleri değiştirmez (kopya + yeni anahtar).
 6. **`boss_sign`** kapı karosunun üstüne (duvar karosuna) çizilecek şekilde 16 × 8; "PATRON" yazısı yok (§3.3).
 
+
+### P5 — Ofis haritası ve sahne (2026-10-29, Frontend/Oyun Mühendisi)
+
+Kod: `web/js/office.js` (harita ve Patron odası sabitleri), `web/js/agents.js` (`startErrandTo`, `queueErrandTo`),
+`web/js/renderer.js` (Patron, masası, levha, oda zemini), yeni `web/js/boss_scene.js` (`BossScene`,
+`connectBossScene`), `web/js/main.js` (bağlantı), `web/js/board.js` (Görev Tahtası konumu artık `office.js`'ten), yeni
+`tests/js/boss_scene.test.js` (12 test). Web `po-v4.0.4` (`web/sw.js` kabuğuna `boss_scene.js` eklendi).
+
+Gerçek harita (§10/1; §3.2'deki çizimin yerine geçer):
+
+```
+     x: 0         1         2
+        0123456789012345678901
+  y 0   #######WW###WW####WW##
+  y 1   #.Q.kCk..GGG..#FF,,,P#     Q su sebili, kCk kahve tezgâhı, GGG Görev Tahtası, F dosya dolabı
+  y 2   #...ccc.......#,,L,,,#     c kahve noktaları, L Patron koltuğu (Patron yeri, yüzü aşağı)
+  y 3   #.TT..TT..TT..#,XXX,,#     XXX Patron masası (48 × 24)
+  y 4   #.h...h...h...#,,,,,,#     (16..18,4) teslim noktaları, (17,4) önce
+  y 5   #.............#,,,,SS#     SS misafir kanepesi
+  y 6   #.TT..TT..TT..###d####     d oda kapısı (alt duvarda, `door_front`), levha kapının duvar kapağında
+  y 7   #.h...h...h..........#
+  y 8   #.............###.####
+  y 9   #.TT..TT..TT..#......#
+  y10   #.h...h...h...#bb==bb#
+  y11   #.............#BB=cBB#     dinlenme odası yerinde; c = kedi (18,11)
+  y12   #P...........P#.....P#
+  y13   ####D#################
+```
+
+(`G` ve kedi işareti `c` yalnızca bu çizimde; haritada o kareler `.` ve `=`.)
+
+1. **Kapı alt duvarda (17,6), yan duvarda değil.** Oda sağ üstte olduğu için ofisten en kısa giriş alttaki y 7
+   koridoru. Patron masanın üstünde (y 2) yüzü aşağı oturur; uzman kapıdan girip masanın önündeki teslim karesinde
+   (y 4) yukarı, Patrona bakar. Kapı karosu `door_front`, `boss_sign` kapı karosunun üst kısmına çizilir.
+2. **Kitaplıklar ve üst saksılar kaldırıldı**, kahve tezgâhı ve su sebili sol üste, Görev Tahtası (9–11,1) ortaya
+   taşındı. `board.js` artık sabit piksel yerine `office.js`'teki `BOARD_TILE`'ı kullanır (tek kaynak).
+3. **Taşma noktaları:** kahve taşması y 1–2'nin boş karelerine ((3,2), (7,2), (2,2), (8,2), (3,1), (7,1)). Uyku
+   taşması dinlenme odasında kaldı. Kedi (18,11)'e taşındığı için o kare taşma listesinden çıktı, yerine (16,12) geldi.
+   Masa taşması değişmedi.
+4. **Odada normal ajana nokta yok:** oda zemini `,` karosu; `reserveFloorSpot`/`randomFloorTile` yalnızca `.` karelerini
+   kullandığı için taşma da odaya düşmez (testli).
+5. **Patron sahne karakteri, ajan değil:** `BossScene` tarayıcıda yaşar, buluta raporlanmaz, adı/etiketi yok. İzleyici
+   (eşleşmemiş tarayıcı) Patronu hep boşta görür (8 sn'de bir yazar ↔ gazete okur). Eşleşmiş tarayıcıda `boss.state`
+   (ve yeniden bağlanınca bir `boss.get`) yalnızca `state`, `orders` ve `orderStates[].state` sayısı olarak okunur:
+   planlıyor → yazar + "…", onay → oturur + "!" + plan kadar dosya, çalışıyor → yazar + bekleyen iş emri kadar dosya,
+   değerlendirme/rapor → okur + "…". Masada en fazla 5 dosya. Birden fazla cihazda iş varsa en son güncellenen
+   gösterilir; hazır olmayan cihaz unutulur.
+6. **Dosya yürüyüşü:** `boss.event` `take`/`deliver` → uzman boş bir teslim karesine yürür, `folder` balonu, Patron
+   `boss_give`, sonra yerine döner (A9 `startErrand` genelleştirildi: `startErrandTo(goals, {face, bubble, onGive})`).
+   Ajan o an girerken/yürürken ise yürüyüş sıraya alınır (`queueErrandTo`, en fazla 30 sn). Ajan henüz ofiste yoksa
+   olay 30 sn bekler, sonra düşer; `leave` bekleyenleri siler. `enter`/`leave` için ayrıca bir şey yapılmaz (ofis
+   anlık görüntüsü ajanı ana kapıdan sokar/çıkarır). Geçersiz olay/anahtar yok sayılır.
+7. **`prefers-reduced-motion`:** Patron yalnızca `boss_sit`; uzman yürümez, yalnızca `folder` balonu; dosyalar ve
+   Patron balonları kalır.
+8. **Mini pencere:** aynı tuval taşındığı için sahne aynı; `pip.js` değişmedi.
+
+Doğrulama: `tests/js/boss_scene.test.js` (yol bulma: her masa/kahve/uyku noktası taşmalar dahil ve her teslim karesi ana
+kapıdan ulaşılabilir; odada nokta yok; oda duvarlı, tek giriş kapı; kedi ve Görev Tahtası oda dışında; `readJob` ve
+poz eşlemesi; azaltılmış hareket; yürüyüş, iki uzman farklı kare, sıraya alma, bekleyen olayın düşmesi, `connectBossScene`).
+Mevcut handoff testleri (9) değişmeden geçiyor. Demo odasında 1280, 390, 360 px ve `?view=mini` başsız tarayıcı ekran
+görüntüleri: konsol hatası yok, yatay kaydırma yok.

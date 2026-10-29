@@ -62,7 +62,7 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | P2 | Patron Odası: Patron masası, istem → plan → onay (P1 sonrası) | Claude | ✅ |
 | P3 | Patron Odası: iş emirlerinin yürütülmesi, değerlendirme, rapor (P2 sonrası) | Claude | ✅ |
 | P4 | Patron Odası: pixel art, Patron ve odası (P3 sonrası) | Claude | ✅ |
-| P5 | Patron Odası: ofis haritası ve sahne (P4 sonrası) | Claude | 🔄 |
+| P5 | Patron Odası: ofis haritası ve sahne (P4 sonrası) | Claude | ✅ |
 | P6 | Patron Odası: Patron paneli ve Görev Tahtası (P5 sonrası) | Claude | ⬜ |
 | P7 | Patron Odası: QA ve belgeler (P6 sonrası) | Claude | ⬜ |
 | P8 | Patron Odası: bağımsız güvenlik incelemesi (P7 sonrası) | Claude | ⬜ |
@@ -313,3 +313,13 @@ görüntüleri, bilinen sorunlar.
   `web/sw.js` + `web/js/cloud.js` (`po-v4.0.3`), `docs/PATRON_ODASI.md` §3.3 (gerçek adlar, boyutlar, oturan Patron
   çizim sırası) ve §11, `PROJECT.md` §6 (3.5.0 kaydı çıkarıldı; günlükte var), günlük. Harita/sahne mantığına
   dokunulmadı (P5). `python3 -m unittest discover -s tests`: 946 test, OK (1 atlandı: `pwsh`).
+- **2026-10-29, Claude (Patron Odası P5: ofis haritası ve sahne, Frontend/Oyun Mühendisi):** Teslim edildi, push yok.
+  27 Ekim'de oturum limitinde yarım kalan WIP commit'i (`cf6d1ef`) tamamlandı. Yeni: `web/js/boss_scene.js`,
+  `tests/js/boss_scene.test.js` (12 test, başsız tarayıcı). Değişen: `web/js/office.js` (sağ üstte Patron Odası, kahve
+  köşesi ve Görev Tahtası sol/orta üst duvara, kedi dinlenme odasına, taşma noktaları), `web/js/agents.js`
+  (`startErrandTo`/`queueErrandTo`, `folder` balonu; handoff davranışı aynı), `web/js/renderer.js` (Patron, masası,
+  dosyalar, levha, oda zemini), `web/js/main.js`, `web/js/board.js` (konum `office.js`'ten), `web/sw.js` +
+  `web/js/cloud.js` (`po-v4.0.4`), `docs/PATRON_ODASI.md` §3.2 notu ve §11 P5 (gerçek harita, kararlar), `PROJECT.md` §6,
+  günlük. Bağlayıcıya ve panel arayüzüne dokunulmadı (P6). Bu makinede Chrome yok (format sonrası); tarayıcı testleri
+  PATH'e geçici `chromium` → Brave bağlantısıyla çalıştırıldı. Demo odasında 1280/390/360 px ve mini pencere ekran
+  görüntüleri: konsol hatası yok.
