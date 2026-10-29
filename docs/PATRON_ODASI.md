@@ -993,3 +993,24 @@ Senaryolar (sahte motor, başsız tarayıcı) ve sonuçları:
    unutur; bu yolda panel hemen bilgi metnine döner (test edildi).
 5. **Belgelerde `$` uyarısı (§10/4):** README ve rehberde "abonelikle eşdeğer maliyet, API anahtarıyla gerçek ücret"
    açıkça yazıyor; panelin tavan ipucu P6'dan beri aynı uyarıyı taşıyor.
+
+### P8 — Bağımsız güvenlik incelemesi (2026-10-29, Uygulama Güvenliği Mühendisi)
+
+Bulgular, yöntem ve tehdit başına doğrulananlar: [`docs/SECURITY_AUDIT.md`](SECURITY_AUDIT.md) §13. 1 Orta + 3 Düşük
+düzeltildi, 5 Bilgi kabul; açık Orta ve üzeri yok. Testler: yeni `tests/test_phase_boss_security.py`,
+`tests/js/boss_security.test.js`. Bağlayıcı 3.8.1, web `po-v4.0.7`.
+
+Davranış değişiklikleri:
+
+1. **S29-04:** Patron ve rol ajanları devir hedefi de olamaz: `task.start {handoff: {agent: <Patron/rol ajanı>}}` →
+   `not_allowed` (A başlamaz). Merkezde `precheck`: görev politikası olmayan hiçbir görev bir Patron/rol ajanında
+   çalışmaz (devir A bittiğinde yeniden denetlenir, `task.handoff` `failed/not_allowed`).
+2. **S29-01:** Bilgisayarda onay bekleyen bir `boss.ask`, tarayıcının eşleşmesi bu arada kaldırıldıysa onaylansa da
+   başlamaz (`not_allowed`; iş, Patron ajanı ve planlama görevi yok).
+3. **S29-02 (P7 notu 3 kapandı):** Eşleşme bilgisayarda ya da başka tarayıcıdan kaldırılınca bağlayıcı, kanalı kapatmadan
+   önce o tarayıcıya `peer.revoked {bid}` (yeni olay; yalnızca o tarayıcının kendi kimliği) gönderir. Sayfa cihazı hemen
+   unutur (açık panel bilgi metnine döner, eylem ve tahta kartı kalkar, "… eşleşmesi kaldırıldı" uyarısı).
+   Sayfanın kendi "Eşleşmeyi kaldır"ı eskisi gibi (yalnızca kendi yanıtı).
+4. **S29-03:** Test iş emri onayının metni (panel) ve yerel onay kartının açıklaması (`/onay`, CLI): test komutları
+   uzmanların yazdığı kodu kullanıcının yetkileriyle çalıştırır; bu kod klasörle ve işin tavanlarıyla sınırlı değildir.
+   Onay akışı aynı (§10/3). Plan adımına bağlayıcı içi `gatePreview` alanı eklendi (mesajla verilemez).

@@ -609,6 +609,11 @@ def extract_plan(output, nonce: str, enabled_profiles: Iterable[str] = DEFAULT_E
 SPECIALIST_FIELD = "bossRole"   # agents.json tag of a role agent, "<role>/<engine>"; set by connector code only
 REPORT_MAX = 16 * 1024          # UTF-8 bytes of boss.report's text
 GATE_TIMEOUT_S = APPROVAL_TIMEOUT_S     # the user's approval before each Test order (§10/3), unanswered = skipped
+# S29-03: the preview of that approval item (this computer's /onay page and CLI). Running the tests runs code the
+# specialists wrote, with the user's own rights; the role's command list does not confine that code.
+GATE_WARNING = ("Test komutları bu bilgisayarda sizin yetkilerinizle çalışır ve uzmanların yazdığı kodu (test "
+                "dosyaları, conftest.py, package.json betikleri) da çalıştırır; bu kod klasörle ve Patron işinin "
+                "tavanlarıyla sınırlı değildir. Planı ve önceki iş emirlerinin sonucunu uygun bulduysanız onaylayın.")
 REVIEW_MARK = "<<<PATRON-KARAR-%s %s>>>"
 DECISION_FIELDS = frozenset({"v", "decision", "plan"})
 ACCEPT, FIX = "accept", "fix"
@@ -880,7 +885,12 @@ class BossDesk:
     def launch(self, prep: dict) -> dict:
         """Reserve the folder's Patron agent and start the planning task. → boss.ack."""
         opts, peer = prep["opts"], prep["peer"]
+        bid = getattr(peer, "bid", None)
         with self._lock:
+            # S29-01: launch may run long after prepare (the computer's confirmation, confirm.agentCreate); a browser
+            # revoked meanwhile starts nothing new (S26-02).
+            if bid is not None and self.app.peers.active(bid) is None:
+                raise BossError("not_allowed", "browser revoked")
             self._check_free()
             ws = opts["workspace"]
             try:
@@ -888,7 +898,7 @@ class BossDesk:
                 ws_name = self.app.workspaces.get(ws["id"])["name"]
             except WorkspaceDenied as e:
                 raise BossError("workspace_denied", str(e)) from None
-            agent = self._boss_agent(ws, getattr(peer, "bid", None))
+            agent = self._boss_agent(ws, bid)
             job = BossJob(peer, prep["label"], ws, ws_name, opts["brief"], opts["maxCostUsd"], self.clock())
             job.agent = agent["key"]
             job.set_state(PLANNING)
@@ -1155,12 +1165,14 @@ class BossDesk:
             role, a = ROLES[o["role"]], agents[o["role"]]
             st.update({"roleId": o["role"], "agent": a["key"], "agentName": a["name"], "inputs": list(o["after"]),
                        "gate": role["confirm"], "gateTitle": "Patron · %s: %s" % (role["name"], o["title"]),
-                       "gateTimeoutS": GATE_TIMEOUT_S, "fresh": True, "maxTurns": role["maxTurns"], "final": False,
+                       "gateTimeoutS": GATE_TIMEOUT_S, "gatePreview": GATE_WARNING if role["confirm"] else None,
+                       "fresh": True, "maxTurns": role["maxTurns"], "final": False,
                        "policy": lambda turns, r=o["role"]: task_policy(r, turns)})
         steps[-1].update({"roleId": BOSS_ROLE["id"], "agent": job.agent, "agentName": BOSS_NAME,
                           "prompt": review_prompt(plan, job.review_nonce, job.round < MAX_FIX_ROUNDS),
                           "inputs": [o["id"] for o in plan["orders"]], "gate": False, "gateTitle": "",
-                          "gateTimeoutS": GATE_TIMEOUT_S, "fresh": False, "maxTurns": BOSS_ROLE["maxTurns"],
+                          "gateTimeoutS": GATE_TIMEOUT_S, "gatePreview": None, "fresh": False,
+                          "maxTurns": BOSS_ROLE["maxTurns"],
                           "final": True, "policy": lambda turns: task_policy(BOSS_ROLE["id"], turns)})
         return steps
 

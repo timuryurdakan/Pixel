@@ -363,6 +363,10 @@ class Connector:
         try:
             if run.policy is not None and (not isinstance(run.policy, TaskPolicy) or a["engine"] != "claude"):
                 raise TaskError("internal", "bad task policy")          # Patron Odası: connector code only
+            if run.policy is None and (a.get("boss") or a.get(SPECIALIST_FIELD)):
+                # S29-04: a Patron or role agent runs only the Boss desk's tasks, each with its role's policy (also
+                # not as a handoff target: the Test agent's stored `dev` would get the device's dev command list).
+                raise TaskError("not_allowed", "the agent is managed by the Boss desk")
             self.resolve_workspace(a)
             self._check_profile(a)
             per_task = self.cfg["engines"]["claude"]["maxBudgetUsdPerTask"] if a["engine"] == "claude" else None
@@ -761,7 +765,7 @@ class Connector:
         if handoff is not None:
             if handoff["agent"] == a["key"]:
                 raise Reply("bad_request", "handoff to the same agent")
-            self.agents.get(handoff["agent"])                 # unknown_agent; checked again when A ends
+            self._not_boss(self.agents.get(handoff["agent"]))   # unknown_agent / not_allowed; again when A ends
         try:
             ack = self.scheduler.submit(a, prompt, fresh, peer, peer.label, self._need_confirm(a, fresh), handoff=handoff)
         except TaskError as e:
@@ -986,11 +990,23 @@ class Connector:
         if ok:
             self.audit.write("peer.revoke", bid=bid, by=by or "local")
             if bid != by:
+                self._tell_revoked(bid)
                 self.router.close_bid(bid)
             self.workflows.peer_revoked(bid)              # S26-02: first, so a run ends as `revoked`, not by its step
             self.boss.peer_revoked(bid)                   # Patron Odası: the same for the Boss's job
             self.scheduler.cancel_for_bid(bid, CANCEL_REVOKED)   # S26-08: confirm / queued / running tasks
         return ok
+
+    def _tell_revoked(self, bid: str) -> None:
+        """S29-02: before its channels close, a browser revoked on the computer (or by another browser) is told so, and
+        its page forgets this device instead of showing its last state until a reconnect fails. Sent on purpose after
+        `peers.revoke` (so `_send_peer` would drop it); the message names only the browser's own bid."""
+        for p in self.router.all_peers():
+            if p.bid == bid:
+                try:
+                    self.router.send(p, {"type": "peer.revoked", "bid": bid})
+                except ValueError:
+                    self.log("peer.revoked notice could not be sealed")
 
     # -- loopback control API (CLI) --------------------------------------------------------------
     def ctl_routes(self) -> dict:

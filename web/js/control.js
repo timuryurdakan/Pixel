@@ -337,6 +337,10 @@ export class DeviceHub {
       return;
     }
     if (msg.type === 'error') return;          // late error for a request that already timed out
+    if (msg.type === 'peer.revoked' && this.me && msg.bid === this.me.bid) {
+      this._revokedByDevice(d);
+      return;
+    }
     if (msg.type === 'device.info') this._setInfo(d, msg);
     if (msg.type === 'agent.deleted' && typeof msg.agent === 'string' && d.agents.delete(msg.agent)) this._changed();
     this._emit('event', d.id, msg);
@@ -568,6 +572,21 @@ export class DeviceHub {
     this.updateRoom();
     this._changed();
     return { remote };
+  }
+
+  /**
+   * S29-02: the device removed this browser's pairing (on the computer or from another browser) and said so before
+   * closing the channel. Forget it locally, as unpair() does, instead of showing its last state until a reconnect
+   * fails. Only the paired device itself can send this (E2E channel).
+   */
+  _revokedByDevice(d) {
+    if (this.devices.get(d.id) !== d) return;
+    this._dropDevice(d, 'not_paired');
+    this.devices.delete(d.id);
+    E.removeDevice(this.store, d.id).catch((e) => console.error('[pixel-office] removeDevice', e));
+    this.updateRoom();
+    this._changed();
+    this._emit('notice', `Bu tarayıcının «${d.name || d.id}» ile eşleşmesi kaldırıldı (bilgisayarda ya da başka bir tarayıcıdan).`);
   }
 
   destroy() {

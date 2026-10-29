@@ -420,3 +420,92 @@ Düzeltilen her bulgu için önce başarısız olduğu görülen bir regresyon t
 
 1. Push; ardından bağlayıcıyı her bilgisayarda 3.4.1'e güncelleyin (SHA-256 `dd38eae4…`).
 2. ~~İsteğe bağlı karar: S26-04 ve S26-08~~ — kullanıcı 2026-10-26'da ikisini de onayladı; bağlayıcı 3.5.0'da düzeltildi (tablo §12.2).
+
+## 13. Patron Odası güvenlik incelemesi (2026-10-29)
+
+Patron Odası P1–P7 (`boss.py`, `workflows.py` plan çalışması, `app.py` `boss.*`/rol ajanları/`workflow.answer.step`,
+`engines/claude.py` görev politikası, `audit.py`, `web/js/{boss,boss_scene,board,main,renderer}.js`, `#dlg-boss`) için
+bağımsız, saldırgan gözüyle inceleme (P8, doğrulayıcı). Taban `patron-odasi` dalı, `70801d0`. Sonuç: **1 Orta ve 3 Düşük
+düzeltildi, 5 Bilgi kabul; açık Orta ve üzeri bulgu yok.** Her düzeltmeden önce başarısız olduğu görülen bir regresyon
+testi var (`tests/test_phase_boss_security.py`, `tests/js/boss_security.test.js`). Bağlayıcı **3.8.1**
+(`pixel-connector.pyz` SHA-256 `1263e5d721a0b54442eab9293a5b520e66795742c09753281fed499c7d3841b5`), web `po-v4.0.7`.
+Testler 954 → TESTS_TOTAL, OK (1 atlandı: `pwsh` yok); `tools/build_connector.py --check` geçiyor. Gerçek Claude
+çalıştırılmadı, ağ kullanılmadı (sahte `claude`, `dev_relay`, başsız tarayıcı olarak Brave).
+
+### 13.1 Kapsam ve yöntem
+
+| Alan | Yapılan |
+|---|---|
+| Plan doğrulaması (T1, T5) | `validate_plan`/`_order`/`_file_pattern`/`_after` izin listesi, tip karışıklığı (bool/float `v`, liste/sözlük), gizli karakterin uçlarda da reddi, rol → profil eşlemesi (Patron profil/model/motor seçemez, `patron` rolü seçilemez, `auto` hiçbir rolde yok), iş emri talimatının 4096 bayt sınırı, `extract_plan` (tam olarak bir blok, istek başına rastgele işaret, tek JSON nesnesi, yinelenen anahtar/`NaN`/derin iç içe → red, 64/32 KiB), tek yeniden deneme ve ortak planlama tavanı, düzeltme planı `fix_round=True` (≤ 2 iş emri), `MAX_FIX_ROUNDS` kodda sabit. |
+| Komut ve alt ajan (T4) | `TaskPolicy` yalnızca bağlayıcı kodunda; `precheck` başka değeri `internal` ile reddediyor; `launch_plan` politikası olmayan adımı reddediyor; planlama, her iş emri ve değerlendirme `task_policy` ile; `build_argv` geçersiz kılmayı yalnızca `dev`'de ve yalnızca `Bash(<komut> *)` biçiminde kabul ediyor, `Agent`/`Task` reddi, `BUILTIN_DENY` ve profilin `deny` listesi yerinde. Bir Patron/rol ajanına politikasız görev verebilen **bütün** yollar (task.start, agent.update, devir, A10 şablonu) tek tek denendi → S29-04. |
+| Maliyet ve sınırlar (T4, T14) | §10/4: çalışma tavanı (tarayıcı yalnızca düşürür, `connector.json` ≤ 3,00 $, kırpma yok), planlama `min(0,20 $, tavan)`/10 tur iki denemenin toplamı, çalışmaya kalan tutar/tur/süre (`_run_limits`), paralel adımların payı (ayrılmış pay korunur), Claude adımına sente aşağı yuvarlanmış `--max-budget-usd` (görev başı tavan ve `block` bütçeleriyle `min`), 100 tur, 45 dk (`tick`), 15 dk onay = red, 4 iş emri, tek etkin iş + tek etkin akış, `boss.ask` görev hız sınırında. |
+| Çit ve karar bloğu (T2, T3) | `inputs_prompt` her çıktı için ayrı `handoff_prompt` çiti; değerlendirme nonce'u (32 bit) yalnızca değerlendirme isteminde ve uzmanlar bittikten sonra yazılıyor; ayrıştırılan yalnızca Patronun yanıtı; iki/eksik işaret, bilinmeyen alan, `accept` + `plan` → karar okunamaz → düzeltme yok (yeni harcama yok); düzeltme planı yeniden izin listesi + kullanıcı onayı. |
+| Hafıza (T12) | Patron oturumu `--resume` (planlama + değerlendirme), uzmanlar her iş emrinde yeni oturum; `boss.reset` (meşgulken `busy`), `agent.reset`, klasör/alt klasör başına ayrı Patron. |
+| Yetki ve eşleşme (T9, T10, T11) | E2E iletisini yalnızca etkin eşleşmiş tarayıcı gönderebiliyor (`session._on_msg` her iletide `peers.active`); `approval.answer` yalnızca araç onaylarını yanıtlıyor (plan/Test/yerel onaylar değil); `boss.approve`/`workflow.answer` yalnızca o işin bekleyen onayını; eşleşme kaldırma: planlıyor/onay/çalışıyor/düzeltme onayı, onaydan sonra başlatmadan önce denetim, bilgisayardaki onay kartı → S29-01, bilgisayarda kaldırmanın sayfaya ulaşmaması (P7 notu 3) → S29-02. |
+| Gizlilik (T8) | `boss.state`/`boss.event`/`workflow.state` alanları (metin yok), `boss.plan`/`boss.report`/`boss.get` yalnızca `broadcast` (etkin eşleşmiş kanallar, E2E), Patron ajanının ofise hiç raporlanmaması (bütün `reporter` çağrı yerleri), rol ajanlarının sabit etiketleri, denetim olayları (uzunluk/para/kod), yerel onay önizlemeleri (yalnızca `/onay` `html.escape` ve CLI `term_safe`), planlama isteminin `task.start` kaydı (`storePrompts` kapalıyken SHA-256 + uzunluk). |
+| Web (T13) | `boss.js`, `boss_scene.js`, `board.js`, `main.js`, `renderer.js`, `#dlg-boss`: `innerHTML`/`insertAdjacentHTML`/`href`/`eval` araması, sınıf adlarının izin listeli durumlardan gelmesi, mesaj okuyucuları (kimlik desenleri, bilinen durumlar, sayılar, uzunluklar), tavan alanının cihaz tavanını aşamaması, hata metinlerinde ham kod/mesaj olmaması, CSP değişmedi. |
+| Klasör (T7) | `boss.ask` alt klasörü yalnızca okur (`Workspaces.resolve`: `children`, `..`, bağ, deny listesi, var olmalı), görev başında yeniden çözülür; rol ajanlarının klasörü her çalışmada işten yazılır; `files` yalnızca bilgi. |
+
+### 13.2 Bulgular
+
+| ID | Önem | Tehdit | Bulgu | Durum | Düzeltme / test |
+|---|---|---|---|---|---|
+| S29-04 | **Orta** (yetki/politika atlatma) | T4, T7, §10/3 | Patron ve rol ajanları yalnızca Patron masasının görevlerini almalı (§11 P3/11: Test ajanının saklı `dev` profili cihazın geniş dev listesiyle kullanılmasın). `task.start` ve `agent.update` bunu sağlıyordu, ama **devir hedefi** denetlenmiyordu: herhangi bir ajana `task.start {handoff: {agent: <Test rol ajanı>}}` (arayüzün devir listesinde rol ajanları görünür) A bitince Test ajanında politikasız bir görev başlatıyordu: `dev` profili + cihazın `profiles.dev.allow` listesi, `Agent`/`Task` reddi yok, Test onayı yok, `confirm.agentCreate` açıkken de yerel onay yok (S23-03'ün korumasını yan yoldan aşar). Patron ajanına devir (anahtarı `workflow.state`'te görünür) Patronun kalıcı oturumunda, iş tavanları dışında çalışıyordu (T12). İstemle tetiklenemez; eşleşmiş tarayıcının (sahibin) isteği gerekir. | **düzeltildi** (3.8.1) | `h_task_start` devir hedefini de `_not_boss` ile denetler (`not_allowed`, A hiç başlamaz); merkezde `precheck`: politikası olmayan görev bir Patron/rol ajanında `not_allowed` (A bittiğinde devir yine denetlenir, `task.handoff` `failed/not_allowed`). Patron masasının kendi görevleri (hepsi politikalı) değişmedi. Testler: `BossAgentHandoffTests` (3). |
+| S29-01 | Düşük (maliyet, eşleşme kaldırma) | T9, T14 | `confirm.agentCreate` açıkken `boss.ask` bilgisayarda onay bekler. Tarayıcının eşleşmesi bu arada kaldırılır ve kart sonra onaylanırsa planlama görevi başlıyordu (≤ 0,20 $; plan kartı yine çıkmıyordu, çünkü `_plan_ended` kaldırmayı denetliyor). S26-02 kuralı: kaldırılmış tarayıcı yeni iş başlatamaz. | **düzeltildi** (3.8.1) | `BossDesk.launch` başlatan tarayıcının hâlâ eşleşmiş olduğunu kilit altında denetler (`not_allowed`, iş/ajan/görev yok). Testler: `RevokedBeforeConfirmTests` (2). |
+| S29-02 | Düşük (kapalı başarısızlık, yanıltıcı arayüz, gizlilik) | T9, T8 | P7 notu 3: bilgisayarda (`peers revoke`, `/ctl/peers/revoke`) ya da başka bir tarayıcıdan yapılan eşleşme kaldırma, kaldırılan sayfaya bildirilmiyordu. Sayfa yeniden bağlanana kadar son paneli (istek, plan, "Çalışıyor", İptal) gösteriyor, istekleri zaman aşımıyla bitiyordu. Hiçbir istek işlenmediği için güvenlik açısından kapalı; ama kullanıcı yanıltılıyor ve "çalınan telefon" senaryosunda zaten gelmiş metin ekranda kalıyordu. | **düzeltildi** (3.8.1 + `po-v4.0.7`) | `App.revoke` kanalları kapatmadan önce o tarayıcının açık kanallarına `peer.revoked {bid}` gönderir (yalnızca o tarayıcının kendi kimliği; tarayıcı kendi eşleşmesini kaldırırken yalnızca kendi yanıtını alır). Sayfa (`control.js`) kendi kimliği için bu bildirimi alınca cihazı yerelde unutur (bekleyen istekler `not_paired`, IndexedDB kaydı silinir, uyarı). Güvenlik çekirdeğine (`session.py`, `e2e.js`) dokunulmadı. Testler: `RevokePushTests` (3), `RevokePushPageTests` (gerçek sayfa: açık panel yenilemeden bilgi metnine döner, eylem yok), `boss_security.test.js` (2). |
+| S29-03 | Düşük (bilgilendirilmiş onay) | T2, T4, T7, §10/3 | Test iş emrinden önceki onay "Test uzmanı bu klasörde test komutlarını çalıştıracak" diyordu; yerel onay kartında açıklama yoktu. Gerçekte test komutları uzmanların yazdığı kodu (test dosyaları, `conftest.py`, `package.json` betikleri; önceki uzman da değiştirmiş olabilir) kullanıcının yetkileriyle çalıştırır: Claude'un okuma/yazma kuralları, klasör, `Agent`/`Task` reddi ve işin para/tur tavanları bu kodu sınırlamaz (örn. kod başka bir program başlatabilir). Tek sınır kullanıcının bu onayıdır. | **düzeltildi** (metin, 3.8.1 + `po-v4.0.7`); kalan risk **kabul** (kullanıcı kararı §10/3) | Paneldeki onay metni (`GATE_TEXT`) ve yerel onay kartının açıklaması (`GATE_WARNING`, `/onay` ve CLI) bunu açıkça söyler. Davranış aynı (onay yine her Test iş emrinden önce, zaman aşımı = red). Testler: `TestGateWarningTests`, `boss_security.test.js`. |
+| S29-05 | Bilgi | T12 | Patronun `--resume` oturumu değerlendirmede uzman çıktılarını (çitli) okur; bu içerik sonraki işlerin planlamasına taşınır. "Hafızayı sıfırla" (`boss.reset`) Patron ajanının oturum kimliğini siler ve geçmiş dosyasını temizler: sonraki görev yeni oturumla başlar. Claude Code'un kendi oturum dökümü `~/.claude/projects` altında kalır (yeniden kullanılmaz; `readonly` Patron klasör dışını okuyamaz). `agent.reset` Patron anahtarıyla da çalışır ve meşgul denetimi yapmaz (zararsız: yalnızca hafızayı boşaltır, H32 geç yazmayı düşürür). | **kabul** | Patron `readonly`, plan her seferinde izin listesi + kullanıcı onayı (T1/T12 tasarımı). |
+| S29-06 | Bilgi | T3, T13 | Rapor tek düz metin: Patronun bölümü (uzman çıktılarından etkilenebilir) "Bağlayıcının özeti:" satırını taklit edebilir; rapor metninde bidi/kontrol karakterleri süzülmüyor (plan metinlerinde süzülüyor). | **kabul** | Yalnızca `textContent` (`<pre>`); gerçek özet her zaman en sonda; panelde iş emri durumları ve maliyet ayrıca `boss.state`'ten (Patron metninden değil) gösteriliyor. Onaylanan şey plan (sıkı metin) olduğu için onay bütünlüğü etkilenmiyor. |
+| S29-07 | Bilgi | T10, T14 | Patron ajanları (klasör ve alt klasör başına bir tane) `agentCreatePerHour` sayacına girmez ve `agent.list`'te görünmez. | **kabul** | `maxAgents`, tek etkin iş ve görev hız sınırıyla sınırlı (S26-07 ile aynı gerekçe); bilgisayarda `pixel-connector agents list|delete` hepsini gösterir/siler. |
+| S29-08 | Bilgi | T6, T7 | `files` zorlanmıyor: dosyaları çakışmayan iki iş emri aynı anda çalışırken biri ötekinin dosyasına yazabilir; S26-09 gereği iki paralel adımın her biri payını bir tur kadar aşabilir. | **kabul** (tasarım) | §8 ("`files` zorlaması sonraki sürüm"); gerçek sınır profil + `Edit(./**)` (H39); çalışma her adım sonunda toplamı denetler. |
+| S29-09 | Bilgi (devreden) | T1, T2 | Çalışma klasöründeki sürümlü `.claude/settings.json` (`--setting-sources project`) Patron/uzman görevine ek izin ya da kanca verebilir. | **kabul** (V3.md T11, S23-01) | Güvenilmeyen depo zaten kabul edilmiş tehdit; `Agent`/`Task` reddi `--disallowedTools`'ta (ret izinden önce gelir). Gerçek Claude ile denenmedi. |
+
+### 13.3 Bulgusuz doğrulananlar (tehdit başına)
+
+- **T1 (Patrona enjeksiyon).** Patron her görevde `readonly` (`TaskPolicy`, saklı profil de her işte geri yazılır); plan izin
+  listeli JSON, rol yalnızca `ROLES`'tan, profil/model/motor/maliyet tahmini plandan gelemez; `boss.ask` `profile`/`engine`/
+  `allow` alanlarını reddeder; plan her turda kullanıcıya gösterilir, 15 dk cevapsız = red; tahmin bağlayıcının sabit rol
+  tutarlarından.
+- **T2 (uzmana enjeksiyon).** İş emri talimatı bağlayıcının sabit metni + rol talimatı + onaylanan alanlar; `after` çıktıları
+  her biri ayrı rastgele çitle; uzmanın sınırı profili (`edit`: `Edit(./**)`, Bash yok; Test: dar liste) ve klasörü.
+- **T3 (değerlendirmeye enjeksiyon).** Karar bloğu nonce'u uzmanlara görünmez; karar okunamazsa harcama yok; düzeltme planı
+  yeniden doğrulanır ve onaylatılır; ikinci düzeltme yok sayılır.
+- **T4 (maliyet).** Bütün Patron/rol görevlerinde `Agent`/`Task` reddi (S29-04 ile artık istisnasız); tavanlar §10/4 ile
+  aynı ve kodda sabit; tarayıcı tavanı yalnızca düşürebilir (bağlayıcıda ve sayfada, kırpma yok); planlama + çalışmalar +
+  değerlendirme aynı iş tavanına sayılıyor; düzeltme turuna kalan tavan yetmiyorsa `fix_no_budget`.
+- **T5.** `MAX_FIX_ROUNDS = 1`, tur 1'de değerlendirme isteminde düzeltme seçeneği yok, gelen "fix" `fix_round_limit`.
+- **T6.** En fazla 2 iş emri; çakışan/`after` sırayla; boş/joker kapsam çakışır; aynı rol tek ajan (kuyrukta bekler).
+- **T7.** Plan yolları göreli (`..`, mutlak, `~`, `\`, `:`, jokerler, boş bileşen red); `boss.ask` alt klasörü var olmalı ve
+  `children` izni gerekli; görev başında `resolve_workspace`.
+- **T8.** `boss.state`/`boss.event`/`workflow.state` kimlik, durum, sayı, para; metin yalnızca E2E ile etkin eşleşmiş
+  tarayıcılara (`_send_peer` kaldırılmış eşi atlar); Patron ofise hiç raporlanmıyor; rol ajanları sabit etiketli; denetim
+  kayıtları ve yerel günlük satırları metin taşımıyor (mevcut kanarya testleri + kod incelemesi).
+- **T9.** Planlama görevi `revoked` koduyla iptal, bekleyen onay geri çekilir, çalışma `peer_revoked` ile durur, onaydan sonra
+  ve her adım öncesinde yeniden denetim; S29-01/S29-02 ile onay kartı ve sayfa tarafı da kapandı.
+- **T10.** `remote.agentCreate: false` → `boss.ask` `not_allowed` (onaydan önce); `confirm.agentCreate` → bilgisayarda onay.
+- **T11.** Başka eşleşmiş tarayıcının onayı S26-05 gereği kabul; denetimde `by` = tarayıcı kimliği.
+- **T12.** S29-05; S29-04 ile Patron oturumuna devirle dışarıdan görev sokma yolu kapandı.
+- **T13.** Bütün cihaz metinleri `textContent`; sınıf adları izin listeli durumlardan; işaretlemede satır içi işleyici yok;
+  tavan alanı `device.info.boss.maxCostUsd` (0,10–3,00 $ dışı → 1,00 $) üstüne çıkamaz.
+- **T14.** Tek etkin Patron işi ve tek etkin akış (`busy`), `boss.ask` görev hız sınırında; `boss.get`/`boss.reset` ucuz ve
+  yalnızca eşleşmiş tarayıcıdan.
+
+**Doğrulanamayanlar:** Gerçek Claude Code ile `Bash(pytest *)` gibi kuralların kabuk işleçleri/komut yerleştirmeyle
+eşleşmesi ve `--disallowedTools Agent Task`'ın etkisi denenmedi (yalnızca argv ve sahte `claude` ile); bunlar P9'da
+gerçek denemede gözlenmeli. Eşzamanlılık kilit sırası kod incelemesiyle doğrulandı, stres testi yapılmadı.
+
+### 13.4 Değişen dosyalar
+
+`pixel_connector/{boss.py,workflows.py,app.py,__init__.py}` (3.8.1; `web/connector/pixel-connector.pyz`, `SHA256SUMS`,
+README özeti), `web/js/{control.js,boss.js}`, `web/sw.js` + `web/js/cloud.js` (`po-v4.0.7`),
+`tests/test_phase_boss_security.py` (yeni), `tests/js/boss_security.test.js` (yeni), `tests/test_phase20_connector.py` +
+`tests/test_e2e_protocol.py` (yalnızca sürüm numarası), `docs/PATRON_ODASI.md` §11 P8, `docs/GOREV_PANOSU.md`,
+`PROJECT.md`, `docs/gunluk/2026-10.md`.
+
+### 13.5 Kullanıcı eylemleri
+
+1. Push; ardından bağlayıcıyı her bilgisayarda 3.8.1'e güncelleyin: `pixel-connector update` (SHA-256 `1263e5d7…`).
+   Web `po-v4.0.7` yayına alınınca sayfa kendini yeniler.
+2. Alışkanlık önerisi (S29-03): Test iş emrini onaylamadan önce önceki iş emirlerinin değişikliklerine (`git diff`,
+   özellikle test dosyaları, `conftest.py`, `package.json` betikleri) bilgisayarda bakın; emin değilseniz Reddet (iş
+   emri atlanır, rapor bunu söyler). §10/3 kararı değişmedi.

@@ -68,6 +68,10 @@ const REQUEST_TEXT = {
   bad_request: 'Bilgisayar isteği geçersiz buldu (metin ya da maliyet tavanı).',
   unknown_job: 'Bu iş bulunamadı ya da zaten bitti.',
 };
+/** S29-03: the approval before each Test order (§10/3); the same warning is the local approval item's preview. */
+export const GATE_TEXT = 'Test uzmanı test komutlarını çalıştıracak. Bu komutlar uzmanların yazdığı kodu (test dosyaları, '
+  + 'package.json betikleri) bilgisayarınızda sizin yetkilerinizle çalıştırır; bu kod klasörle ve Patron işinin '
+  + 'tavanlarıyla sınırlı değildir. Başlasın mı? Reddederseniz bu iş emri atlanır.';
 const RESET_BUSY_TEXT = 'Patron çalışırken hafızası sıfırlanamaz. İş bitince tekrar deneyin.';
 
 function requestText(e) {
@@ -649,7 +653,7 @@ export class BossPanel {
   /** §10/3: every Test order waits for the user's approval before it starts (workflow.answer with the step). */
   _gate(job, o) {
     const box = el('div', 'boss-gate');
-    box.appendChild(el('p', 'wf-run-note small', 'Test uzmanı bu klasörde test komutlarını çalıştıracak. Başlasın mı? Reddederseniz bu iş emri atlanır.'));
+    box.appendChild(el('p', 'wf-run-note small', GATE_TEXT));
     const key = `gate:${o.id}`;
     const busy = this.inflight.has(key);
     const actions = el('div', 'wf-run-actions');

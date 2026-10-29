@@ -77,8 +77,8 @@ PLAN_TEMPLATE_ID = "patron"
 PLAN_STEP_TRANSITIONS = {WAITING: {RUNNING, APPROVAL, CANCELLED}, APPROVAL: {RUNNING, CANCELLED, ERROR},
                          RUNNING: {DONE, ERROR, CANCELLED}}
 PLAN_STEP_FIELDS = frozenset({"id", "type", "role", "roleId", "engine", "profile", "model", "prompt", "agent",
-                              "agentName", "inputs", "gate", "gateTitle", "gateTimeoutS", "fresh", "policy",
-                              "maxTurns", "final"})
+                              "agentName", "inputs", "gate", "gateTitle", "gateTimeoutS", "gatePreview", "fresh",
+                              "policy", "maxTurns", "final"})
 PLAN_MAX_PARALLEL = 2
 SKIPPED = "skipped"         # step code: an input step did not finish, or no order was done before the final step
 INPUT_NOTE = "Girdi %d/%d: %s iş emrinin (%s) çıktısı. Durum: %s."
@@ -970,7 +970,8 @@ class WorkflowEngine:
         self._sync_run_state(run)
         left = run.limits["timeoutS"] - (st.started - run.started)
         timeout = max(1.0, min(float(st.spec["gateTimeoutS"]), left))
-        st.pending = self.app.approvals.request("workflow", st.spec["gateTitle"][:80], None, st.agent_name,
+        st.pending = self.app.approvals.request("workflow", st.spec["gateTitle"][:80], st.spec.get("gatePreview"),
+                                                st.agent_name,
                                                 lambda res, r=run, s=st: self._gate_done(r, s, res), timeout_s=timeout)
         st.expires = st.pending.expires
         self.app.audit.write("workflow.step", run=run.id, step=st.id, index=st.index, state=APPROVAL,

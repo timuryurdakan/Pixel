@@ -65,7 +65,7 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | P5 | Patron Odası: ofis haritası ve sahne (P4 sonrası) | Claude | ✅ |
 | P6 | Patron Odası: Patron paneli ve Görev Tahtası (P5 sonrası) | Claude | ✅ |
 | P7 | Patron Odası: QA ve belgeler (P6 sonrası) | Claude | ✅ |
-| P8 | Patron Odası: bağımsız güvenlik incelemesi (P7 sonrası) | Claude | ⬜ |
+| P8 | Patron Odası: bağımsız güvenlik incelemesi (P7 sonrası) | Claude | ✅ |
 | P9 | Patron Odası: gerçek deneme, kullanıcı onayıyla, düşük bütçe (P8 sonrası) | Claude | ⬜ |
 
 **A6–A10'un ayrıntıları, başlama koşulları ve push yöntemi:** [`docs/V4_ANTIGRAVITY.md`](V4_ANTIGRAVITY.md).
@@ -344,3 +344,15 @@ görüntüleri, bilinen sorunlar.
   `PROJECT.md` §6 (P2 kaydı çıkarıldı; günlükte var), günlük. Bağlayıcıya ve güvenlik çekirdeğine dokunulmadı.
   P6 açığı (a) yeniden üretilemedi (bağlayıcı zaten `boss.state` gönderiyor; regresyon testi eklendi), (b) düzeltildi.
   `python3 -m unittest discover -s tests`: 954 test, OK (1 atlandı: `pwsh`); tarayıcı testleri Brave ile.
+- **2026-10-29, Claude (Patron Odası P8: bağımsız güvenlik incelemesi, Uygulama Güvenliği Mühendisi):** Teslim edildi,
+  commit/push yok (koordinatör denetleyip commit'leyecek). Sonuç `docs/SECURITY_AUDIT.md` §13: 1 Orta (S29-04: Patron/rol
+  ajanı devir hedefi olabiliyordu, Test ajanı cihazın dev listesiyle onaysız çalışıyordu) ve 3 Düşük (S29-01 kaldırılmış
+  tarayıcının bilgisayarda onaylanan `boss.ask`'i, S29-02 bilgisayarda kaldırma sayfaya bildirilmiyordu (P7 notu 3),
+  S29-03 Test onayı metni) düzeltildi, 5 Bilgi kabul; açık Orta ve üzeri yok. Yeni: `tests/test_phase_boss_security.py`
+  (10), `tests/js/boss_security.test.js` (3) (ikisi `git add -N`); her düzeltmeden önce başarısız test. Değişen:
+  `pixel_connector/{boss,workflows,app,__init__}.py` (3.8.1, `.pyz`, `SHA256SUMS`, README özeti), `web/js/{control,boss}.js`,
+  `web/sw.js` + `web/js/cloud.js` (`po-v4.0.7`), `tests/test_phase20_connector.py` + `tests/test_e2e_protocol.py`
+  (yalnızca sürüm), `docs/SECURITY_AUDIT.md` §13, `docs/PATRON_ODASI.md` §11 P8, `PROJECT.md` §6 (P3 kaydı çıkarıldı;
+  günlükte var), günlük. Güvenlik çekirdeğine (`crypto.py`, `session.py`, `e2e.js`) dokunulmadı.
+  `python3 -m unittest discover -s tests`: TESTS_LINE; tarayıcı testleri Brave ile. Kullanıcı: push sonrası
+  `pixel-connector update`.
