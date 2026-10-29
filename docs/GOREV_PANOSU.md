@@ -67,6 +67,10 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | P7 | Patron Odası: QA ve belgeler (P6 sonrası) | Claude | ✅ |
 | P8 | Patron Odası: bağımsız güvenlik incelemesi (P7 sonrası) | Claude | ✅ |
 | P9 | Patron Odası: gerçek deneme, kullanıcı onayıyla, düşük bütçe (P8 sonrası) | Claude | ✅ |
+| G1 | Faz 1 (`docs/EVRENSEL_PLATFORM_ARASTIRMA_RAPORU.md` §1.2): sahne kontrolleri (yakınlaştır/uzaklaştır/sığdır, Ctrl+tekerlek, mobilde iki parmak), atmosfer seçici (gündüz/gün batımı/gece/otomatik), tıklanabilir kahve makinesi ve su sebili, Patron üzerine gelince "Patron" ipucu. Kedi zaten var, yeni kedi çizilmez. Dosyalar: `web/js/renderer.js`, `web/js/fx.js`, `web/js/sprites.js`, yeni `web/js/scene_controls.js`, `tests/js/scene_controls.test.js` | Antigravity | ⬜ |
+| G3 | Faz 1 (§1.5): tarayıcı bildirimi + sekme başlığında onay sayısı (izin yalnızca kullanıcı tıklayınca istenir, bildirimde istem/çıktı metni yok), yanıt ve Patron raporu için "Kopyala" ve ".md indir" (yalnızca `textContent`/Blob). Dosyalar: `web/js/prompt.js`, `web/js/approvals.js`, `web/js/boss.js`, yeni `web/js/notify.js`, `tests/js/notify.test.js`. G1'den sonra | Antigravity | ⬜ |
+| G4 | Faz 1 (§1.3/2, §1.6): Patron'da başarısız tek iş emrini yeniden deneme (`boss.retry_step`, tavan ve onay kuralları aynen) ve eşleştirme kodunu QR ile telefona taşıma (SAS onayı aynen). Dosyalar: `pixel_connector/*`, `web/js/devices.js`, `web/js/boss.js` (yalnızca G3 birleştikten sonra) | Claude | ⬜ |
+| G2 | Faz 1 (§1.1): ilk ziyarette rehber yerine canlı demo ofisi + üst bant, demoda Patron senaryosu. Dosyalar: `web/js/main.js`, `web/index.html`, `web/tanitim.html`. G1–G4 birleştikten sonra (ortak dosyalar) | Claude | ⬜ |
 
 **A6–A10'un ayrıntıları, başlama koşulları ve push yöntemi:** [`docs/V4_ANTIGRAVITY.md`](V4_ANTIGRAVITY.md).
 
@@ -359,3 +363,13 @@ görüntüleri, bilinen sorunlar.
 - **2026-10-29, Claude (Patron Odası P9: gerçek deneme, Koordinatör + kullanıcı):** Kullanıcı tabletten canlı sitede gerçek
   Claude ile denedi: `~/PixelOfficeIsler`, toplam 0,30 $, akış baştan sona çalıştı. Klasör dışı yazma yok (deneme
   klasöründe yalnızca `index.html`; Pixel deposu temiz). Kod değişmedi; yalnızca `PROJECT.md` §6, günlük ve bu pano.
+
+- **2026-10-29, Claude (Koordinatör: Faz 1 iş bölümü):** Antigravity'nin `docs/EVRENSEL_PLATFORM_ARASTIRMA_RAPORU.md`
+  raporu kullanıcı onayıyla alındı. Önce Faz 1 (G1–G4); Faz 2–3 (departmanlar, araç kullanan motorlar, tarayıcı içi
+  ajan motoru E4) ayrı tasarım ve güvenlik incelemesi ister (E4: tarayıcıda API anahtarı ve CSP `connect-src`
+  genişlemesi), Faz 1'den sonra konuşulur. Rapordaki iki düzeltme: ofis kedisi zaten var (`CAT_TILE`, `getCatFrame`,
+  tıklanınca miyavlar); `drawPatronRoom()` yok, Patron `renderer.js` `_bossItem` ve `boss_scene.js` `BossScene` ile
+  çizilir. Antigravity formattan sonra yeniden kurulan `~/Desktop/Pixel-antigravity` worktree'sinde,
+  `antigravity/gorevler` dalında çalışır; `web/sw.js` `VERSION`'ı ve `web/js/cloud.js` `APP_VERSION`'ı Claude
+  birleştirirken artırır, Antigravity dokunmaz. Ortak dosyalar (`web/css/style.css`, `web/index.html`): yalnızca sona
+  ekleme, mevcut kurallar değişmez.
