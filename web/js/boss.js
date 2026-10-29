@@ -301,8 +301,10 @@ export class BossStore {
   putReport(dev, raw) {
     const report = readReport(raw);
     if (!report) return false;
-    this._entry(dev, report.job).report = report;
-    if (this.notifier) { try { this.notifier.notifyDone(); } catch {} }
+    const entry = this._entry(dev, report.job);
+    const isNew = !entry.report;      // a resync re-delivers the same report: notify only once
+    entry.report = report;
+    if (isNew && this.notifier) { try { this.notifier.notifyDone(); } catch { /* notifications are best effort */ } }
     return true;
   }
 
