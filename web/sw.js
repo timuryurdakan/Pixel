@@ -19,7 +19,7 @@ const SHELL = [
   '/js/sprites.js', '/js/fx.js', '/js/audio.js', '/js/transport.js', '/js/cloud.js', '/js/pip.js',
   '/js/relay.js', '/js/e2e.js', '/js/idb.js', '/js/control.js', '/js/prompt.js', '/js/devices.js', '/js/usage.js',
   '/js/approvals.js', '/js/board.js', '/js/workflows.js', '/js/template_builder.js', '/js/preview.js', '/js/update_banner.js', '/js/boss_scene.js', '/js/boss.js',
-  '/js/scene_controls.js', '/js/notify.js', '/js/demo.js',
+  '/js/scene_controls.js', '/js/notify.js', '/js/demo.js', '/js/keystore.js',
   '/rehber.html', '/css/guide.css', '/js/guide.js',
   '/manifest.webmanifest',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png', '/icons/apple-touch-icon.png',
