@@ -207,6 +207,70 @@ _ROLE_SPECS = [
                     "açısından kısa bir rapor yazarsın. Dosya değiştirmezsin."},
 ]
 ROLES: Dict[str, dict] = {r["id"]: validate_role(r) for r in _ROLE_SPECS}
+# E1a: departments. The software department is ROLES (the default; older browsers send no department). The other
+# departments' roles write text files only: readonly or edit, never a command, so none of them asks for approval.
+TEXT_RULE = (" Yalnızca Markdown ya da düz metin dosyası yaz; kod, betik ve yapılandırma dosyalarına dokunma. İnternete "
+             "erişemezsin: bilmediğin bilgiyi, rakamı ya da kaynağı uydurma, doğrulanması gerekeni öyle işaretle.")
+REVIEW_RULE = " Yalnızca okursun ve kısa bir değerlendirme yazarsın; dosya değiştirmezsin."
+_DEPARTMENT_ROLE_SPECS = [
+    {"id": "yazar", "name": "Yazar", "badge": "pencil", "profile": "edit", "costUsd": 0.25, "maxTurns": 25,
+     "instruction": "Sen içerik yazarısın: blog yazısı, video metni, sosyal medya gönderisi ve bülten yazarsın. "
+                    "İsteğin tonuna ve hedef kitlesine uy." + TEXT_RULE},
+    {"id": "editor", "name": "Editör", "badge": "magnifier", "profile": "readonly", "costUsd": 0.15, "maxTurns": 20,
+     "instruction": "Sen editörsün: metinleri dil, akış, tutarlılık ve doğruluk açısından okursun." + REVIEW_RULE},
+    {"id": "akademisyen", "name": "Akademisyen", "badge": "pencil", "profile": "edit", "costUsd": 0.25,
+     "maxTurns": 25,
+     "instruction": "Sen akademik yazarsın: konu anlatımı, özet ve çalışma notu hazırlarsın. Kavramları doğru ve "
+                    "sade anlat; alıntı ve kaynak uydurma." + TEXT_RULE},
+    {"id": "soru", "name": "Soru Hazırlayıcı", "badge": "checklist", "profile": "edit", "costUsd": 0.20,
+     "maxTurns": 20,
+     "instruction": "Sen soru hazırlayıcısın: konuya uygun çalışma soruları, cevap anahtarı ve açıklamalarını "
+                    "yazarsın." + TEXT_RULE},
+    {"id": "danisman", "name": "Danışman", "badge": "magnifier", "profile": "readonly", "costUsd": 0.15,
+     "maxTurns": 20,
+     "instruction": "Sen akademik danışmansın: anlatımları ve soruları doğruluk ve seviye açısından okursun."
+                    + REVIEW_RULE},
+    {"id": "pazarlama", "name": "Pazarlama", "badge": "globe", "profile": "edit", "costUsd": 0.25, "maxTurns": 25,
+     "instruction": "Sen pazarlama uzmanısın: ürün tanıtımı, kampanya metni, e-posta ve sosyal medya planı "
+                    "yazarsın." + TEXT_RULE},
+    {"id": "analist", "name": "İş Analisti", "badge": "people", "profile": "edit", "costUsd": 0.25, "maxTurns": 25,
+     "instruction": "Sen iş analistisin: iş planı, fiyatlandırma, hedef kitle ve rakip karşılaştırması yazarsın; "
+                    "yalnızca klasördeki bilgilere ve isteğe dayan, tahminleri tahmin olarak belirt." + TEXT_RULE},
+    {"id": "denetci", "name": "Denetçi", "badge": "magnifier", "profile": "readonly", "costUsd": 0.15,
+     "maxTurns": 20,
+     "instruction": "Sen iş denetçisisin: planları ve metinleri tutarlılık, gerçekçilik ve risk açısından okursun."
+                    + REVIEW_RULE},
+    {"id": "planlayici", "name": "Planlayıcı", "badge": "checklist", "profile": "edit", "costUsd": 0.20,
+     "maxTurns": 20,
+     "instruction": "Sen kişisel planlayıcısın: gezi planı, haftalık program, alışveriş ve yapılacaklar listesi "
+                    "hazırlarsın." + TEXT_RULE},
+    {"id": "kontrol", "name": "Kontrol", "badge": "magnifier", "profile": "readonly", "costUsd": 0.10,
+     "maxTurns": 15,
+     "instruction": "Sen kontrol uzmanısın: planları eksik, çelişki ve uygulanabilirlik açısından okursun."
+                    + REVIEW_RULE},
+]
+DEPARTMENT_ROLES: Dict[str, dict] = {r["id"]: validate_role(dict(r, engine="claude"))
+                                     for r in _DEPARTMENT_ROLE_SPECS}
+ALL_ROLES: Dict[str, dict] = {**ROLES, **DEPARTMENT_ROLES}
+DEFAULT_DEPARTMENT = "yazilim"
+DEPARTMENTS: Dict[str, dict] = {
+    "yazilim": {"name": "Yazılım", "roles": tuple(ROLES)},
+    "icerik": {"name": "İçerik ve Medya", "roles": ("yazar", "editor")},
+    "akademik": {"name": "Akademik ve Eğitim", "roles": ("akademisyen", "soru", "danisman")},
+    "girisim": {"name": "Girişim ve Pazarlama", "roles": ("pazarlama", "analist", "denetci")},
+    "kisisel": {"name": "Kişisel Yaşam", "roles": ("planlayici", "kontrol")},
+}
+
+
+def departments_public() -> List[dict]:
+    """device.info `bossDepartments`: ids, names and role ids (role details travel with each boss.plan)."""
+    return [{"id": did, "name": d["name"], "roles": list(d["roles"])} for did, d in DEPARTMENTS.items()]
+
+
+def department_roles(department: str = DEFAULT_DEPARTMENT) -> Tuple[str, ...]:
+    return DEPARTMENTS[department]["roles"]
+
+
 BOSS_ROLE = validate_role({
     "id": "patron", "name": "Patron", "badge": "people", "engine": "claude", "profile": "readonly",
     "costUsd": PLAN_COST_USD, "maxTurns": PLAN_MAX_TURNS,
@@ -216,7 +280,7 @@ BOSS_ROLE = validate_role({
 
 def role_allow_rules(role_id: str) -> List[str]:
     """The commands a role may run: the role's own list only, as a copy (the device's dev allow list is never added)."""
-    return list(ROLES[role_id]["allow"])
+    return list(ALL_ROLES[role_id]["allow"])
 
 
 # -- plan -----------------------------------------------------------------------------------------------------------
@@ -250,12 +314,13 @@ def order_prompt(summary: str, order: dict) -> str:
     """A step instruction: fixed connector text, the role's instruction and the order's fields."""
     files = "\n".join("- " + f for f in order["files"]) or FILES_NONE
     accept = "\n".join("- " + a for a in order["accept"])
-    return "\n\n".join((ORDER_HEAD, ROLES[order["role"]]["instruction"], "Planın özeti: " + summary,
+    return "\n\n".join((ORDER_HEAD, ALL_ROLES[order["role"]]["instruction"], "Planın özeti: " + summary,
                         "İş emri: " + order["title"], "Hedef:\n" + order["goal"], "Kabul ölçütleri:\n" + accept,
                         "Dokunulacak dosyalar:\n" + files, ORDER_RULES))
 
 
-def _order(raw, where: str, earlier: List[str], summary: str, enabled_profiles: frozenset) -> dict:
+def _order(raw, where: str, earlier: List[str], summary: str, enabled_profiles: frozenset,
+           roles: Tuple[str, ...]) -> dict:
     _allowed(raw, ORDER_FIELDS, where)
     if not ORDER_REQUIRED <= set(raw):
         raise BossError("bad_plan", where + ": missing field")
@@ -263,7 +328,7 @@ def _order(raw, where: str, earlier: List[str], summary: str, enabled_profiles: 
     if not isinstance(oid, str) or not ORDER_ID_RE.match(oid) or oid in earlier:
         raise BossError("bad_plan", where + ".id")
     role = raw["role"]
-    if not isinstance(role, str) or role not in ROLES:
+    if not isinstance(role, str) or role not in roles:
         raise BossError("bad_plan", where + ".role")
     out = {"id": oid, "role": role, "title": _strict_text(raw["title"], where + ".title", TITLE_MAX),
            "goal": _strict_text(raw["goal"], where + ".goal", GOAL_MAX_BYTES, True, GOAL_MAX_BYTES),
@@ -273,12 +338,12 @@ def _order(raw, where: str, earlier: List[str], summary: str, enabled_profiles: 
            "after": _after(raw.get("after", []), where + ".after", earlier)}
     if len(order_prompt(summary, out).encode("utf-8")) > PROMPT_MAX:
         raise BossError("bad_plan", where + ": the order is too long for one step instruction")
-    if ROLES[role]["profile"] not in enabled_profiles:
+    if ALL_ROLES[role]["profile"] not in enabled_profiles:
         raise BossError("role_unavailable", where + ".role")
     return out
 
 
-def _plan(raw, enabled_profiles: frozenset, fix_round: bool) -> dict:
+def _plan(raw, enabled_profiles: frozenset, fix_round: bool, roles: Tuple[str, ...]) -> dict:
     _allowed(raw, PLAN_FIELDS, "plan")
     if not PLAN_FIELDS <= set(raw):
         raise BossError("bad_plan", "plan: missing field")
@@ -291,15 +356,16 @@ def _plan(raw, enabled_profiles: frozenset, fix_round: bool) -> dict:
         raise BossError("bad_plan", "orders")
     orders: List[dict] = []
     for i, o in enumerate(orders_raw):
-        orders.append(_order(o, "orders[%d]" % i, [x["id"] for x in orders], summary, enabled_profiles))
+        orders.append(_order(o, "orders[%d]" % i, [x["id"] for x in orders], summary, enabled_profiles, roles))
     return {"v": PLAN_VERSION, "summary": summary, "orders": orders}
 
 
-def validate_plan(raw, enabled_profiles: Iterable[str] = DEFAULT_ENABLED_PROFILES, fix_round: bool = False) -> dict:
+def validate_plan(raw, enabled_profiles: Iterable[str] = DEFAULT_ENABLED_PROFILES, fix_round: bool = False,
+                  roles: Iterable[str] = tuple(ROLES)) -> dict:
     """The Boss's plan → normalized copy. BossError("bad_plan") for anything outside the allow-list (the detail names
     the field, never its text), BossError("role_unavailable") when a role's profile is off on this device. A fix-round
-    plan may hold at most MAX_FIX_ORDERS orders."""
-    return _as_boss("bad_plan", _plan, raw, frozenset(enabled_profiles), fix_round)
+    plan may hold at most MAX_FIX_ORDERS orders. `roles`: the job's department's role ids (E1a)."""
+    return _as_boss("bad_plan", _plan, raw, frozenset(enabled_profiles), fix_round, tuple(roles))
 
 
 # -- scheduling (pure) ----------------------------------------------------------------------------------------------
@@ -331,7 +397,7 @@ def files_conflict(a: List[str], b: List[str]) -> bool:
 
 def orders_conflict(a: dict, b: dict) -> bool:
     """Two orders may not run at the same time: at least one of them writes and their file scopes may overlap."""
-    if ROLES[a["role"]]["profile"] == "readonly" and ROLES[b["role"]]["profile"] == "readonly":
+    if ALL_ROLES[a["role"]]["profile"] == "readonly" and ALL_ROLES[b["role"]]["profile"] == "readonly":
         return False
     return files_conflict(a["files"], b["files"])
 
@@ -396,7 +462,7 @@ def estimate(plan: dict, fix_round: bool = False) -> float:
     """Estimated USD shown next to the hard cap: planning (not in a fix round) + each role's estimate + the review. The
     Boss's own estimate, if it wrote one, is never used (untrusted)."""
     total = 0.0 if fix_round else PLAN_COST_USD
-    total += sum(ROLES[o["role"]]["costUsd"] for o in plan["orders"]) + REVIEW_COST_USD
+    total += sum(ALL_ROLES[o["role"]]["costUsd"] for o in plan["orders"]) + REVIEW_COST_USD
     return round(total, 2)
 
 
@@ -408,7 +474,7 @@ def _step(sid: str, role: dict, prompt: str) -> dict:
 def plan_to_steps(plan: dict) -> List[dict]:
     """A validated plan → A10 agent steps: one per order (profile from its role), then the Boss's review step. Run
     order, parallelism (`ready_orders`), `after` outputs and the Test role's approval are P3's job."""
-    steps = [_step(o["id"], ROLES[o["role"]], order_prompt(plan["summary"], o)) for o in plan["orders"]]
+    steps = [_step(o["id"], ALL_ROLES[o["role"]], order_prompt(plan["summary"], o)) for o in plan["orders"]]
     steps.append(_step(REVIEW_STEP_ID, BOSS_ROLE, REVIEW_PROMPT))
     return steps
 
@@ -417,7 +483,7 @@ def plan_to_steps(plan: dict) -> List[dict]:
 
 SUBAGENT_TOOLS = ("Agent", "Task")        # T4: no Boss or role task opens Claude sub-agents (both names, old and new)
 JOB_ID_RE = re.compile(r"^b_[A-Za-z0-9_-]{10}\Z")
-ASK_FIELDS = frozenset({"type", "id", "workspace", "brief", "maxCostUsd"})
+ASK_FIELDS = frozenset({"type", "id", "workspace", "brief", "maxCostUsd", "department"})
 APPROVE_FIELDS = frozenset({"type", "id", "job", "approve"})
 JOB_FIELDS = frozenset({"type", "id", "job"})
 RETRY_FIELDS = frozenset({"type", "id", "job", "order"})
@@ -475,7 +541,7 @@ class TaskPolicy:
 
 def task_policy(role_id: str, max_turns: int) -> TaskPolicy:
     """The policy of a task for `role_id` (a ROLES id or the Boss). Turn cap 1..the role's own maxTurns."""
-    role = BOSS_ROLE if role_id == BOSS_ROLE["id"] else ROLES.get(role_id)
+    role = BOSS_ROLE if role_id == BOSS_ROLE["id"] else ALL_ROLES.get(role_id)
     if role is None:
         raise BossError("bad_role", "unknown role")
     turns = _as_boss("bad_request", _number, max_turns, "maxTurns", (1, role["maxTurns"]), True, code="bad_request")
@@ -523,7 +589,11 @@ def parse_ask(msg: dict, ceiling: float) -> dict:
     brief = brief.strip()
     if not brief or any(_hidden_char(ch, True) for ch in brief):
         raise BossError("bad_request", "brief")
-    return {"workspace": ws, "brief": brief, "maxCostUsd": run_cost_cap(msg.get("maxCostUsd"), ceiling)}
+    department = msg.get("department", DEFAULT_DEPARTMENT)
+    if not isinstance(department, str) or department not in DEPARTMENTS:
+        raise BossError("bad_request", "department")
+    return {"workspace": ws, "brief": brief, "maxCostUsd": run_cost_cap(msg.get("maxCostUsd"), ceiling),
+            "department": department}
 
 
 def parse_job_msg(msg: dict, fields: frozenset, need_job: bool = True) -> Optional[str]:
@@ -539,14 +609,15 @@ def parse_job_msg(msg: dict, fields: frozenset, need_job: bool = True) -> Option
 
 # -- the planning prompt and the plan in the Boss's reply -----------------------------------------------------------
 
-def _roles_text() -> str:
+def _roles_text(department: str = DEFAULT_DEPARTMENT) -> str:
+    roles = (ALL_ROLES[rid] for rid in department_roles(department))
     return "Roller:\n" + "\n".join("- %s (%s, %s): %s" % (r["id"], r["name"], PROFILE_TEXT[r["profile"]],
-                                                          r["instruction"]) for r in ROLES.values())
+                                                          r["instruction"]) for r in roles)
 
 
-def planning_prompt(brief: str, nonce: str) -> str:
+def planning_prompt(brief: str, nonce: str, department: str = DEFAULT_DEPARTMENT) -> str:
     start, end = plan_markers(nonce)
-    return "\n\n".join((PLAN_HEAD, BOSS_ROLE["instruction"], PLAN_RULES, _roles_text(), PLAN_SCHEMA,
+    return "\n\n".join((PLAN_HEAD, BOSS_ROLE["instruction"], PLAN_RULES, _roles_text(department), PLAN_SCHEMA,
                         PLAN_OUTPUT % (start, end), PLAN_BRIEF_HEAD + "\n" + brief))
 
 
@@ -597,7 +668,7 @@ def _json_block(output, start: str, end: str):
 
 
 def extract_plan(output, nonce: str, enabled_profiles: Iterable[str] = DEFAULT_ENABLED_PROFILES,
-                 fix_round: bool = False) -> dict:
+                 fix_round: bool = False, roles: Iterable[str] = tuple(ROLES)) -> dict:
     """The Boss's reply → a validated plan. The reply is untrusted (the Boss read the user's project): it must be at
     most RESULT_MAX bytes and hold exactly one block between this request's marker lines, the block at most
     PLAN_JSON_MAX bytes and exactly one JSON object (no duplicate keys, no NaN), which `validate_plan` accepts.
@@ -605,7 +676,7 @@ def extract_plan(output, nonce: str, enabled_profiles: Iterable[str] = DEFAULT_E
     raw = _json_block(output, *plan_markers(nonce))
     if not isinstance(raw, dict):
         raise BossError("bad_plan", "json")
-    return validate_plan(raw, enabled_profiles, fix_round)
+    return validate_plan(raw, enabled_profiles, fix_round, roles)
 
 
 # == P3: running the plan, the Boss's review, the report =============================================================
@@ -655,23 +726,24 @@ def review_markers(nonce: str) -> Tuple[str, str]:
     return REVIEW_MARK % (nonce, "BAŞLANGIÇ"), REVIEW_MARK % (nonce, "SON")
 
 
-def review_prompt(plan: dict, nonce: str, fix_allowed: bool) -> str:
+def review_prompt(plan: dict, nonce: str, fix_allowed: bool, department: str = DEFAULT_DEPARTMENT) -> str:
     """The review step's instruction: fixed text, the orders' titles and acceptance criteria (from the approved plan)
     and the decision format. The orders' outputs follow as fenced data (`workflows.inputs_prompt`)."""
     orders = "\n\n".join("%s (%s): %s\nKabul ölçütleri:\n%s" % (
-        o["id"], ROLES[o["role"]]["name"], o["title"], "\n".join("- " + a for a in o["accept"]))
+        o["id"], ALL_ROLES[o["role"]]["name"], o["title"], "\n".join("- " + a for a in o["accept"]))
         for o in plan["orders"])
     start, end = review_markers(nonce)
     parts = [REVIEW_HEAD, REVIEW_PROMPT, "Planın özeti: " + plan["summary"], "İş emirleri:\n" + orders]
     if fix_allowed:
-        parts += [_roles_text(), PLAN_SCHEMA, REVIEW_FIX]
+        parts += [_roles_text(department), PLAN_SCHEMA, REVIEW_FIX]
     else:
         parts.append(REVIEW_NO_FIX)
     parts.append(REVIEW_REPORT % (start, end))
     return "\n\n".join(parts)
 
 
-def parse_review(output, nonce: str, enabled_profiles: Iterable[str] = DEFAULT_ENABLED_PROFILES) -> dict:
+def parse_review(output, nonce: str, enabled_profiles: Iterable[str] = DEFAULT_ENABLED_PROFILES,
+                 roles: Iterable[str] = tuple(ROLES)) -> dict:
     """The Boss's review reply (untrusted) → {"decision": accept | fix | None, "plan": a validated fix plan or None,
     "text": the report part (before the marker line), "note": None | review_unreadable | fix_invalid}. Never raises:
     an unreadable decision means no fix round (fail closed: no new spend)."""
@@ -690,7 +762,7 @@ def parse_review(output, nonce: str, enabled_profiles: Iterable[str] = DEFAULT_E
     out.update(decision=raw["decision"], note=None)
     if raw["decision"] == FIX:
         try:
-            out["plan"] = validate_plan(raw["plan"], enabled_profiles, fix_round=True)
+            out["plan"] = validate_plan(raw["plan"], enabled_profiles, fix_round=True, roles=roles)
         except BossError:
             out["note"] = "fix_invalid"
     return out
@@ -728,7 +800,7 @@ class BossJob:
     once the job is over (sent to paired browsers only)."""
 
     def __init__(self, peer, label: str, workspace: dict, ws_name: Optional[str], brief: str, run_cap: float,
-                 now: float) -> None:
+                 now: float, department: str = DEFAULT_DEPARTMENT) -> None:
         self.id = new_job_id()
         self.peer = peer
         self.bid = getattr(peer, "bid", None)
@@ -736,6 +808,7 @@ class BossJob:
         self.workspace = dict(workspace)
         self.ws_name = ws_name
         self.brief = brief
+        self.department = department              # E1a: the roles the Boss may plan with
         self.run_cap = run_cap
         self.plan_cap = plan_cost_cap(run_cap)
         self.state = IDLE
@@ -795,7 +868,7 @@ class BossJob:
         return {"job": self.id, "state": self.state, "code": self.code, "round": self.round,
                 "orders": len(self.plan["orders"]) if self.plan else 0, "costUsd": round(self.spent(), 6),
                 "maxCostUsd": self.run_cap, "estimateUsd": self.estimate, "run": self.run,
-                "orderStates": self.order_states(),
+                "orderStates": self.order_states(), "department": self.department,
                 "workspace": dict(self.workspace), "startedAt": _ms(self.started), "endedAt": _ms(self.ended),
                 "expiresAt": _ms(self.expires)}
 
@@ -803,7 +876,7 @@ class BossJob:
         """`boss.plan`: paired browsers only (E2E). The roles the plan uses, for the plan card."""
         used = {o["role"] for o in self.plan["orders"]}
         roles = {rid: {"name": r["name"], "badge": r["badge"], "profile": r["profile"]}
-                 for rid, r in ROLES.items() if rid in used}
+                 for rid, r in ALL_ROLES.items() if rid in used}
         return {"type": "boss.plan", "job": self.id, "plan": json.loads(json.dumps(self.plan)), "roles": roles,
                 "estimateUsd": self.estimate, "maxCostUsd": self.run_cap, "round": self.round,
                 "expiresAt": _ms(self.expires)}
@@ -824,7 +897,7 @@ class BossJob:
                 st = STEP_TEXT.get(o["state"], o["state"])
                 if o["code"] and o["state"] != "done":
                     st += " (%s)" % _code_text(o["code"])
-                lines.append("- %s%s · %s · %s: %s" % ("Düzeltme · " if n else "", o["id"], ROLES[o["role"]]["name"],
+                lines.append("- %s%s · %s · %s: %s" % ("Düzeltme · " if n else "", o["id"], ALL_ROLES[o["role"]]["name"],
                                                        o["title"], st))
         lines += ["- " + NOTE_TEXT.get(c, c) for c in self.notes]
         lines.append("Toplam maliyet: %.2f $ (tavan %.2f $)." % (self.spent(), self.run_cap))
@@ -906,16 +979,17 @@ class BossDesk:
             except WorkspaceDenied as e:
                 raise BossError("workspace_denied", str(e)) from None
             agent = self._boss_agent(ws, bid)
-            job = BossJob(peer, prep["label"], ws, ws_name, opts["brief"], opts["maxCostUsd"], self.clock())
+            job = BossJob(peer, prep["label"], ws, ws_name, opts["brief"], opts["maxCostUsd"], self.clock(),
+                          opts["department"])
             job.agent = agent["key"]
             job.set_state(PLANNING)
             self.jobs[job.id] = job
             self._trim()
             self.app.audit.write("boss.ask", bid=job.bid, job=job.id, agent=job.agent, ws=ws["id"], sub=ws["sub"],
                                  briefLen=len(job.brief.encode("utf-8")), maxCostUsd=job.run_cap,
-                                 planCapUsd=job.plan_cap)
+                                 planCapUsd=job.plan_cap, dept=job.department)
             job.nonce = self.nonce()
-            self._submit_plan(job, planning_prompt(job.brief, job.nonce))
+            self._submit_plan(job, planning_prompt(job.brief, job.nonce, job.department))
             self._emit(job)
             return {"type": "boss.ack", "job": job.wire()}
 
@@ -1010,7 +1084,7 @@ class BossDesk:
 
     def _take_plan(self, job: BossJob, result) -> None:
         try:
-            plan = extract_plan(result, job.nonce)
+            plan = extract_plan(result, job.nonce, roles=department_roles(job.department))
         except BossError as e:
             if job.attempt <= PLAN_RETRIES:
                 self.app.audit.write("boss.retry", job=job.id, code=e.code, attempt=job.attempt + 1)
@@ -1029,7 +1103,7 @@ class BossDesk:
     # -- approval -----------------------------------------------------------------------------------------------------
     def _preview(self, job: BossJob) -> str:
         """The local approval item's text (this computer's /onay page and CLI only, never sent anywhere)."""
-        orders = "; ".join("%s %s: %s" % (o["id"], ROLES[o["role"]]["name"], o["title"]) for o in job.plan["orders"])
+        orders = "; ".join("%s %s: %s" % (o["id"], ALL_ROLES[o["role"]]["name"], o["title"]) for o in job.plan["orders"])
         text = "%s | %s | Tahmini %.2f $, tavan %.2f $" % (job.plan["summary"], orders, job.estimate, job.run_cap)
         return text if len(text) <= PREVIEW_MAX else text[:PREVIEW_MAX - 1] + "…"
 
@@ -1138,7 +1212,7 @@ class BossDesk:
                 roles.append(o["role"])
         found = []
         for rid in roles:
-            tag = "%s/%s" % (rid, ROLES[rid]["engine"])
+            tag = "%s/%s" % (rid, ALL_ROLES[rid]["engine"])
             cur = next((a for a in agents.list() if a.get(SPECIALIST_FIELD) == tag), None)
             if cur is not None and self.app.scheduler.active_for(cur["key"]) is not None:
                 raise BossError("busy", "a role agent is busy")
@@ -1149,7 +1223,7 @@ class BossDesk:
         ws = {"id": job.workspace["id"], "sub": job.workspace["sub"]}
         out = {}
         for rid, tag, cur in found:
-            role = ROLES[rid]
+            role = ALL_ROLES[rid]
             if cur is None:
                 a = agents.create(role["name"], role["engine"], role["model"], ws, role["profile"], None)
                 a = dict(a, **{SPECIALIST_FIELD: tag})
@@ -1171,7 +1245,7 @@ class BossDesk:
         plan = job.plan
         steps = plan_to_steps(plan)
         for st, o in zip(steps, plan["orders"]):
-            role, a = ROLES[o["role"]], agents[o["role"]]
+            role, a = ALL_ROLES[o["role"]], agents[o["role"]]
             st.update({"roleId": o["role"], "agent": a["key"], "agentName": a["name"], "inputs": list(o["after"]),
                        "gate": role["confirm"], "gateTitle": "Patron · %s: %s" % (role["name"], o["title"]),
                        "gateTimeoutS": GATE_TIMEOUT_S, "gatePreview": GATE_WARNING if role["confirm"] else None,
@@ -1180,7 +1254,8 @@ class BossDesk:
             if o["id"] in priors:
                 st["prior"] = priors[o["id"]]
         steps[-1].update({"roleId": BOSS_ROLE["id"], "agent": job.agent, "agentName": BOSS_NAME,
-                          "prompt": review_prompt(plan, job.review_nonce, job.round < MAX_FIX_ROUNDS),
+                          "prompt": review_prompt(plan, job.review_nonce, job.round < MAX_FIX_ROUNDS,
+                                                 job.department),
                           "inputs": [o["id"] for o in plan["orders"]], "gate": False, "gateTitle": "",
                           "gateTimeoutS": GATE_TIMEOUT_S, "gatePreview": None, "fresh": False,
                           "maxTurns": BOSS_ROLE["maxTurns"],
@@ -1251,7 +1326,7 @@ class BossDesk:
     def _reviewed(self, job: BossJob, result) -> None:
         """The Boss's decision (caller holds the lock). A valid fix plan in round 0 goes back to the user for approval
         (at most MAX_FIX_ROUNDS, at most MAX_FIX_ORDERS orders); anything else ends the job with the report."""
-        d = parse_review(result, job.review_nonce)
+        d = parse_review(result, job.review_nonce, roles=department_roles(job.department))
         job.review_text = _cut(d["text"], REPORT_MAX) or None
         self.app.audit.write("boss.review", job=job.id, run=job.run, round=job.round, decision=d["decision"],
                              note=d["note"], outLen=len(result.encode("utf-8")) if isinstance(result, str) else 0,

@@ -126,7 +126,7 @@ class ParseAskTests(unittest.TestCase):
 
     def test_defaults_and_lowering(self):
         self.assertEqual(self.parse(), {"workspace": {"id": "pixel", "sub": None}, "brief": "Koyu tema ekle",
-                                        "maxCostUsd": 1.0})
+                                        "maxCostUsd": 1.0, "department": "yazilim"})
         self.assertEqual(self.parse(maxCostUsd=0.5)["maxCostUsd"], 0.5)
         self.assertEqual(self.parse(ceiling=2.5)["maxCostUsd"], 2.5)
         self.assertEqual(self.parse(workspace={"id": "pixel", "sub": "site/v1"})["workspace"]["sub"], "site/v1")

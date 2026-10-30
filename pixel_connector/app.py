@@ -25,7 +25,7 @@ from .agents import LABELS, AgentError, AgentStore, OfficeReporter
 from .approvals import (TOOL_ID_RE, Approvals, ControlServer, ToolApproval, ToolLimit, summary_hash,
                         validate_tool_request)
 from .audit import AuditLog
-from .boss import APPROVE_FIELDS, JOB_FIELDS, SPECIALIST_FIELD, BossDesk, TaskPolicy, parse_job_msg
+from .boss import APPROVE_FIELDS, JOB_FIELDS, SPECIALIST_FIELD, BossDesk, TaskPolicy, departments_public, parse_job_msg
 from .config import (AUDIT_FILE, LEDGER_FILE, Config, claude_path_label, claude_path_refreshed, ensure_dir, find_claude,
                      remote_approvals_state)
 from .engines.base import TaskContext, clear_history
@@ -51,7 +51,7 @@ APPROVAL_AUDIT = {"ok": "approval.approve", "denied": "approval.deny", "timeout"
                   "withdrawn": "approval.withdraw"}
 APPROVAL_POLL_S = 0.5       # how often a waiting /ctl/approvals/tool call checks that its hook is still there
 # device.info.features: optional protocol parts (v4-B handoff, v4-C workflows, Patron Odası boss.*)
-FEATURES = ["handoff", "workflows", "boss", "bossRetry"]
+FEATURES = ["handoff", "workflows", "boss", "bossRetry", "bossDepartments"]
 SLOW_TYPES = {"peer.hello", "runtime.list", "runtime.start", "runtime.stop", "model.load", "model.unload",
               "workspace.list", "agent.create", "peer.revoke", "workflow.list", "workflow.start", "boss.ask",
               "boss.retry_step"}
@@ -535,6 +535,7 @@ class Connector:
                              for p in ("readonly", "edit", "dev", "auto")],
                 "remote": dict(self.cfg["remote"]), "approvals": {"remote": self.remote_approvals()["enabled"]},
                 "features": list(FEATURES), "boss": {"maxCostUsd": self.boss.ceiling()},
+                "bossDepartments": departments_public(),
                 "time": int(self.clock() * 1000), "tz": tz_name()}
 
     def h_peer_hello(self, peer: Peer, msg: dict) -> None:
