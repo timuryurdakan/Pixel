@@ -564,3 +564,24 @@ Kısa tarama (uygulayıcının notu; Faz 1'in yeni web yüzeyleri, `0d198a4..HEA
 - **G2 demo:** `/?demo=1` yalnızca sabit değerle eşleşir, URL'den başka veri okunmaz; `demo.js` ağ isteği, depolama ya
   da oda anahtarı kullanmaz, `DEMO_DEVICE` hiçbir merkeze bağlanmaz. Bant statik işaretleme, satır içi işleyici yok.
 - Riskli kalıp taraması (`innerHTML`, `eval`, `Function(`, `insertAdjacentHTML`, `document.write`) yeni kodda temiz.
+
+## 17. Faz 2 kapanış taraması (S2) ve E3 notu (2026-10-30)
+
+Kısa tarama (uygulayıcının notu; `6b58a1c..3e8b9f9`: E1a, E1b, E2, E3). Yeni bulgu yok.
+
+- **E1a/E1b departmanlar:** `department` bağlayıcıda izin listesiyle (`boss.DEPARTMENTS`) doğrulanır, plan yalnızca o
+  departmanın rollerini adlandırabilir (düzeltme turu dahil). Yeni rollerin hiçbiri komut çalıştıramaz (`edit` /
+  `readonly`, izin listesi boş, onay kapısı yok). Tarayıcı `device.info.bossDepartments`'ı güvenilmez veri olarak
+  okur (`/^[a-z]{1,16}$/`, en fazla 10, bozuk öğe atılır), adları `textContent` ile yazar; özellik yoksa alanı
+  göndermez.
+- **E2 önizleme:** yalnızca `sandbox=""` (hiç izin yok) iframe + `srcdoc`, içeride `default-src 'none'` CSP; ana
+  sayfada `innerHTML` yok. Markdown'da her metin önce kaçışlanır; bağlantılar yalnızca `http(s)`, tıklanınca iframe
+  içinde kalır (ana sayfa CSP'si `frame-src`'yi `'self'` ile sınırlar). Adım önizlemesi var olan `task.get`'i kullanır
+  (eşleşmiş tarayıcı, E2E).
+- **E2 şablon oluşturucu:** bağlayıcıya yazmaz; `workflows.json` üretir, kullanıcı elle koyar ve bağlayıcı
+  `validate_template` ile yine doğrular. `localStorage` taslakları okunurken aynı doğrulamadan geçer.
+- **E3 dosya araçları:** tehdit modeli ve sınırlar `docs/FAZ3_TASARIM.md` §2 ve `docs/V3.md` §20 E3; negatif testler
+  `tests/test_e3_tools.py` (yol kaçışı, sembolik bağ, FIFO, yasak adlar, boyut, profil, araç/tur/jeton tavanı, anahtar
+  kanaryası). Araçlar varsayılan kapalı; komut ve web aracı yok.
+- Riskli kalıp taraması (`innerHTML`, `eval`, `new Function`, `allow-scripts`, `allow-same-origin`, `subprocess`,
+  `shell=True`) bu aralıktaki yeni kodda temiz.
