@@ -14,6 +14,7 @@ import { MemoryStore } from '../../web/js/idb.js';
 import { DeviceHub, ControlError } from '../../web/js/control.js';
 import { PromptPanel } from '../../web/js/prompt.js';
 import { PreviewDrawer } from '../../web/js/preview.js';
+import { KeyStore, IdbKeyBackend } from '../../web/js/keystore.js';
 import {
   PROVIDER_PRESETS,
   ALLOWED_PROVIDERS,
@@ -385,7 +386,7 @@ test('E4a — Canary API key ("sk-CANARY-...") NEVER appears in any DOM text, hu
   });
   await hub.init();
 
-  const keystore = createMemoryKeystore();
+  const keystore = new KeyStore({ backend: new IdbKeyBackend('test-e4a-keys-' + Date.now()) });
   const hubTraffic = [];
   hub.on('event', (dev, msg) => hubTraffic.push(msg));
   const origRequest = hub.request.bind(hub);

@@ -5,6 +5,7 @@
 // and strict path/size/count caps (D7), and renders all outputs via textContent or sandbox="" PreviewDrawer.
 
 import { ControlError } from './control.js';
+import { KeyStore, keyHint } from './keystore.js';
 
 export const BROWSER_DEVICE_ID = 'browser';
 
@@ -288,7 +289,7 @@ export function createMemoryKeystore() {
       return keys.get(provider) ?? null;
     },
     async set(provider, key, _opts = { remember: false }) {
-      if (!PROVIDER_PRESETS[provider]) throw new Error('unknown_provider');
+      if (!PROVIDER_PRESETS[provider]) throw new Error('bad_provider');
       if (typeof key !== 'string' || !key.trim()) {
         keys.delete(provider);
         return;
@@ -297,6 +298,12 @@ export function createMemoryKeystore() {
     },
     async forget(provider) {
       keys.delete(provider);
+    },
+    async forgetAll() {
+      keys.clear();
+    },
+    async hint(provider) {
+      return keyHint(keys.get(provider) ?? null);
     },
   };
 }
@@ -532,7 +539,7 @@ export class BrowserDevice {
   constructor({
     id = BROWSER_DEVICE_ID,
     name = 'Tarayıcı Cihazı',
-    keystore,
+    keystore = null,
     store,
     workspace = null,
     fetchFn = null,
@@ -540,11 +547,10 @@ export class BrowserDevice {
     onUpsert = null,
     onRemove = null,
   } = {}) {
-    if (!keystore) throw new Error('BrowserDevice requires a keystore');
     if (!store) throw new Error('BrowserDevice requires a store');
     this.id = id;
     this.name = name;
-    this.keystore = keystore;
+    this.keystore = keystore || new KeyStore();
     this.store = store;
     this.workspace = workspace || new VirtualWorkspace({ store });
     this.fetchFn = fetchFn || ((...a) => globalThis.fetch(...a));
@@ -1443,11 +1449,17 @@ export class BrowserDevicePanel {
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const rawKey = keyInput.value.trim();
-      keyInput.value = '';
-      if (!rawKey) return;
-      await this.keystore.set(this.selectedProvider, rawKey, { remember: Boolean(remInput.checked) });
-      await this._updateKeyStatus(statusBadge, this.selectedProvider);
-      this.toast('API anahtarı kaydedildi', 'ok');
+      if (!rawKey) {
+        keyInput.value = '';
+        return;
+      }
+      try {
+        await this.keystore.set(this.selectedProvider, rawKey, { remember: Boolean(remInput.checked) });
+        await this._updateKeyStatus(statusBadge, this.selectedProvider);
+        this.toast('API anahtarı kaydedildi', 'ok');
+      } finally {
+        keyInput.value = '';
+      }
     });
 
     forgetBtn.addEventListener('click', async () => {
@@ -1515,12 +1527,21 @@ export class BrowserDevicePanel {
 
   async _updateKeyStatus(badgeEl, providerId) {
     let hasKey = false;
+    let hintText = '';
     try {
-      const k = await this.keystore.get(providerId);
-      hasKey = Boolean(k && typeof k === 'string');
+      if (typeof this.keystore.hint === 'function') {
+        hintText = (await this.keystore.hint(providerId)) || '';
+        hasKey = Boolean(hintText);
+      } else {
+        const k = await this.keystore.get(providerId);
+        hasKey = Boolean(k && typeof k === 'string');
+        hintText = hasKey ? keyHint(k) : '';
+      }
     } catch {
       hasKey = false;
     }
-    badgeEl.textContent = hasKey ? 'Anahtar durumu: Hazır (kayıtlı)' : 'Anahtar durumu: Girilmemiş';
+    badgeEl.textContent = hasKey
+      ? `Anahtar durumu: Hazır (${hintText || 'kayıtlı'})`
+      : 'Anahtar durumu: Girilmemiş';
   }
 }
