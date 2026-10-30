@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """Pixel Office — Antigravity IDE watcher (Phase 18). Python >= 3.8, stdlib only.
 
-Antigravity has no hooks, so this tails the transcripts it writes and mirrors each conversation to one office agent:
+It tails the transcripts Antigravity writes and mirrors each conversation to one office agent:
     <root>/<conversation-id>/.system_generated/logs/transcript.jsonl      (one JSON step per line, append-only)
+F4-1: Antigravity (App, IDE and `agy` CLI) now also has hooks (`~/.gemini/config/hooks.json`). With
+`--install-hooks`, each hook event runs `pixel_antigravity.py hook <Event>`, which prints the reply Antigravity needs
+at once and leaves a one-line record (state, tool name, folder name; no text) in ~/.pixel-office/antigravity-hooks/.
+The running watcher prefers those records over the transcript: states come without the transcript's 8-30 s delay,
+and a tool that waits long after PreToolUse shows "Onay bekliyor olabilir".
 
 Needs `pixel_agent.py` in the same folder (it is the library that sends the updates):
     curl -fsSL <server>/hook/pixel_agent.py -o pixel_agent.py
@@ -13,6 +18,8 @@ CLI (either form):
     python3 pixel_agent.py antigravity [same flags]                       (pixel-antigravity after install-shims)
     python3 pixel_antigravity.py --install-service [--dry-run]            # start at login: systemd / launchd / schtasks
     python3 pixel_antigravity.py --uninstall-service
+    python3 pixel_antigravity.py --install-hooks [--dry-run]              # F4-1: Antigravity hooks (keeps other hooks)
+    python3 pixel_antigravity.py --uninstall-hooks
 
 Why a separate file: the watcher is only useful next to Antigravity, the connector (.pyz) bundles pixel_agent.py and
 does not need it, and pixel_agent.py stays a small library (v2.md D6). This file imports pixel_agent from its own
@@ -36,6 +43,100 @@ import signal
 import subprocess
 import sys
 import time
+
+
+# --------------------------------------------------------------------------------------------------
+# F4-1: Antigravity hook events (stdlib only, before pixel_agent is loaded: a hook must answer even if the library
+# is missing). Antigravity waits for the hook; PreToolUse and Stop need a `decision` on stdout, so the reply is
+# printed first, whatever happens next. `allow` hands the decision to Antigravity's own policy (nothing is approved
+# here); any Stop decision other than "continue" lets the agent stop.
+# --------------------------------------------------------------------------------------------------
+
+AG_HOOK_EVENTS = ("SessionStart", "PreInvocation", "PreToolUse", "PostToolUse", "PostInvocation", "Stop")
+AG_HOOK_REPLY = {"PreToolUse": {"decision": "allow"}, "Stop": {"decision": "stop"}}
+AG_HOOK_DIR = os.path.join(".pixel-office", "antigravity-hooks")     # under the home folder
+AG_HOOK_STDIN_MAX = 1024 * 1024
+AG_HOOK_ID_MAX = 200
+_HOOK_NAME_RE = re.compile(r"[^A-Za-z0-9_.:-]")
+
+
+def hook_reply(event: str) -> dict:
+    return dict(AG_HOOK_REPLY.get(event, {}))
+
+
+def _hook_short(v: object, limit: int) -> object:
+    if not isinstance(v, str):
+        return None
+    v = _HOOK_NAME_RE.sub("", v)[:limit]
+    return v or None
+
+
+def _hook_folder(paths: object) -> object:
+    """Basename of the first workspace path (only the name leaves the machine; the watcher cleans it again)."""
+    if not isinstance(paths, list) or not paths or not isinstance(paths[0], str):
+        return None
+    parts = [x for x in re.split(r"[\\/]+", paths[0]) if x]
+    name = "".join(ch for ch in parts[-1] if ord(ch) >= 0x20)[:32] if parts else ""
+    return name or None
+
+
+def hook_record(event: str, data: object, now: float) -> object:
+    """A hook event (untrusted stdin JSON) → the record the watcher reads, or None. Only the event, the tool name
+    (sanitised), an error flag and the folder's name are kept; arguments, paths and messages are dropped here."""
+    if event not in AG_HOOK_EVENTS or not isinstance(data, dict):
+        return None
+    cid = data.get("conversationId")
+    if not isinstance(cid, str) or not 0 < len(cid) <= AG_HOOK_ID_MAX:
+        return None
+    call = data.get("toolCall") if isinstance(data.get("toolCall"), dict) else {}
+    return {"v": 1, "id": hashlib.sha256(cid.encode("utf-8", "replace")).hexdigest()[:16], "ev": event, "at": now,
+            "tool": _hook_short(call.get("name"), 48) if event in ("PreToolUse", "PostToolUse") else None,
+            "err": bool(data.get("error")) if event in ("PostToolUse", "Stop") else False,
+            "folder": _hook_folder(data.get("workspacePaths"))}
+
+
+def hook_dir(home: object = None) -> str:
+    return os.path.join(home or os.path.expanduser("~"), AG_HOOK_DIR)
+
+
+def write_hook_record(rec: dict, home: object = None) -> None:
+    """Atomic replace of the conversation's one-line record (0600 in a 0700 folder)."""
+    d = hook_dir(home)
+    os.makedirs(d, mode=0o700, exist_ok=True)
+    path = os.path.join(d, rec["id"] + ".json")
+    tmp = "%s.%d.tmp" % (path, os.getpid())
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(rec, f)
+    os.replace(tmp, path)
+
+
+def hook_main(argv: list, stdin=None, stdout=None, home: object = None, clock=time.time) -> int:
+    """`pixel_antigravity.py hook <Event>`: reply first, then the record. Never raises, always exits 0."""
+    event = argv[0] if argv else ""
+    out = stdout or sys.stdout
+    try:
+        out.write(json.dumps(hook_reply(event)) + "\n")
+        out.flush()
+    except Exception:
+        pass
+    try:
+        raw = (stdin or sys.stdin.buffer).read(AG_HOOK_STDIN_MAX + 1)
+        if isinstance(raw, str):
+            raw = raw.encode("utf-8", "replace")
+        if len(raw) > AG_HOOK_STDIN_MAX:
+            return 0
+        rec = hook_record(event, json.loads(raw.decode("utf-8", "replace") or "null"), clock())
+        if rec is not None:
+            write_hook_record(rec, home)
+    except Exception:
+        pass
+    return 0
+
+
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "hook":
+    sys.exit(hook_main(sys.argv[2:]))
+
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -96,6 +197,11 @@ TASK_RESTART_COUNT = 3
 TASK_RESTART_INTERVAL = "PT1M"
 TASK_NS = "http://schemas.microsoft.com/windows/2004/02/mit/task"
 AG_ACTIVE = ("working", "thinking")
+AG_HOOK_FRESH = 600.0       # s: a conversation with a hook record this recent ignores its transcript
+AG_MAYBE_WAIT = 20.0        # s after PreToolUse of a tool that may ask the user → "Onay bekliyor olabilir"
+AG_APPROVAL_TOOLS = frozenset({"Bash", "Write", "Edit"})      # (mapped names) the tools Antigravity may ask about
+AG_HOOK_FILE_MAX = 4096
+L_MAYBE_WAIT = "Onay bekliyor olabilir"
 AG_KNOWN_SOURCES = ("MODEL", "USER_EXPLICIT", "SYSTEM")
 # Antigravity tool names → the office's (Claude Code style) names, so the right bubble icon shows.
 AG_TOOL_NAMES = {
@@ -308,12 +414,46 @@ class TranscriptTail:
 # The watcher
 # --------------------------------------------------------------------------------------------------
 
-class _AgConv:
-    __slots__ = ("key", "tail", "agent", "base", "last", "project", "shown")
+def hook_state(rec: dict) -> object:
+    """A hook record → (state, tool, label) like antigravity_state; PreToolUse is the open tool."""
+    ev = rec.get("ev")
+    if ev == "PreToolUse":
+        return "working", antigravity_tool(rec.get("tool")), None
+    if ev in ("PreInvocation", "PostInvocation"):
+        return "thinking", None, None
+    if ev == "PostToolUse":
+        return "thinking", None, L_ERROR if rec.get("err") else None
+    if ev in ("Stop", "SessionStart"):
+        return "idle", None, L_ERROR if rec.get("err") else None
+    return None
 
-    def __init__(self, key: str, path: str) -> None:
+
+def read_hook_record(path: str) -> object:
+    """A record file written by `hook` (any local process could write there, so it is checked like input)."""
+    try:
+        with open(path, "rb") as f:
+            raw = f.read(AG_HOOK_FILE_MAX + 1)
+        if len(raw) > AG_HOOK_FILE_MAX:
+            return None
+        rec = json.loads(raw.decode("utf-8"))
+    except (OSError, ValueError, UnicodeDecodeError):
+        return None
+    if (not isinstance(rec, dict) or rec.get("v") != 1 or rec.get("ev") not in AG_HOOK_EVENTS
+            or not isinstance(rec.get("id"), str) or not re.match(r"^[0-9a-f]{16}\Z", rec["id"])
+            or not isinstance(rec.get("at"), (int, float)) or isinstance(rec.get("at"), bool)):
+        return None
+    return {"ev": rec["ev"], "id": rec["id"], "at": float(rec["at"]), "tool": clean_tool(rec.get("tool")),
+            "err": rec.get("err") is True, "folder": clean_project(rec.get("folder"))}
+
+
+class _AgConv:
+    __slots__ = ("key", "tail", "agent", "base", "last", "project", "shown", "hid", "hook")
+
+    def __init__(self, key: str, path: object) -> None:
         self.key = key
-        self.tail = TranscriptTail(path)
+        self.hid = hashlib.sha256(key.encode("utf-8", "replace")).hexdigest()[:16]
+        self.hook = None          # the last hook record (F4-1), or None
+        self.tail = TranscriptTail(path) if path else None
         self.agent = None
         self.base = None          # (state, tool, label) of the last step
         self.last = 0.0           # time of the last activity (clock time; a step's created_at at discovery)
@@ -336,7 +476,7 @@ class AntigravityWatcher:
 
     def __init__(self, agent_factory, roots: list, name: str = AG_DEFAULT_NAME, idle_after: float = AG_IDLE_AFTER,
                  sleep_after: float = AG_SLEEP_AFTER, gone_after: float = AG_GONE_AFTER, project: object = None,
-                 clock=time.time, scan_every: float = AG_SCAN_EVERY) -> None:
+                 clock=time.time, scan_every: float = AG_SCAN_EVERY, hook_home: object = None) -> None:
         self.agent_factory = agent_factory
         self.roots = list(roots)
         self.name = _text(name, 24) or AG_DEFAULT_NAME
@@ -347,6 +487,8 @@ class AntigravityWatcher:
         self.convs = {}
         self.numbers = {}         # conversation key → name number (1 = plain name)
         self._scanned_at = None
+        self.hook_home = hook_home
+        self._hook_mtimes = {}    # record file → mtime last read
 
     # -- discovery ---------------------------------------------------------------------------------
     def _discover(self) -> list:
@@ -383,6 +525,14 @@ class AntigravityWatcher:
         for path, cid in self._discover():
             if path in self.convs:
                 continue
+            hid = hashlib.sha256(cid.encode("utf-8", "replace")).hexdigest()[:16]
+            early = self.convs.pop("hook:" + hid, None)
+            if early is not None:                           # known from hooks first: keep the agent, add the file
+                early.key, early.tail = cid, TranscriptTail(path)
+                if early.tail.stat() is not None:
+                    early.tail.seek_end(early.tail.stat())
+                self.convs[path] = early
+                continue
             conv = _AgConv(cid, path)
             st = conv.tail.stat()
             if st is None:
@@ -396,7 +546,54 @@ class AntigravityWatcher:
                 self._apply(conv, steps, at)
 
     # -- state -------------------------------------------------------------------------------------
+    def _hook_driven(self, conv: _AgConv, now: float) -> bool:
+        return conv.hook is not None and now - conv.hook["at"] < AG_HOOK_FRESH
+
+    def _read_hooks(self, now: float) -> None:
+        d = hook_dir(self.hook_home)
+        try:
+            names = [n for n in os.listdir(d) if n.endswith(".json")]
+        except OSError:
+            return
+        by_hid = {c.hid: c for c in self.convs.values()}
+        for name in names:
+            path = os.path.join(d, name)
+            try:
+                mtime = os.stat(path).st_mtime
+            except OSError:
+                continue
+            if self._hook_mtimes.get(path) == mtime:
+                continue
+            self._hook_mtimes[path] = mtime
+            rec = read_hook_record(path)
+            if rec is None or name != rec["id"] + ".json":
+                continue
+            if now - rec["at"] >= self.gone_after:
+                try:
+                    os.unlink(path)                         # stale: the conversation has long left the office
+                except OSError:
+                    pass
+                self._hook_mtimes.pop(path, None)
+                continue
+            conv = by_hid.get(rec["id"])
+            if conv is None:                                # the hook came before the transcript (or there is none)
+                conv = _AgConv("hook:" + rec["id"], None)
+                conv.hid = rec["id"]
+                self.convs[conv.key] = conv
+                by_hid[conv.hid] = conv
+            if conv.hook is not None and rec["at"] < conv.hook["at"]:
+                continue
+            conv.hook = rec
+            mapped = hook_state(rec)
+            if mapped is not None:
+                conv.base = mapped
+                conv.last = min(rec["at"], now)
+            if rec["folder"]:
+                conv.project = rec["folder"]
+
     def _apply(self, conv: _AgConv, steps: list, at: float) -> None:
+        if self._hook_driven(conv, self.clock()):
+            return                                          # hooks are exact and earlier; the transcript lags
         changed = False
         for st in steps:
             mapped = antigravity_state(st)
@@ -419,6 +616,12 @@ class AntigravityWatcher:
         if age >= self.gone_after:
             return ("offline", None, None)
         state, tool, label = conv.base
+        if self._hook_driven(conv, now) and conv.hook["ev"] == "PreToolUse":
+            # A tool is open: never "idle" before PostToolUse. A tool that may ask the user and runs long might be
+            # waiting for an approval (the hooks cannot tell a prompt from a slow command).
+            if tool in AG_APPROVAL_TOOLS and age >= AG_MAYBE_WAIT:
+                return "waiting_for_user", tool, L_MAYBE_WAIT
+            return state, tool, label
         if state in AG_ACTIVE and age >= self.idle_after:
             state, tool, label = "idle", None, None
         if state == "idle" and age >= self.sleep_after:
@@ -438,7 +641,7 @@ class AntigravityWatcher:
             n = self._number(conv.key)
             suffix = " %d" % n
             name = self.name if n == 1 else self.name[:24 - len(suffix)].rstrip() + suffix
-            session = "ag-" + hashlib.sha256(conv.key.encode("utf-8", "replace")).hexdigest()[:10]
+            session = "ag-" + conv.hid[:10]                # = SHA-256(conversation id), also for hook-only ones
             conv.agent = self.agent_factory(name, session)
         return conv.agent
 
@@ -470,7 +673,13 @@ class AntigravityWatcher:
         now = self.clock()
         if self._scanned_at is None or now - self._scanned_at >= self.scan_every:
             self.scan(now)
+        self._read_hooks(now)
         for path, conv in list(self.convs.items()):
+            if conv.tail is None:                           # known from hooks only
+                self._show(conv, now)
+                if conv.agent is None and conv.base is None:
+                    del self.convs[path]
+                continue
             st = conv.tail.stat()
             if st is None:                              # conversation deleted
                 if conv.agent is not None:
@@ -789,6 +998,93 @@ def install_antigravity_service(extra: list, dry_run: bool = False, uninstall: b
 # CLI
 # --------------------------------------------------------------------------------------------------
 
+# --------------------------------------------------------------------------------------------------
+# F4-1: hooks.json (the user's file: only our "pixel-office" entry is added or removed; everything else is kept)
+# --------------------------------------------------------------------------------------------------
+
+AG_HOOKS_FILE = os.path.join(".gemini", "config", "hooks.json")
+AG_HOOK_NAME = "pixel-office"
+AG_HOOK_TIMEOUT = 5          # s; the hook prints its reply first and only writes one small file
+AG_TOOL_EVENTS = ("PreToolUse", "PostToolUse")
+
+
+def hook_command(python: str, script: str, event: str) -> str:
+    if os.name == "nt":
+        return " ".join(windows_quote(x) for x in (python, script, "hook", event))
+    import shlex
+    return " ".join(shlex.quote(x) for x in (python, script, "hook", event))
+
+
+def hooks_entry(python: str, script: str) -> dict:
+    entry = {}
+    for ev in AG_HOOK_EVENTS:
+        handler = {"type": "command", "command": hook_command(python, script, ev), "timeout": AG_HOOK_TIMEOUT}
+        entry[ev] = [{"matcher": "*", "hooks": [handler]}] if ev in AG_TOOL_EVENTS else [handler]
+    return entry
+
+
+def merge_hooks(text: object, entry: object) -> str:
+    """The new hooks.json text with our entry set (entry None: removed). ValueError if the existing file is not a
+    JSON object: then nothing is written (the user's hooks are never guessed at)."""
+    data = {}
+    if text is not None and text.strip():
+        data = json.loads(text)
+        if not isinstance(data, dict):
+            raise ValueError("hooks.json is not a JSON object")
+    if entry is None:
+        data.pop(AG_HOOK_NAME, None)
+    else:
+        data[AG_HOOK_NAME] = entry
+    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+
+def install_antigravity_hooks(dry_run: bool = False, uninstall: bool = False, log=print, home: object = None,
+                              python: object = None) -> int:
+    home = home or os.path.expanduser("~")
+    path = os.path.join(home, AG_HOOKS_FILE)
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except FileNotFoundError:
+        text = None
+    except OSError as e:
+        log("hooks.json okunamadı: %s" % e.strerror)
+        return 1
+    if uninstall:
+        entry = None
+    else:
+        script = os.path.join(home, ".pixel-office", AG_SCRIPT) if dry_run else install_files()
+        entry = hooks_entry(python or sys.executable, script)
+    try:
+        new = merge_hooks(text, entry)
+    except ValueError:
+        log("%s geçerli bir JSON nesnesi değil; hiçbir şey değiştirilmedi. Dosyayı düzeltip tekrar deneyin." % path)
+        return 1
+    if new == (text or ""):
+        log("Değişiklik yok: %s" % path)
+        return 0
+    if dry_run:
+        log("Yazılacak (%s):\n%s" % (path, new))
+        return 0
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    backup = path + ".pixel-backup"
+    if text is not None and not os.path.exists(backup):
+        with open(backup, "w", encoding="utf-8") as f:
+            f.write(text)
+    tmp = path + ".pixel-tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(new)
+    os.replace(tmp, path)
+    if uninstall:
+        log("Pixel Office kancaları kaldırıldı: %s (diğer kancalara dokunulmadı)" % path)
+    else:
+        log("Pixel Office kancaları eklendi: %s" % path)
+        log("İzleyici servisi de çalışmalı: python3 %s --install-service" % os.path.join(home, ".pixel-office",
+                                                                                          AG_SCRIPT))
+        log("Antigravity'yi yeniden başlatın; CLI'da /hooks ile görebilirsiniz.")
+    return 0
+
+
 def build_parser(prog: str = AG_SCRIPT) -> argparse.ArgumentParser:
     ag = argparse.ArgumentParser(prog=prog, description="pixel-antigravity: show Antigravity IDE conversations in "
                                                         "the office (reads its transcripts, sends only states)")
@@ -804,7 +1100,11 @@ def build_parser(prog: str = AG_SCRIPT) -> argparse.ArgumentParser:
     ag.add_argument("--install-service", action="store_true",
                     help="start at login (Linux: systemd user unit, macOS: launchd, Windows: Task Scheduler)")
     ag.add_argument("--uninstall-service", action="store_true")
-    ag.add_argument("--dry-run", action="store_true", help="with --install-service: only print what would be done")
+    ag.add_argument("--install-hooks", action="store_true",
+                    help="add Pixel Office to ~/.gemini/config/hooks.json (Antigravity App, IDE, CLI; other hooks kept)")
+    ag.add_argument("--uninstall-hooks", action="store_true", help="remove only the Pixel Office hooks")
+    ag.add_argument("--dry-run", action="store_true",
+                    help="with --install-service / --install-hooks: only print what would be done")
     pixel_agent._add_target_args(ag)
     return ag
 
@@ -815,6 +1115,8 @@ def cmd_antigravity(a) -> int:
         if not v > 0:
             sys.stderr.write("pixel-antigravity: %s sıfırdan büyük olmalı\n" % flag)
             return 2
+    if a.install_hooks or a.uninstall_hooks:
+        return install_antigravity_hooks(dry_run=a.dry_run, uninstall=a.uninstall_hooks)
     if a.install_service or a.uninstall_service:
         if a.url or a.room or a.key or a.owner:
             print("Not: servis --url/--room/--key/--owner kullanmaz; ~/.pixel-office/config.json dosyasını okur.")

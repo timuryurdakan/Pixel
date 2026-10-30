@@ -264,6 +264,26 @@ Hedef adres öbür araçlarla aynı sırayla bulunur (§5). Servis `--url/--room
 
 **Neden ayrı dosya:** İzleyici yalnızca Antigravity'nin olduğu bilgisayarda gerekiyor. `pixel_agent.py` küçük bir kütüphane olarak kalıyor (v2.md D6) ve bağlayıcı paketi (`pixel-connector.pyz`, `pixel_agent.py`'yi içerir) izleyiciyi taşımıyor. İzleyici `pixel_connector` paketini içe aktarmaz, çünkü yalnızca kanca dosyalarını indiren bilgisayarlarda o paket yok. Bu yüzden servis tanımı için gereken küçük `_quote_systemd` yardımcısı bilerek kopyalandı; bir test iki kopyanın aynı sonucu verdiğini denetler.
 
+**Kancalar (F4-1, önerilen).** Antigravity'nin App, IDE ve `agy` CLI'ında artık kanca sistemi var
+(`~/.gemini/config/hooks.json`, [belge](https://antigravity.google/docs/hooks)). Kurulum:
+```sh
+python3 ~/.pixel-office/pixel_antigravity.py --install-hooks --dry-run   # yalnızca ne yazılacağını gösterir
+python3 ~/.pixel-office/pixel_antigravity.py --install-hooks             # izleyici servisi de çalışmalı (--install-service)
+python3 ~/.pixel-office/pixel_antigravity.py --uninstall-hooks
+```
+- hooks.json'a yalnızca `"pixel-office"` girdisi eklenir; diğer kancalar korunur, dosyanın ilk hâli bir kez
+  `hooks.json.pixel-backup` olarak saklanır, dosya geçerli bir JSON nesnesi değilse hiçbir şey yazılmaz.
+- Her olay `pixel_antigravity.py hook <Olay>` çalıştırır. Kanca **önce** Antigravity'nin beklediği yanıtı yazar
+  (`PreToolUse` → `{"decision": "allow"}`: karar Antigravity'nin kendi izin politikasına kalır, burada hiçbir şey
+  onaylanmaz; `Stop` → `{"decision": "stop"}`), sonra `~/.pixel-office/antigravity-hooks/` içine tek satırlık bir kayıt
+  yazar (olay, araç adı, hata bayrağı, klasör adı; argüman, yol, mesaj yok; 0600). Ağa çıkmaz, `pixel_agent.py`
+  olmadan da yanıt verir; zaman aşımı 5 sn.
+- Çalışan izleyici bu kayıtları kayıt dosyasından önce kullanır (10 dk taze sayılır): durumlar 8–30 sn gecikmeden
+  gelir. `PreToolUse` sonrası açık kalan araç asla "boşta" görünmez; onay isteyebilen bir araç (Bash, Write, Edit)
+  20 sn'den uzun açık kalırsa **"Onay bekliyor olabilir"** görünür. Kancalar uzun süren bir komutla onay sorusunu
+  ayırt edemediği için bu metin bilerek "olabilir" der.
+- Kancası olmayan sürümlerde ya da kanca kurulmadıysa aşağıdaki kayıt izleme aynen çalışır.
+
 **Nasıl izler:**
 - İki kök klasöre bakar: `~/.gemini/antigravity-ide/brain` ve `~/.gemini/antigravity/brain`. Başka bir yer için `--root KLASÖR` (birden çok kez verilebilir) ya da `PIXEL_ANTIGRAVITY_DIR` ortam değişkeni (`:` ile ayrılmış; Windows'ta `;`).
 - Saniyede bir dosya boyutuna bakar, yalnızca sona eklenen tamamlanmış satırları okur. Yarım kalan son satır tamamlanınca okunur; bozuk JSON satırları ve 1 MB'tan uzun satırlar atlanır. Dosya kısalırsa ya da yenisiyle değiştirilirse baştan okunur. inotify gibi ek bir bağımlılık yok.
