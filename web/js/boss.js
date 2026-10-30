@@ -25,6 +25,26 @@ const RUN_RE = /^w_[A-Za-z0-9_-]{10}$/;
 const ORDER_RE = /^o[1-9]$/;
 const STEP_RE = /^(o[1-9]|patron)$/;
 const WORD_RE = /^[a-z][a-z0-9_]{0,31}$/;    // role ids and codes
+export const DEPT_RE = /^[a-z]{1,16}$/;
+export const BOSS_DEPARTMENTS_FEATURE = 'bossDepartments';
+export const DEFAULT_DEPARTMENT = 'yazilim';
+const MAX_DEPARTMENTS = 10;
+
+export const DEPARTMENT_NAMES = Object.freeze({
+  yazilim: 'Yazılım',
+  icerik: 'İçerik ve Medya',
+  akademik: 'Akademik ve Eğitim',
+  girisim: 'Girişim ve Pazarlama',
+  kisisel: 'Kişisel Yaşam',
+});
+
+export const DEPARTMENT_HINTS = Object.freeze({
+  yazilim: 'Kod, mimari, ön yüz, arka yüz, test ve güvenlik',
+  icerik: 'Blog, video metni, sosyal medya',
+  akademik: 'Literatür özeti, sınav soruları, çalışma planı',
+  girisim: 'Pazar analizi, büyüme metinleri, iş modeli incelemesi',
+  kisisel: 'Haftalık plan, gezi/etkinlik hazırlığı, yapılacaklar',
+});
 
 export const STATE_TEXT = {
   idle: 'Boşta', planning: 'Planlıyor', approval: 'Onay bekliyor', approved: 'Onaylandı', running: 'Çalışıyor',
@@ -123,6 +143,31 @@ export function supportsBossRetry(dev) {
   return supportsBoss(dev) && dev.info.features.includes(BOSS_RETRY_FEATURE);
 }
 
+/** E1a/E1b: the connector lists bossDepartments (connector 3.10.0+). */
+export function supportsBossDepartments(dev) {
+  return supportsBoss(dev) && dev.info.features.includes(BOSS_DEPARTMENTS_FEATURE);
+}
+
+/** Untrusted `device.info.bossDepartments` → clean `[{id, name, roles}]` (at most 10 items; malformed dropped). */
+export function readDepartments(dev) {
+  if (!supportsBossDepartments(dev) || !Array.isArray(dev.info.bossDepartments)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const item of dev.info.bossDepartments) {
+    if (out.length >= MAX_DEPARTMENTS) break;
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    if (typeof item.id !== 'string' || !DEPT_RE.test(item.id) || seen.has(item.id)) continue;
+    if (typeof item.name !== 'string' || !item.name.trim()) continue;
+    if (item.roles !== undefined && !Array.isArray(item.roles)) continue;
+    const roles = Array.isArray(item.roles)
+      ? item.roles.filter((r) => typeof r === 'string' && WORD_RE.test(r)).slice(0, 16)
+      : [];
+    seen.add(item.id);
+    out.push({ id: item.id, name: item.name.slice(0, TEXT_MAX.title), roles });
+  }
+  return out;
+}
+
 /** The device's run cost ceiling (device.info.boss.maxCostUsd); anything invalid → the connector's default. */
 export function costCeiling(dev) {
   const v = dev && dev.info && dev.info.boss ? dev.info.boss.maxCostUsd : undefined;
@@ -160,6 +205,7 @@ export function readState(m) {
   const ws = m.workspace && typeof m.workspace === 'object' ? m.workspace : {};
   return {
     job: m.job, state: m.state, code: typeof m.code === 'string' && WORD_RE.test(m.code) ? m.code : null,
+    department: typeof m.department === 'string' && DEPT_RE.test(m.department) ? m.department : null,
     round: m.round, orders: Number.isInteger(m.orders) && m.orders >= 0 && m.orders <= MAX_ORDERS ? m.orders : 0,
     costUsd: m.costUsd, maxCostUsd: m.maxCostUsd, estimateUsd: numOrNull(m.estimateUsd), run: m.run || null,
     orderStates: (m.orderStates || []).slice(0, MAX_ORDERS + 1).map(readOrderState).filter(Boolean),
@@ -358,6 +404,8 @@ export class BossPanel {
     this.jobBox = dialog.querySelector('#boss-job');
     this.form = dialog.querySelector('#boss-form');
     this.f = this.form.elements;
+    this.deptRow = dialog.querySelector('#boss-dept-row');
+    this.deptHint = dialog.querySelector('#boss-dept-hint');
     this.subRow = dialog.querySelector('#boss-sub-row');
     this.capHint = dialog.querySelector('#boss-cap-hint');
     this.err = dialog.querySelector('#boss-error');
@@ -371,6 +419,7 @@ export class BossPanel {
     dialog.addEventListener('click', (e) => { if (e.target === dialog) dialog.close(); });
     if (!hub) return;
     this.deviceSel.addEventListener('change', () => { this._error(''); this.render(); this._loadDevice(); });
+    if (this.f.department) this.f.department.addEventListener('change', () => this._updateDeptHint());
     this.f.workspace.addEventListener('change', () => this._ws());
     this.form.addEventListener('submit', (e) => { e.preventDefault(); this.ask(); });
     dialog.querySelector('[data-boss-reset]').addEventListener('click', () => this._askReset(true));
@@ -445,7 +494,41 @@ export class BossPanel {
     this.jobBox.replaceChildren();
     if (entry) this.jobBox.appendChild(this._jobCard(entry));
     this.form.hidden = !usable || !!(entry && !TERMINAL.has(entry.job.state));
-    if (!this.form.hidden) this._updateAsk();
+    if (!this.form.hidden) {
+      this._fillDepartments();
+      this._updateAsk();
+    }
+  }
+
+  _fillDepartments() {
+    if (!this.deptRow || !this.f.department) return;
+    const d = this._device();
+    const depts = readDepartments(d);
+    if (!depts.length) {
+      this.deptRow.hidden = true;
+      this.f.department.replaceChildren();
+      if (this.deptHint) { this.deptHint.textContent = ''; this.deptHint.hidden = true; }
+      return;
+    }
+    this.deptRow.hidden = false;
+    const keep = this.f.department.value;
+    this.f.department.replaceChildren(...depts.map((dep) => {
+      const o = el('option', null, dep.name);
+      o.value = dep.id;
+      return o;
+    }));
+    if (keep && depts.some((dep) => dep.id === keep)) this.f.department.value = keep;
+    else if (depts.some((dep) => dep.id === DEFAULT_DEPARTMENT)) this.f.department.value = DEFAULT_DEPARTMENT;
+    else this.f.department.value = depts[0].id;
+    this._updateDeptHint();
+  }
+
+  _updateDeptHint() {
+    if (!this.deptHint || !this.f.department) return;
+    const id = this.f.department.value;
+    const text = Object.hasOwn(DEPARTMENT_HINTS, id) ? DEPARTMENT_HINTS[id] : '';
+    this.deptHint.textContent = text;
+    this.deptHint.hidden = !text;
   }
 
   async _loadDevice() {
@@ -464,6 +547,7 @@ export class BossPanel {
   _fillForm() {
     const d = this._device();
     if (!d) return;
+    this._fillDepartments();
     const list = (this.wsCache.get(d.id) || []).filter((w) => w && typeof w.id === 'string');
     const ws = this.f.workspace;
     const keep = ws.value;
@@ -517,7 +601,12 @@ export class BossPanel {
     if (!this.f.workspace.value) return { error: 'Bir çalışma klasörü seçin.' };
     const cost = parseCost(this.f.cost.value, costCeiling(d));
     if (cost.error) return { error: cost.error };
-    return { msg: { type: 'boss.ask', workspace: this._workspace(), brief, maxCostUsd: cost.value } };
+    const msg = { type: 'boss.ask', workspace: this._workspace(), brief, maxCostUsd: cost.value };
+    if (supportsBossDepartments(d) && readDepartments(d).length > 0 && this.f.department) {
+      const dept = this.f.department.value;
+      if (typeof dept === 'string' && DEPT_RE.test(dept)) msg.department = dept;
+    }
+    return { msg };
   }
 
   async ask() {
@@ -595,7 +684,8 @@ export class BossPanel {
     card.appendChild(head);
     const name = this._folderName(job.workspace.id);
     const ws = name ? `Klasör: ${name}${job.workspace.sub ? '/' + job.workspace.sub : ''} · ` : '';
-    card.appendChild(el('div', 'wf-run-meta muted small', `${ws}${money(job.costUsd)} / ${money(job.maxCostUsd)}`));
+    const dept = job.department ? `Departman: ${this._departmentName(job.department)} · ` : '';
+    card.appendChild(el('div', 'wf-run-meta muted small', `${dept}${ws}${money(job.costUsd)} / ${money(job.maxCostUsd)}`));
     if (STATE_NOTE[job.state]) card.appendChild(el('p', 'wf-run-note small', STATE_NOTE[job.state]));
     if (this.actError) {
       const err = el('p', 'form-error boss-act-error', this.actError);
@@ -632,6 +722,13 @@ export class BossPanel {
     const d = this._device();
     const w = d && id ? (this.wsCache.get(d.id) || []).find((x) => x && x.id === id) : null;
     return w && typeof w.name === 'string' ? w.name : id;
+  }
+
+  _departmentName(id) {
+    if (!id) return '';
+    const found = readDepartments(this._device()).find((x) => x.id === id);
+    if (found) return found.name;
+    return Object.hasOwn(DEPARTMENT_NAMES, id) ? DEPARTMENT_NAMES[id] : id;
   }
 
   _roleName(plan, id) {
