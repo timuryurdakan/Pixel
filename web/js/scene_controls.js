@@ -5,16 +5,17 @@
 
 import { ATMOSPHERE_MODES } from './fx.js';
 import { sound } from './audio.js';
+import { t } from './i18n.js';
 
 export const ZOOM_MIN = 0.8;
 export const ZOOM_MAX = 2.5;
 export const ZOOM_STEP = 0.25;
 
 export const ATMOSPHERE_LABELS = Object.freeze({
-  auto: 'Otomatik',
-  day: 'Gündüz',
-  sunset: 'Gün batımı',
-  night: 'Gece',
+  auto: t('Otomatik'),
+  day: t('Gündüz'),
+  sunset: t('Gün batımı'),
+  night: t('Gece'),
 });
 
 function touchDistance(touches) {
@@ -56,7 +57,7 @@ export class SceneControls {
     const bar = document.createElement('div');
     bar.className = 'scene-controls';
     bar.setAttribute('role', 'toolbar');
-    bar.setAttribute('aria-label', 'Sahne kontrolleri');
+    bar.setAttribute('aria-label', t('Sahne kontrolleri'));
 
     const mkBtn = (action, label, title) => {
       const b = document.createElement('button');
@@ -69,10 +70,10 @@ export class SceneControls {
       return b;
     };
 
-    this.btnZoomOut = mkBtn('zoom-out', '−', 'Uzaklaştır');
-    this.btnZoomFit = mkBtn('zoom-fit', 'Sığdır', 'Sahneyi sığdır');
-    this.btnZoomIn = mkBtn('zoom-in', '+', 'Yakınlaştır');
-    this.btnAtmosphere = mkBtn('atmosphere', ATMOSPHERE_LABELS.auto, 'Atmosfer modunu değiştir');
+    this.btnZoomOut = mkBtn('zoom-out', '−', t('Uzaklaştır'));
+    this.btnZoomFit = mkBtn('zoom-fit', t('Sığdır'), t('Sahneyi sığdır'));
+    this.btnZoomIn = mkBtn('zoom-in', '+', t('Yakınlaştır'));
+    this.btnAtmosphere = mkBtn('atmosphere', ATMOSPHERE_LABELS.auto, t('Atmosfer modunu değiştir'));
 
     this.btnZoomOut.addEventListener('click', () => this.zoomOut());
     this.btnZoomFit.addEventListener('click', () => this.resetZoom());
@@ -122,7 +123,7 @@ export class SceneControls {
     const z = this.renderer.zoomLevel;
     this.btnZoomOut.disabled = z <= ZOOM_MIN;
     this.btnZoomIn.disabled = z >= ZOOM_MAX;
-    this.btnZoomFit.textContent = z === 1.0 ? 'Sığdır' : `${Math.round(z * 100)}%`;
+    this.btnZoomFit.textContent = z === 1.0 ? t('Sığdır') : `${Math.round(z * 100)}%`;
 
     const mode = this.renderer.lighting.mode || 'auto';
     const label = ATMOSPHERE_LABELS[mode] || ATMOSPHERE_LABELS.auto;

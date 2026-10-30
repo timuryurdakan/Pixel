@@ -7,6 +7,7 @@
 // There is deliberately no "approve all" control.
 
 import { defaultNotifier } from './notify.js';
+import { t } from './i18n.js';
 
 export const APPROVAL_TICK_MS = 1000;
 export const VIBRATE_MS = 180;
@@ -16,10 +17,10 @@ const MAX_OPTIONS = 6;
 
 /** Turkish text for an answer error code. */
 export const APPROVAL_ERROR_TEXT = {
-  unknown_approval: 'Bu istek başka yerden cevaplandı ya da süresi doldu.',
-  device_offline: 'Cihaz çevrimdışı.',
-  timeout: 'Cihaz yanıt vermedi.',
-  bad_request: 'Cihaz cevabı geçersiz buldu.',
+  unknown_approval: t('Bu istek başka yerden cevaplandı ya da süresi doldu.'),
+  device_offline: t('Cihaz çevrimdışı.'),
+  timeout: t('Cihaz yanıt vermedi.'),
+  bad_request: t('Cihaz cevabı geçersiz buldu.'),
 };
 
 function el(tag, cls, text) {
@@ -80,7 +81,7 @@ export class ApprovalCenter {
     this.head = el('div', 'apv-bar');
     this.title = el('b', 'apv-title');
     this.notifyBtn = this.notifier ? this.notifier.createToggleButton('btn small ghost apv-notify') : null;
-    this.toggle = el('button', 'btn small apv-toggle', 'Gizle');
+    this.toggle = el('button', 'btn small apv-toggle', t('Gizle'));
     this.toggle.type = 'button';
     this.toggle.addEventListener('click', () => { this.collapsed = !this.collapsed; this._chrome(); });
     if (this.notifyBtn) this.head.append(this.title, this.notifyBtn, this.toggle);
@@ -142,25 +143,25 @@ export class ApprovalCenter {
     const { a } = it;
     const card = el('article', 'apv-card');
     card.dataset.approval = a.id;
-    card.setAttribute('aria-label', a.ask === 'question' ? 'Soru' : 'İzin isteği');
+    card.setAttribute('aria-label', a.ask === 'question' ? t('Soru') : t('İzin isteği'));
     const head = el('header', 'apv-head');
     const dev = this.hub.device(it.deviceId);
-    head.append(el('span', 'apv-tool', a.ask === 'question' ? 'Soru' : (a.tool || 'Araç')),
+    head.append(el('span', 'apv-tool', a.ask === 'question' ? t('Soru') : (a.tool || t('Araç'))),
       el('span', 'apv-agent', [a.agent, a.project, dev ? dev.label : ''].filter(Boolean).join(' · ')));
     const time = el('span', 'apv-time');
-    time.setAttribute('aria-label', 'Kalan süre');
+    time.setAttribute('aria-label', t('Kalan süre'));
     head.appendChild(time);
     card.appendChild(head);
     if (a.summary) card.appendChild(el('code', 'apv-summary', a.summary));
     if (summaryWasCut(a.summary)) {
-      const cut = el('p', 'apv-cut small', 'Komut kısaltıldı: sonunu görmeden onaylamayın. Tamamı bilgisayardaki Claude Code penceresinde.');
+      const cut = el('p', 'apv-cut small', t('Komut kısaltıldı: sonunu görmeden onaylamayın. Tamamı bilgisayardaki Claude Code penceresinde.'));
       cut.setAttribute('role', 'note');
       card.appendChild(cut);
     }
     a.questions.forEach((q, qi) => card.appendChild(this._question(it, q, qi)));
     const actions = el('div', 'apv-actions');
-    const ok = el('button', 'btn accent', a.ask === 'question' ? 'Gönder' : 'Onayla');
-    const no = el('button', 'btn danger', 'Reddet');
+    const ok = el('button', 'btn accent', a.ask === 'question' ? t('Gönder') : t('Onayla'));
+    const no = el('button', 'btn danger', t('Reddet'));
     ok.type = 'button'; no.type = 'button';
     ok.dataset.apv = 'allow'; no.dataset.apv = 'deny';
     ok.addEventListener('click', () => this.answer(it, 'allow'));
@@ -213,13 +214,13 @@ export class ApprovalCenter {
     }
     it.busy = true;
     this._sync(it);
-    it.parts.msg.textContent = 'Gönderiliyor…';
+    it.parts.msg.textContent = t('Gönderiliyor…');
     try {
       await this.hub.request(it.deviceId, msg);
       this.remove(it.deviceId, it.a.id);
     } catch (e) {
       const code = e && e.code;
-      it.parts.msg.textContent = APPROVAL_ERROR_TEXT[code] || 'Cevap gönderilemedi.';
+      it.parts.msg.textContent = APPROVAL_ERROR_TEXT[code] || t('Cevap gönderilemedi.');
       if (code === 'unknown_approval') {
         setTimeout(() => this.remove(it.deviceId, it.a.id), 2500);
       } else {
@@ -251,8 +252,8 @@ export class ApprovalCenter {
     const onPage = !!(this.pageSlot && this.list.parentNode === this.pageSlot);
     this.banner.hidden = n === 0 || onPage;
     if (this.pageSlot) this.pageSlot.hidden = n === 0;
-    this.title.textContent = n === 1 ? '1 onay bekliyor' : `${n} onay bekliyor`;
-    this.toggle.textContent = this.collapsed ? 'Göster' : 'Gizle';
+    this.title.textContent = n === 1 ? t('1 onay bekliyor') : t('{n} onay bekliyor', { n });
+    this.toggle.textContent = this.collapsed ? t('Göster') : t('Gizle');
     this.toggle.setAttribute('aria-expanded', this.collapsed ? 'false' : 'true');
     this.list.hidden = this.collapsed && !onPage;
     for (const b of this.badges) {

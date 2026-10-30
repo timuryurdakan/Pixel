@@ -3,6 +3,8 @@
 // reviews and reports, over and over. The output has the shapes the real feeds use (v1 Agent JSON, `boss.state`,
 // `boss.event`), so main.js hands it to the same CharacterManager and BossScene.
 
+import { t } from './i18n.js';
+
 export const DEMO_DEVICE = 'demo';
 export const BOSS_CYCLE_S = 70;            // one Boss job, then a pause before the next one
 const STATE_MIN_S = 5;                     // an agent keeps a state this long at least …
@@ -19,10 +21,10 @@ export const DEMO_AGENT_COUNT = CAST.length;
 // Weighted so the office looks busy: mostly working, some thinking, now and then waiting for the user or a break.
 const STATE_WEIGHTS = [['working', 5], ['thinking', 3], ['waiting_for_user', 1], ['idle', 1]];
 const WORK = [
-  { tool: 'Edit', detail: 'sepet.js düzenleniyor' },
-  { tool: 'Bash', detail: 'testler çalışıyor' },
-  { tool: 'Read', detail: 'README.md okunuyor' },
-  { tool: 'Grep', detail: 'TODO aranıyor' },
+  { tool: 'Edit', detail: t('sepet.js düzenleniyor') },
+  { tool: 'Bash', detail: t('testler çalışıyor') },
+  { tool: 'Read', detail: t('README.md okunuyor') },
+  { tool: 'Grep', detail: t('TODO aranıyor') },
 ];
 
 // The Boss's script: [second in the cycle, job state, events]. Specialists k2 and k3 take their orders and deliver.

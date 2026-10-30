@@ -48,8 +48,10 @@ class Page:
         self.send("Runtime.enable")
         self.send("Page.enable")
         self.send("Log.enable")
-        # F4-2: the UI picks its language from navigator.language; the suites assert the Turkish texts.
-        self.send("Emulation.setLocaleOverride", {"locale": "tr-TR"})
+        # F4-2: the UI picks its language (localStorage 'po-lang', else navigator.language); the suites assert the
+        # Turkish source texts, so every document of this page starts with the choice already made.
+        self.send("Page.addScriptToEvaluateOnNewDocument",
+                  {"source": "try { localStorage.setItem('po-lang', 'tr'); } catch (e) {}"})
 
     def _read(self) -> None:
         while self._alive:

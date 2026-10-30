@@ -114,7 +114,7 @@ Claude'un raporunda `(doğrulanmadı)` olarak işaretlediği 5 teknik noktayı r
 
 ### 4.1. Antigravity Hooks (`hooks.json`) IDE ve CLI'da Aynı mı Çalışıyor? → **DOĞRULANDI (Evet, Birebir Aynı + Uzaktan Onay Destekli)**
 - **Kaynaklar:**
-  - Yerleşik Antigravity resmi belgesi: [`/home/timur/.gemini/antigravity/builtin/skills/agy-customizations/docs/hooks.md`](file:///home/timur/.gemini/antigravity/builtin/skills/agy-customizations/docs/hooks.md)
+  - Yerleşik Antigravity resmi belgesi: `~/.gemini/antigravity/builtin/skills/agy-customizations/docs/hooks.md` (Antigravity ile gelen yerel belge)
   - Resmi Web Belgesi: [https://antigravity.google/docs/hooks](https://antigravity.google/docs/hooks)
 - **Doğrulanan Teknik Detaylar:**
   - Yükleme yolları hem **Antigravity CLI**, hem **Antigravity 2.0**, hem de **Antigravity IDE** için ortaktır:
