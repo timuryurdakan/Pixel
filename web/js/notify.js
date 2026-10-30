@@ -4,6 +4,8 @@
 // 2. Notification title/body NEVER include prompt, command, project, or output text — only fixed generic strings.
 // 3. All DOM rendering uses createElement + textContent only; never innerHTML.
 
+import { PreviewDrawer } from './preview.js';
+
 export const NOTIFY_STORAGE_KEY = 'po-notify-enabled';
 export const GENERIC_APPROVAL_TEXT = 'Onay bekliyor';
 export const GENERIC_DONE_TEXT = 'Görev tamamlandı';
@@ -77,7 +79,7 @@ export function downloadMarkdown(text, filename = 'cikti.md', { triggerDownload 
 }
 
 /**
- * Build a DOM action bar with "Kopyala" and ".md indir" buttons (textContent only).
+ * Build a DOM action bar with "Önizle", "Kopyala" and ".md indir" buttons (textContent only).
  * @param {() => string} getText
  * @param {string} [filenamePrefix]
  * @param {{ btnClass?: string, containerClass?: string }} [opts]
@@ -88,6 +90,12 @@ export function makeExportActions(getText, filenamePrefix = 'cikti', {
 } = {}) {
   const bar = document.createElement('div');
   bar.className = containerClass;
+
+  const btnPreview = document.createElement('button');
+  btnPreview.type = 'button';
+  btnPreview.className = btnClass;
+  btnPreview.dataset.action = 'preview';
+  btnPreview.textContent = 'Önizle';
 
   const btnCopy = document.createElement('button');
   btnCopy.type = 'button';
@@ -101,6 +109,25 @@ export function makeExportActions(getText, filenamePrefix = 'cikti', {
   btnDl.dataset.action = 'download-md';
   btnDl.textContent = '.md indir';
 
+  btnPreview.addEventListener('click', () => {
+    const doc = bar.ownerDocument || document;
+    let dlg = doc.getElementById('dlg-preview');
+    if (!dlg && doc.body) {
+      dlg = doc.createElement('dialog');
+      dlg.id = 'dlg-preview';
+      dlg.className = 'dlg wide preview-dlg';
+      doc.body.appendChild(dlg);
+    }
+    if (!dlg) return;
+    if (!dlg._previewDrawer) {
+      dlg._previewDrawer = new PreviewDrawer({ dialog: dlg, doc });
+    }
+    dlg._previewDrawer.open({
+      title: String(filenamePrefix || 'Eser Önizleme'),
+      content: String(getText() ?? ''),
+    });
+  });
+
   let resetTimer = 0;
   btnCopy.addEventListener('click', async () => {
     const ok = await copyText(getText());
@@ -113,7 +140,7 @@ export function makeExportActions(getText, filenamePrefix = 'cikti', {
     downloadMarkdown(getText(), `${filenamePrefix}.md`);
   });
 
-  bar.append(btnCopy, btnDl);
+  bar.append(btnPreview, btnCopy, btnDl);
   return bar;
 }
 

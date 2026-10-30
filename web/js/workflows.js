@@ -8,7 +8,6 @@ import { ControlError, errorText } from './control.js';
 import { CLAUDE_MODELS } from './devices.js';
 import { PROFILE_TEXT } from './prompt.js';
 import { TemplateBuilder } from './template_builder.js';
-import { PreviewDrawer } from './preview.js';
 
 export const WORKFLOWS_FEATURE = 'workflows';
 export const BRIEF_MAX = 4096;               // = pixel_connector/workflows.py BRIEF_MAX (UTF-8 bytes)
@@ -183,7 +182,7 @@ export class WorkflowDialog {
    * @param {WorkflowStore} o.store
    * @param {(text:string, opts?:object)=>void} o.toast
    */
-  constructor({ dialog, hub, store, toast = () => {}, previewDialog = null, storage = null }) {
+  constructor({ dialog, hub, store, toast = () => {}, storage = null }) {
     Object.assign(this, { dialog, hub, store, toast });
     const f = this.form = dialog.querySelector('#wf-form');
     this.f = f.elements;
@@ -196,15 +195,6 @@ export class WorkflowDialog {
     this.subRow = dialog.querySelector('#wf-sub-row');
     this.wsCache = new Map();
     this.busy = new Set();              // run ids with a request in flight
-    const doc = dialog.ownerDocument || document;
-    let pDlg = previewDialog || doc.getElementById('dlg-preview');
-    if (!pDlg && doc.body) {
-      pDlg = doc.createElement('dialog');
-      pDlg.id = 'dlg-preview';
-      pDlg.className = 'dlg wide preview-dlg';
-      doc.body.appendChild(pDlg);
-    }
-    this.preview = new PreviewDrawer({ dialog: pDlg, doc });
     this._initBuilder(storage);
     this.f.device.addEventListener('change', () => this._loadDevice());
     this.f.template.addEventListener('change', () => this._template());
@@ -472,13 +462,6 @@ export class WorkflowDialog {
       if (s.type === 'agent' && s.model) extra += ` · ${s.model}`;
       if (s.code && s.state !== 'done') extra += ` · ${codeText(s.code)}`;
       li.appendChild(el('span', 'wf-step-meta muted small', extra));
-      if (s.type === 'agent' && (s.preview || s.output || s.task || s.state === 'done')) {
-        const pBtn = el('button', 'btn small wf-preview-btn', 'Eseri Önizle');
-        pBtn.type = 'button';
-        pBtn.dataset.action = 'preview-artifact';
-        pBtn.addEventListener('click', () => this._previewStep(dev, run, s));
-        li.appendChild(pBtn);
-      }
       ol.appendChild(li);
     }
     card.appendChild(ol);
@@ -505,29 +488,5 @@ export class WorkflowDialog {
     }
     if (actions.childElementCount) card.appendChild(actions);
     return card;
-  }
-
-  async _previewStep(dev, run, step) {
-    const title = `${run.name || run.template || 'İş akışı'} · ${step.role || step.id}`;
-    if (typeof step.preview === 'string' && step.preview) {
-      this.preview.open({ title, content: step.preview });
-      return;
-    }
-    if (typeof step.output === 'string' && step.output) {
-      this.preview.open({ title, content: step.output });
-      return;
-    }
-    if (step.task && this.hub && typeof this.hub.request === 'function') {
-      try {
-        const r = await this.hub.request(dev, { type: 'task.get', task: step.task });
-        const content = (r && (r.result || r.output || r.preview)) || '';
-        this.preview.open({ title, content });
-        return;
-      } catch (e) {
-        this.toast(e instanceof ControlError ? e.text : 'Adım çıktısı alınamadı', { error: true });
-        return;
-      }
-    }
-    this.preview.open({ title, content: '' });
   }
 }

@@ -19,6 +19,8 @@ import {
 } from '../../web/js/preview.js';
 
 import { WorkflowStore, WorkflowDialog } from '../../web/js/workflows.js';
+import { TaskBlock } from '../../web/js/prompt.js';
+import { BossStore, BossPanel } from '../../web/js/boss.js';
 
 function makeDoc() {
   const doc = document.implementation.createHTMLDocument('e2-test');
@@ -437,38 +439,11 @@ test('E2 — PreviewDrawer handles empty and oversized (> 256 KB) inputs gracefu
     assert.match(notice.textContent, /kısaltıldı|sınır/i);
 });
 
-test('E2 — integrates with WorkflowDialog to open template builder and preview step output', async () => {
+test('E2 — integrates with WorkflowDialog to open and use the no-code template builder', async () => {
     const html = await (await fetch('/web/index.html')).text();
     const parsedDoc = new DOMParser().parseFromString(html, 'text/html');
     const dlg = document.importNode(parsedDoc.getElementById('dlg-workflows'), true);
-    const previewDlg = document.createElement('dialog');
-    previewDlg.id = 'dlg-preview';
-    document.body.append(dlg, previewDlg);
-
-    const sampleRun = {
-      id: 'w_1234567890',
-      template: 'statik-site',
-      name: 'Statik Site Ekibi',
-      workspace: { id: 'isler', name: 'Pixel Office İşleri', sub: 'site' },
-      state: 'done',
-      code: null,
-      current: null,
-      costUsd: 0.12,
-      turns: 3,
-      limits: { maxCostUsd: 1.5, maxTurns: 30, timeoutS: 900 },
-      startedAt: 1,
-      endedAt: 2,
-      steps: [{
-        id: 'tasarim',
-        type: 'agent',
-        role: 'Tasarımcı',
-        engine: 'claude',
-        model: 'haiku',
-        agent: 'k1',
-        task: 't_1234567890',
-        state: 'done',
-      }],
-    };
+    document.body.appendChild(dlg);
 
     const dev = {
       id: 'd1',
@@ -507,20 +482,11 @@ test('E2 — integrates with WorkflowDialog to open template builder and preview
               steps: [{ id: 'tasarim', type: 'agent', role: 'Tasarımcı', engine: 'claude', engines: ['claude'], profile: 'edit', model: null }],
             }],
             invalid: 0,
-            runs: [sampleRun],
+            runs: [],
           };
         }
         if (msg.type === 'workspace.list') {
           return { workspaces: [{ id: 'isler', name: 'İşler', children: [] }] };
-        }
-        if (msg.type === 'task.get' && msg.task === 't_1234567890') {
-          return {
-            task: 't_1234567890',
-            status: 'success',
-            prompt: 'Tasarım yap',
-            result: '# Tasarım Özeti\n\nRenk paleti ve yerleşim hazır.\n\n<script>window.__pwnedWf=1</script>',
-            truncated: false,
-          };
         }
         return {};
       },
@@ -532,12 +498,10 @@ test('E2 — integrates with WorkflowDialog to open template builder and preview
       hub,
       store,
       toast() {},
-      previewDialog: previewDlg,
       storage: makeFakeStorage(),
     });
 
     wfDlg.open();
-    // Wait for workflow.list to load
     await new Promise((r) => setTimeout(r, 30));
 
     // Toggle template builder inside workflows dialog
@@ -545,33 +509,158 @@ test('E2 — integrates with WorkflowDialog to open template builder and preview
     assert.ok(toggleBuilderBtn, 'toggle-builder button should exist');
     toggleBuilderBtn.click();
     const builderEl = dlg.querySelector('[data-tb-root]');
-    assert.ok(builderEl && ! dlg.querySelector('#wf-builder').hidden, 'builder should be visible after toggle');
+    assert.ok(builderEl && !dlg.querySelector('#wf-builder').hidden, 'builder should be visible after toggle');
 
-    // Click preview artifact button on finished step (fetches task.get result)
-    const previewBtn = dlg.querySelector('[data-action="preview-artifact"]');
-    assert.ok(previewBtn, 'preview-artifact button should exist on finished step');
-    previewBtn.click();
-    await new Promise((r) => setTimeout(r, 30));
-
-    assert.equal(previewDlg.hasAttribute('open'), true);
-    const iframe = previewDlg.querySelector('iframe.preview-frame');
-    assert.equal(iframe.getAttribute('sandbox'), '');
-    assert.ok(iframe.srcdoc.includes('<h1>Tasarım Özeti</h1>'));
-    assert.ok(iframe.srcdoc.includes('&lt;script&gt;window.__pwnedWf=1&lt;/script&gt;'));
-    assert.equal(window.__pwnedWf, undefined);
-
-    // Ensure no inline on* handlers or <script> tags exist anywhere in dlg or previewDlg
-    for (const root of [dlg, previewDlg]) {
-      for (const el of root.querySelectorAll('*')) {
-        for (const attr of el.getAttributeNames()) {
-          assert.ok(!attr.toLowerCase().startsWith('on'), `inline handler ${attr}`);
-        }
-        assert.notEqual(el.tagName, 'SCRIPT');
+    // Ensure no inline on* handlers or <script> tags exist anywhere in dlg
+    for (const el of dlg.querySelectorAll('*')) {
+      for (const attr of el.getAttributeNames()) {
+        assert.ok(!attr.toLowerCase().startsWith('on'), `inline handler ${attr}`);
       }
+      assert.notEqual(el.tagName, 'SCRIPT');
     }
 
-    previewDlg.close();
     dlg.close();
-    previewDlg.remove();
     dlg.remove();
+});
+
+test('E2 — TaskBlock (prompt.js) Önizle button opens real PreviewDrawer with sandbox="" and keeps XSS inside iframe', () => {
+    const previewDlg = document.createElement('dialog');
+    previewDlg.id = 'dlg-preview';
+    const blk = new TaskBlock('tsk_e2', 'Rapor hazırla', null);
+    document.body.append(previewDlg, blk.el);
+    try {
+      const XSS_TASK = [
+        '# Görev Çıktısı',
+        '',
+        'Özet **hazır**.',
+        '<script>window.__pwnedTaskPreview = 1;</script>',
+        '<img src="x" onerror="window.__pwnedTaskPreview = 2">',
+      ].join('\n');
+
+      blk.part({ k: 'text', v: XSS_TASK });
+      blk.end({ status: 'success', turns: 1, durationMs: 1200 }, 'Tamamlandı · 1 tur', null);
+
+      const previewBtn = blk.el.querySelector('[data-action="preview"]');
+      assert.ok(previewBtn, 'TaskBlock export bar must have Önizle button');
+      assert.equal(previewBtn.textContent, 'Önizle');
+
+      previewBtn.click();
+
+      assert.equal(previewDlg.hasAttribute('open'), true);
+      const iframe = previewDlg.querySelector('iframe.preview-frame');
+      assert.ok(iframe, 'PreviewDrawer iframe must exist');
+      assert.equal(iframe.getAttribute('sandbox'), '');
+      assert.ok(iframe.srcdoc.includes('<h1>Görev Çıktısı</h1>'));
+      assert.ok(iframe.srcdoc.includes('&lt;script&gt;window.__pwnedTaskPreview = 1;&lt;/script&gt;'));
+      assert.ok(!iframe.srcdoc.includes('<script>window.__pwnedTaskPreview'));
+
+      // XSS payload never escapes outside the sandboxed iframe into the host DOM
+      assert.equal(window.__pwnedTaskPreview, undefined);
+      assert.equal(blk.el.querySelectorAll('img, script').length, 0);
+      assert.equal(previewDlg.querySelectorAll('img, script').length, 0);
+    } finally {
+      if (previewDlg.open) previewDlg.close();
+      previewDlg.remove();
+      blk.el.remove();
+    }
+});
+
+test('E2 — BossPanel (boss.js) report Önizle button opens real PreviewDrawer with sandbox="" and keeps XSS inside iframe', async () => {
+    const html = await (await fetch('/web/index.html')).text();
+    const parsedDoc = new DOMParser().parseFromString(html, 'text/html');
+    const bossDlg = document.importNode(parsedDoc.getElementById('dlg-boss'), true);
+    const previewDlg = document.importNode(parsedDoc.getElementById('dlg-preview'), true);
+    document.body.append(bossDlg, previewDlg);
+    try {
+      const dev = {
+        id: 'd1',
+        label: 'Masaüstü',
+        ready: true,
+        status: 'ready',
+        info: {
+          features: ['boss'],
+          remote: {},
+          limits: { maxPrompt: 32768 },
+          engines: { claude: { available: true } },
+        },
+        agents: new Map(),
+      };
+      const listeners = new Map();
+      const hub = {
+        dev,
+        pairedCount: 1,
+        devices: new Map([[dev.id, dev]]),
+        on(t, fn) { if (!listeners.has(t)) listeners.set(t, []); listeners.get(t).push(fn); },
+        emit(t, ...a) { for (const fn of listeners.get(t) || []) fn(...a); },
+        isPaired: () => true,
+        isReady: () => true,
+        device: (id) => (id === dev.id ? dev : null),
+        async request(id, msg) {
+          if (msg.type === 'boss.get') return { type: 'boss.state', job: null };
+          if (msg.type === 'workspace.list') return { workspaces: [{ id: 'isler', name: 'İşler', children: [] }] };
+          return {};
+        },
+      };
+
+      const store = new BossStore({ hub });
+      await new Promise((r) => setTimeout(r, 0));
+      const panel = new BossPanel({ dialog: bossDlg, hub, store });
+
+      const XSS_REPORT = [
+        '# Patron Sonuç Raporu',
+        '',
+        'Tüm iş emirleri **başarıyla** tamamlandı.',
+        '<script>window.__pwnedBossPreview = 1;</script>',
+        '<img src="x" onerror="window.__pwnedBossPreview = 2">',
+      ].join('\n');
+
+      store.putState('d1', {
+        type: 'boss.state',
+        job: 'b_1234567890',
+        state: 'done',
+        round: 0,
+        workspace: { id: 'isler', sub: null },
+        costUsd: 0.15,
+        maxCostUsd: 1.0,
+        orders: 1,
+        orderStates: [{ id: 'o1', role: 'backend', state: 'done' }],
+      });
+      store.putReport('d1', {
+        type: 'boss.report',
+        job: 'b_1234567890',
+        report: XSS_REPORT,
+        partial: false,
+        state: 'done',
+      });
+
+      panel.open();
+
+      const repEl = bossDlg.querySelector('#boss-job .boss-report');
+      assert.ok(repEl);
+      assert.equal(repEl.children.length, 0, '.boss-report must have 0 child elements');
+
+      const previewBtn = bossDlg.querySelector('#boss-job [data-action="preview"]');
+      assert.ok(previewBtn, 'Boss report export bar must have Önizle button');
+      assert.equal(previewBtn.textContent, 'Önizle');
+
+      previewBtn.click();
+
+      assert.equal(previewDlg.hasAttribute('open'), true);
+      const iframe = previewDlg.querySelector('iframe.preview-frame');
+      assert.ok(iframe, 'PreviewDrawer iframe must exist');
+      assert.equal(iframe.getAttribute('sandbox'), '');
+      assert.ok(iframe.srcdoc.includes('<h1>Patron Sonuç Raporu</h1>'));
+      assert.ok(iframe.srcdoc.includes('&lt;script&gt;window.__pwnedBossPreview = 1;&lt;/script&gt;'));
+      assert.ok(!iframe.srcdoc.includes('<script>window.__pwnedBossPreview'));
+
+      // XSS payload never escapes outside the sandboxed iframe into the host DOM
+      assert.equal(window.__pwnedBossPreview, undefined);
+      assert.equal(bossDlg.querySelectorAll('img, script').length, 0);
+      assert.equal(previewDlg.querySelectorAll('img, script').length, 0);
+    } finally {
+      if (previewDlg.open) previewDlg.close();
+      if (bossDlg.open) bossDlg.close();
+      previewDlg.remove();
+      bossDlg.remove();
+    }
 });
