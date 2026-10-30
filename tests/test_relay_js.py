@@ -25,6 +25,7 @@ PAGE = """<!doctype html><meta charset="utf-8"><title>relay js tests</title>
 <script type="importmap">{"imports": {"node:test": "/tests/js_shims/node_test.js",
                                       "node:assert/strict": "/tests/js_shims/node_assert.js",
                                       "cloudflare:workers": "/tests/js_shims/cloudflare_workers.js"}}</script>
+<script>localStorage.setItem('po-lang', 'tr');   // F4-2: suites assert the Turkish (source) texts</script>
 <script type="module">
 const files = %s;
 const post = (obj) => fetch('/__result', {method: 'POST', body: JSON.stringify(obj)});

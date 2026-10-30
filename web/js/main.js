@@ -13,6 +13,7 @@ import { sound } from './audio.js';
 import { TaskBoard, categorizeTasks } from './board.js';
 import { BossScene, connectBossScene } from './boss_scene.js';
 import { toLocalAgent } from './browser_office.js';
+import { t, applyStatic, langSwitch } from './i18n.js';
 
 export const STEP = 1 / 60;   // fixed timestep (s)
 export const MAX_STEPS = 5;   // per animation frame (excess is dropped)
@@ -432,6 +433,9 @@ function setupMiniButton() {
 
 // --- boot --------------------------------------------------------------------
 function bootCommon() {
+  applyStatic(document);                    // F4-2: static markup in the chosen language, before anything is drawn
+  const soundBtn = document.getElementById('btn-sound');
+  if (soundBtn) soundBtn.after(langSwitch(document));
   canvas = document.getElementById('office');
   office = new Office();
   manager = new CharacterManager(office);

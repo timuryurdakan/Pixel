@@ -48,6 +48,8 @@ class Page:
         self.send("Runtime.enable")
         self.send("Page.enable")
         self.send("Log.enable")
+        # F4-2: the UI picks its language from navigator.language; the suites assert the Turkish texts.
+        self.send("Emulation.setLocaleOverride", {"locale": "tr-TR"})
 
     def _read(self) -> None:
         while self._alive:

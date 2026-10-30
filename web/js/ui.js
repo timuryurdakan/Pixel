@@ -4,13 +4,14 @@
 // Every untrusted string reaches the DOM only through esc() (or textContent / input.value).
 
 import { makeCharacterPalette } from './sprites.js';
+import { t } from './i18n.js';
 
 export const STATE_LABELS = {
-  working: 'Çalışıyor',
-  thinking: 'Düşünüyor',
-  waiting_for_user: 'Kullanıcıyı bekliyor',
-  idle: 'Kahve molasında',
-  sleeping: 'Uyuyor',
+  working: t('Çalışıyor'),
+  thinking: t('Düşünüyor'),
+  waiting_for_user: t('Kullanıcıyı bekliyor'),
+  idle: t('Kahve molasında'),
+  sleeping: t('Uyuyor'),
 };
 
 export const STATE_COLORS = {
@@ -27,25 +28,26 @@ const stateLabel = (st) => (Object.hasOwn(STATE_LABELS, st) ? STATE_LABELS[st] :
 const STATE_ORDER = ['working', 'thinking', 'waiting_for_user', 'idle', 'sleeping'];
 
 const CONN_TEXT = {
-  connecting: 'Bağlanıyor…',
-  live: 'Bağlı',
-  reconnecting: 'Yeniden bağlanıyor…',
-  notfound: 'Oda bulunamadı',
+  connecting: t('Bağlanıyor…'),
+  live: t('Bağlı'),
+  reconnecting: t('Yeniden bağlanıyor…'),
+  notfound: t('Oda bulunamadı'),
 };
 
 /** Short counts for the mini window strip: "3 çalışıyor · 1 bekliyor · 2 kahvede". */
 const SHORT_LABELS = {
-  working: 'çalışıyor', thinking: 'düşünüyor', waiting_for_user: 'bekliyor', idle: 'kahvede', sleeping: 'uyuyor',
+  working: t('çalışıyor'), thinking: t('düşünüyor'), waiting_for_user: t('bekliyor'), idle: t('kahvede'),
+  sleeping: t('uyuyor'),
 };
 export function summaryText(agents) {
-  if (!agents.length) return 'Ofis boş';
+  if (!agents.length) return t('Ofis boş');
   const counts = Object.fromEntries(STATE_ORDER.map((s) => [s, 0]));
   for (const a of agents) if (Object.hasOwn(counts, a.state)) counts[a.state]++;
   return STATE_ORDER.filter((s) => counts[s]).map((s) => `${counts[s]} ${SHORT_LABELS[s]}`).join(' · ');
 }
 
 const SOURCE_LABELS = {
-  'claude-code': 'Claude Code', custom: 'Özel (kütüphane)', 'pixel-run': 'pixel-run', 'pixel-proxy': 'pixel-proxy', antigravity: 'Antigravity', api: 'Genel API',
+  'claude-code': 'Claude Code', custom: t('Özel (kütüphane)'), 'pixel-run': 'pixel-run', 'pixel-proxy': 'pixel-proxy', antigravity: 'Antigravity', api: t('Genel API'),
 };
 const sourceLabel = (s) => (Object.hasOwn(SOURCE_LABELS, s) ? SOURCE_LABELS[s] : String(s));
 const RENAMED_SOURCES = new Set(['custom', 'project', 'owner']);
@@ -60,18 +62,18 @@ export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&a
 /** 75 000 ms → "1 dk 15 sn" */
 export function formatDuration(ms) {
   const sec = Math.max(0, Math.floor(ms / 1000));
-  if (sec < 60) return `${sec} sn`;
+  if (sec < 60) return t('{s} sn', { s: sec });
   const min = Math.floor(sec / 60);
-  if (min < 60) return `${min} dk ${sec % 60} sn`;
+  if (min < 60) return t('{m} dk {s} sn', { m: min, s: sec % 60 });
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h} sa ${min % 60} dk`;
-  return `${Math.floor(h / 24)} gün ${h % 24} sa`;
+  if (h < 24) return t('{h} sa {m} dk', { h, m: min % 60 });
+  return t('{d} gün {h} sa', { d: Math.floor(h / 24), h: h % 24 });
 }
 
 function formatClock(ms) {
   if (!ms) return '—';
   const d = new Date(ms);
-  return d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return d.toLocaleTimeString(t('tr-TR'), { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 /** Attributes that identify a focusable element across re-renders (list rows, details links, rename actions). */
@@ -192,13 +194,13 @@ export class UI {
       replaceMarkup(els.list, this.mode === 'cloud'
         ? `<li class="empty">
         <div class="empty-icon">☕</div>
-        <div><b>Henüz ajan yok.</b></div>
-        <div class="muted">${esc(this.emptyHint || "'Ajan bağla' ile ekleyin.")}</div>
+        <div><b>${esc(t('Henüz ajan yok.'))}</b></div>
+        <div class="muted">${esc(this.emptyHint || t("'Ajan bağla' ile ekleyin."))}</div>
       </li>`
         : `<li class="empty">
         <div class="empty-icon">☕</div>
-        <div><b>Ofis şu an boş.</b></div>
-        <div class="muted">Bir Claude Code oturumu başlatınca burada belirecek.<br>Denemek için: <code>python3 server.py --demo</code></div>
+        <div><b>${esc(t('Ofis şu an boş.'))}</b></div>
+        <div class="muted">${esc(t('Bir Claude Code oturumu başlatınca burada belirecek.'))}<br>${esc(t('Denemek için:'))} <code>python3 server.py --demo</code></div>
       </li>`);
       this._renderDetails();
       return;
@@ -247,8 +249,8 @@ export class UI {
     const sel = a.id === this.selectedId ? ' selected' : '';
     const tool = a.tool ? `<span class="tool" title="${esc(a.detail || '')}">🔧 ${esc(a.tool)}${a.detail ? ` · ${esc(a.detail)}` : ''}</span>` : '';
     const ci = this.ctlInfo ? this.ctlInfo(a) : null;
-    const ctl = ci ? `<span class="ctl-badge" title="Bu ajana görev verebilirsiniz" aria-label="Bu ajana görev verebilirsiniz">⌨</span>` : '';
-    const tok = ci && ci.tokens ? `<span class="ctl-tok" title="Bugün">${esc(ci.tokens)}</span>` : '';
+    const ctl = ci ? `<span class="ctl-badge" title="${esc(t('Bu ajana görev verebilirsiniz'))}" aria-label="${esc(t('Bu ajana görev verebilirsiniz'))}">⌨</span>` : '';
+    const tok = ci && ci.tokens ? `<span class="ctl-tok" title="${esc(t('Bugün'))}">${esc(ci.tokens)}</span>` : '';
     return `<li class="agent${indented ? ' sub' : ''}${sel}" data-id="${esc(a.id)}" tabindex="0" role="button" aria-pressed="${sel ? 'true' : 'false'}">
       <span class="swatch" style="background:${esc(this._color(a))}"></span>
       <div class="agent-main">
@@ -287,7 +289,7 @@ export class UI {
     if (!a) {
       el.classList.add('placeholder');
       replaceMarkup(el, this.agents.length
-        ? '<p class="muted">Ayrıntıları görmek için ofisteki bir karaktere ya da listedeki bir ajana tıklayın.</p>'
+        ? `<p class="muted">${esc(t('Ayrıntıları görmek için ofisteki bir karaktere ya da listedeki bir ajana tıklayın.'))}</p>`
         : '');
       return;
     }
@@ -295,7 +297,7 @@ export class UI {
     const now = this._now();
     const parent = a.parentId ? this.byId.get(a.parentId) : null;
     const subs = this.agents.filter((x) => x.parentId === a.id);
-    const row = (k, v, cls = '') => (v === null || v === undefined || v === '' ? '' : `<dt>${k}</dt><dd class="${cls}">${v}</dd>`);
+    const row = (k, v, cls = '') => (v === null || v === undefined || v === '' ? '' : `<dt>${esc(t(k))}</dt><dd class="${cls}">${v}</dd>`);
     replaceMarkup(el, `
       <div class="det-head">
         <span class="swatch big" style="background:${esc(this._color(a))}"></span>
@@ -303,7 +305,7 @@ export class UI {
           ${this._nameBlock(a)}
           <div class="muted" title="${esc(a.projectPath || '')}">📁 ${esc(a.project)}${a.projectPath ? ` <span class="path">${esc(a.projectPath)}</span>` : ''}</div>
         </div>
-        <button class="close" data-select="" title="Kapat (Esc)" aria-label="Kapat">✕</button>
+        <button class="close" data-select="" title="${esc(t('Kapat (Esc)'))}" aria-label="${esc(t('Kapat'))}">✕</button>
       </div>
       ${this._resetLine(a)}
       ${a.title ? `<div class="det-title">${esc(a.title)}</div>` : ''}
@@ -321,7 +323,7 @@ export class UI {
         ${row('Ana ajan', a.parentId ? (parent ? `<a href="#" data-select="${esc(parent.id)}">${esc(parent.name)}</a>` : `<span class="muted">${esc(a.parentId.slice(0, 8))}…</span>`) : null)}
         ${row('Alt ajanlar', subs.length ? subs.map((s) => `<a href="#" data-select="${esc(s.id)}">${esc(s.name)}</a>`).join(', ') : null)}
         ${row('Başladı', formatClock(num(a.startedAt)))}
-        ${row('Son etkinlik', `<span class="ago" data-at="${num(a.updatedAt)}">${formatDuration(now - (num(a.updatedAt) || now))} önce</span>`)}
+        ${row('Son etkinlik', `<span class="ago" data-at="${num(a.updatedAt)}">${esc(t('{d} önce', { d: formatDuration(now - (num(a.updatedAt) || now)) }))}</span>`)}
         ${row('Kimlik', `<code class="id">${esc(a.id)}</code>`)}
       </dl>`);
   }
@@ -341,11 +343,11 @@ export class UI {
     const m = this.els.mode;
     this.mode = mode;
     if (mode === 'cloud') {
-      m.textContent = 'BULUT ODA';
-      m.title = 'Paylaşılan bulut odası';
+      m.textContent = t('BULUT ODA');
+      m.title = t('Paylaşılan bulut odası');
     } else {
-      m.textContent = mode === 'demo' ? 'DEMO MOD' : 'CANLI MOD';
-      m.title = mode === 'demo' ? 'Sahte ajanlarla demo modu' : 'Gerçek Claude Code oturumları';
+      m.textContent = mode === 'demo' ? t('DEMO MOD') : t('CANLI MOD');
+      m.title = mode === 'demo' ? t('Sahte ajanlarla demo modu') : t('Gerçek Claude Code oturumları');
     }
     m.dataset.mode = mode;
   }
@@ -353,7 +355,7 @@ export class UI {
   // --- rename (CLOUD.md §15.1) ------------------------------------------------------------------
   _nameBlock(a) {
     const edit = this.canRename(a)
-      ? ` <button class="edit-name" data-act="rename" title="Yeniden adlandır" aria-label="Yeniden adlandır">✎</button>`
+      ? ` <button class="edit-name" data-act="rename" title="${esc(t('Yeniden adlandır'))}" aria-label="${esc(t('Yeniden adlandır'))}">✎</button>`
       : '';
     return `<div class="det-name"><span class="det-name-text">${a.isSubagent ? '↳ ' : ''}${esc(a.name)}</span>${edit}</div>`;
   }
@@ -361,8 +363,8 @@ export class UI {
   _resetLine(a) {
     if (!this.canRename(a) || !RENAMED_SOURCES.has(a.nameSource)) return '';
     const def = a.defaultName && a.defaultName !== a.name ? ` <span class="default-name">(${esc(a.defaultName)})</span>` : '';
-    const why = a.nameSource === 'custom' ? 'Bu ajana verilen ad' : a.nameSource === 'owner' ? 'Sahibin varsayılan adı' : 'Projenin varsayılan adı';
-    return `<div class="rename-meta"><span class="muted">${why}.</span> <a href="#" data-act="reset">Varsayılana dön</a>${def}</div>`;
+    const why = a.nameSource === 'custom' ? t('Bu ajana verilen ad') : a.nameSource === 'owner' ? t('Sahibin varsayılan adı') : t('Projenin varsayılan adı');
+    return `<div class="rename-meta"><span class="muted">${esc(why)}.</span> <a href="#" data-act="reset">${esc(t('Varsayılana dön'))}</a>${def}</div>`;
   }
 
   _startEdit() {
@@ -379,7 +381,7 @@ export class UI {
     input.type = 'text';
     input.maxLength = NAME_MAX;
     input.value = a.name || '';
-    input.setAttribute('aria-label', 'Yeni ad');
+    input.setAttribute('aria-label', t('Yeni ad'));
     input.spellcheck = false;
     box.appendChild(input);
     let check = null;
@@ -395,7 +397,7 @@ export class UI {
     }
     const hint = document.createElement('div');
     hint.className = 'rename-hint muted';
-    hint.textContent = 'Enter: kaydet · Esc: vazgeç';
+    hint.textContent = t('Enter: kaydet · Esc: vazgeç');
     box.appendChild(hint);
     holder.replaceWith(box);
     lastMarkup.delete(this.els.details);   // the DOM no longer matches the last markup
@@ -463,7 +465,7 @@ export class UI {
     }
     for (const el of document.querySelectorAll('.ago[data-at]')) {
       const at = Number(el.dataset.at) || now;
-      el.textContent = `${formatDuration(now - at)} önce`;
+      el.textContent = t('{d} önce', { d: formatDuration(now - at) });
     }
   }
 }
