@@ -25,6 +25,7 @@
       <button type="button" id="btn-setup" class="btn accent" data-cloud hidden title="Claude Code ya da başka bir ajanı bu odaya bağla">Ajan bağla</button>
       <button type="button" id="btn-devices" class="btn" hidden title="Eşleşmiş cihazlar, çalışma ortamları ve cihaz ekleme">Cihazlar</button>
       <button type="button" id="btn-newagent" class="btn" hidden title="Eşleşmiş bir cihazda yeni ajan oluştur">Yeni ajan</button>
+      <button type="button" id="btn-browser" class="btn" hidden title="Kurulum olmadan, kendi API anahtarınla bu tarayıcıda çalışan ajanlar">Tarayıcı ajanı</button>
       <button type="button" id="btn-workflows" class="btn" hidden title="Hazır iş akışı şablonları: adım adım çalışan ajanlar, sonunda sizin onayınız">Şablonlar</button>
       <button type="button" id="btn-board" class="btn" title="Ofis görev tahtası (Kanban)">Görevler</button>
       <button type="button" id="btn-mini" class="btn" hidden title="Her zaman üstte duran küçük pencere. Ekranın sağ altına sürükleyin.">Mini pencere</button>
@@ -317,6 +318,12 @@
 </dialog>
 
 <dialog id="dlg-preview" class="dlg wide preview-dlg" aria-labelledby="dlg-preview-title"></dialog>
+
+<!-- E4: the browser device's keys and virtual folder (browser_device.js BrowserDevicePanel); filled by script -->
+<dialog id="dlg-browser" class="dlg wide" aria-labelledby="dlg-browser-title">
+  <div class="dlg-head"><h2 id="dlg-browser-title">Tarayıcı ajanı</h2><button type="button" class="close" data-close aria-label="Kapat">✕</button></div>
+  <div id="browser-panel"></div>
+</dialog>
 
 <script type="module" src="js/main.js"></script>
 </body>

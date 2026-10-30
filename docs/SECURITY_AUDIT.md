@@ -585,3 +585,23 @@ Kısa tarama (uygulayıcının notu; `6b58a1c..3e8b9f9`: E1a, E1b, E2, E3). Yeni
   kanaryası). Araçlar varsayılan kapalı; komut ve web aracı yok.
 - Riskli kalıp taraması (`innerHTML`, `eval`, `new Function`, `allow-scripts`, `allow-same-origin`, `subprocess`,
   `shell=True`) bu aralıktaki yeni kodda temiz.
+
+## 18. E4 tarayıcı cihazı ve CSP genişlemesi (2026-10-30)
+
+Uygulayıcının notu (bağımsız inceleme değil). Tasarım ve tehdit modeli `docs/FAZ3_TASARIM.md` §3.
+
+- **Anahtar:** `web/js/keystore.js`. Varsayılan bellek; "hatırla" ile AES-GCM, sarma anahtarı dışa aktarılamaz,
+  sağlayıcı AAD. Private alanlar sayesinde `JSON.stringify` / `String()` anahtarı göstermez. Kanarya testleri:
+  IndexedDB kayıtları, DOM metni, hata metinleri ve hub olayları. Kalan risk: sayfada XSS olursa çalışan betik
+  anahtarı kullanabilir; savunma `textContent` kuralı, izinsiz kum havuzu önizleme ve CSP `script-src 'self'`.
+- **CSP:** `connect-src` yalnızca `'self'`, röle ve 6 sağlayıcı kökeni (joker yok, test sabit liste). Bedel: bir XSS
+  bu adreslere istek atabilir; hepsi kimlik doğrulamalı API olduğu için sızdırma kanalı dar. `set_relay_host.py`
+  artık sağlayıcıları silmez (önce siliyordu).
+- **Oda sınırı (D6):** tarayıcı ajanları `localAgents` içinde kalır, `hub.updateRoom`'a gitmez; oda API'sine yazma
+  yolu yok. Sanal klasör ayrı veritabanında (`pixel-office-browser`), E2E anahtarlarıyla aynı depoda değil (E4a'daki
+  hali düzeltildi).
+- **Model çıktısı:** yalnızca `textContent` ya da izinsiz kum havuzu önizleme. Araç yolları bağlayıcıdaki
+  `split_path` kurallarıyla aynı; tavanlar D7.
+- **DeviceHub yaması:** E4a `hub.request/watch/connect/unpair/updateRoom/_dropDevice`'ı yalnızca `browser` cihazı için
+  yerelde yanıtlayacak şekilde sarar; diğer cihazlar özgün yoldan gider. Uçtan uca testler (gerçek sayfa ⇄ röle ⇄
+  bağlayıcı) bu değişiklikle geçer.

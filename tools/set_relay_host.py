@@ -51,9 +51,13 @@ def current(text: str):
 
 
 def apply(text: str, url: str) -> str:
-    if len(CONNECT_RE.findall(text)) != 1:
+    """Replace only the relay (wss://) source; the browser device's https:// provider hosts (docs/FAZ3_TASARIM.md
+    §3.3) stay as they are."""
+    found = CONNECT_RE.findall(text)
+    if len(found) != 1:
         raise ValueError("vercel.json içinde tam olarak bir connect-src bekleniyordu")
-    out = CONNECT_RE.sub("connect-src 'self' " + url, text)
+    providers = [s for s in found[0].split()[1:] if s.startswith("https://")]
+    out = CONNECT_RE.sub(lambda m: " ".join(["connect-src", "'self'", url] + providers), text)
     json.loads(out)                     # still valid JSON
     return out
 

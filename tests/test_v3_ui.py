@@ -142,6 +142,7 @@ class Scenario:
         ("unpaired_browser", ("ollama_agent", "claude_agent")),
         ("phone_layout", ("runtimes", "claude_agent", "workflow")),
         ("unpair", ("pairing",)),
+        ("browser_device", ("pairing",)),
     )
 
     def __init__(self, base, room, key, dev, llm, fake_claude_dir, shots=None, chrome_factory=Chrome):
@@ -498,6 +499,31 @@ class Scenario:
         t.assertEqual(A.errors, [])
 
 
+    # ---- E4: the browser device is opt-in, local, and never shows the key ---------------------------------------
+    def browser_device(self, t):
+        A = self.A
+        canary = "sk-CANARY-ui-e4b-0123456789"
+        t.assertFalse(A.eval("window.pixelOffice.v3.hub.devices.has('browser')"))     # not attached until asked
+        A.click("#btn-browser")
+        A.wait("document.getElementById('dlg-browser').open && !!document.querySelector('#browser-panel form')", 15,
+               what="browser device dialog")
+        t.assertTrue(A.eval("window.pixelOffice.v3.hub.devices.has('browser')"))
+        t.assertEqual(A.eval("localStorage.getItem('po-browser-device')"), "1")
+        A.eval("document.querySelector('#browser-panel [name=provider]').value = 'groq'")
+        A.type("#browser-panel [name=apiKey]", canary)
+        A.click("#browser-panel button[type=submit]")
+        A.wait("/…6789/.test(document.querySelector('#browser-panel').textContent)", 10, what="key hint")
+        t.assertNotIn(canary, A.eval("document.body.innerText + document.title"))
+        t.assertEqual(A.eval("document.querySelector('#browser-panel [name=apiKey]').value"), "")
+        t.assertNotIn(canary, A.eval("JSON.stringify(Object.entries(localStorage))"))
+        A.click("#dlg-browser [data-close]")
+        A.click("#btn-newagent")
+        A.wait("document.getElementById('dlg-agent').open", 10)
+        t.assertIn("browser", A.eval("[...document.querySelectorAll('#agent-form [name=device] option')].map(o => o.value).join(',')"))
+        A.eval("document.getElementById('dlg-agent').close()")
+        t.assertEqual(A.errors, [])
+
+
 def run_scenario(t, base, room, key, dev, llm, fake_claude_dir, shots=None, chrome_factory=Chrome):
     """The whole Phase 14 flow in one go (manual runs against a real `pixel-connector run`, see the module doc)."""
     with Scenario(base, room, key, dev, llm, fake_claude_dir, shots, chrome_factory) as sc:
@@ -588,6 +614,9 @@ class V3UiTests(unittest.TestCase):
 
     def test_09_unpair(self):
         self._step("unpair")
+
+    def test_09b_browser_device(self):
+        self._step("browser_device")
 
     def test_10_audit_and_privacy(self):
         evs = [r["ev"] for r in self.conn.audit.read()]

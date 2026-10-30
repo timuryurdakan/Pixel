@@ -12,6 +12,7 @@ import * as cloud from './cloud.js';
 import { sound } from './audio.js';
 import { TaskBoard, categorizeTasks } from './board.js';
 import { BossScene, connectBossScene } from './boss_scene.js';
+import { toLocalAgent } from './browser_office.js';
 
 export const STEP = 1 / 60;   // fixed timestep (s)
 export const MAX_STEPS = 5;   // per animation frame (excess is dropped)
@@ -35,6 +36,8 @@ let rafHost = window;
 let loopToken = 0;
 /** @type {Map<string, object>} latest server JSON per agent id */
 const agents = new Map();
+/** E4 browser device agents (docs/FAZ3_TASARIM.md D6): shown in this office only, kept across room snapshots. */
+const localAgents = new Map();
 /** Optimistic renames: id → {name, nameSource, defaultName, until} (CLOUD.md §15.1). */
 const overrides = new Map();
 /** v3 device control (V3.md §11): set up only for a cloud room with the write key and a configured relay. */
@@ -152,7 +155,7 @@ const handlers = {
     ui.setMode(d.mode);
     if (room && d.room && typeof d.room.name === 'string') room.ui.setRoomName(d.room.name);
     agents.clear();
-    const list = (d.agents || []).map(withOverride);
+    const list = [...(d.agents || []).map(withOverride), ...localAgents.values()];
     for (const a of list) agents.set(a.id, a);
     manager.sync(list, { initial: firstSnapshot });
     firstSnapshot = false;
@@ -611,6 +614,61 @@ function bootCloud(config) {
   }
 }
 
+// --- E4: the browser device (docs/FAZ3_TASARIM.md §3) -----------------------------------------------------
+// Opt-in per browser (a convenience flag, not a secret): the device is attached only after the user opened
+// "Tarayıcı ajanı" once, so nobody else sees an extra device in the hub, the new-agent dialog or the device list.
+const BROWSER_DEVICE_FLAG = 'po-browser-device';
+
+function browserDeviceWanted() { try { return localStorage.getItem(BROWSER_DEVICE_FLAG) === '1'; } catch { return false; } }
+function rememberBrowserDevice() { try { localStorage.setItem(BROWSER_DEVICE_FLAG, '1'); } catch { /* private window */ } }
+
+function setupBrowserDevice(hub, toast) {
+  let ready = null;
+  const attach = () => {
+    if (!ready) {
+      ready = (async () => {
+        const [{ BrowserDevice, BrowserDevicePanel }, { IdbStore }] =
+          await Promise.all([import('./browser_device.js'), import('./idb.js')]);
+        const device = new BrowserDevice({
+          // Its own database: the virtual folder never shares a store with the E2E keys in "pixel-office".
+          store: new IdbStore('pixel-office-browser'),
+          onUpsert: (raw) => {
+            const a = toLocalAgent(raw, localAgents.get(raw && raw.id));
+            if (!a) return;
+            localAgents.set(a.id, a);
+            handlers.onUpsert(a);
+          },
+          onRemove: (id) => {
+            if (!localAgents.delete(id)) return;
+            handlers.onRemove(id);
+          },
+        });
+        await device.attach(hub);
+        const dlg = document.getElementById('dlg-browser');
+        return new BrowserDevicePanel({ container: dlg.querySelector('#browser-panel'), device, toast });
+      })();
+      ready.catch(() => { ready = null; });
+    }
+    return ready;
+  };
+  const dlg = document.getElementById('dlg-browser');
+  const btn = document.getElementById('btn-browser');
+  btn.hidden = false;
+  btn.addEventListener('click', async () => {
+    try {
+      rememberBrowserDevice();
+      const panel = await attach();
+      await panel.render();
+      dlg.showModal();
+    } catch (e) {
+      console.warn('[pixel-office] browser device unavailable', e);
+      toast('Tarayıcı ajanı açılamadı.', { error: true });
+    }
+  });
+  dlg.querySelector('[data-close]').addEventListener('click', () => dlg.close());
+  if (browserDeviceWanted()) attach().catch((e) => console.warn('[pixel-office] browser device unavailable', e));
+}
+
 // --- v3: device control (V3.md §11) ---------------------------------------------------------------------
 async function setupV3(roomId, key, pairParam = null) {
   const [{ DeviceHub }, { PromptPanel }, { DevicesPage, PairWizard, NewAgentDialog }, { fmtCompact: fmtTok },
@@ -696,6 +754,7 @@ async function setupV3(roomId, key, pairParam = null) {
     bossStore, boss, pendingSelect: null, setTab };
   window.pixelOffice.v3 = v3;
   if (pairParam) wizard.openWithCode(pairParam);
+  setupBrowserDevice(hub, toast);
 
   ui.ctlInfo = (a) => {
     if (!a.control || !hub.isReady(a.control.device)) return null;

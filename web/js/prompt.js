@@ -784,7 +784,8 @@ export class PromptPanel {
     if (this.mode === 'offline') hint = 'Cihaz çevrimdışı. Bağlayıcı çalışıyor mu? (Cihazlar → Durum)';
     else if (this.mode === 'connecting') hint = 'Cihaza güvenli bağlantı kuruluyor…';
     else if (this.mode === 'error') hint = 'Cihazla güvenli bağlantı kurulamadı. Yeniden eşleştirmeyi deneyin (Cihazlar).';
-    else if (engine === 'ollama' || engine === 'openai') hint = 'Yerel model: sohbet eder, dosyalara dokunmaz.';
+    else if (d && d.isBrowserLocal) hint = 'Tarayıcı ajanı: bu tarayıcıdaki sanal klasörde dosya okur ve yazar, komut çalıştırmaz.';
+    else if (engine === 'ollama' || engine === 'openai') hint = 'Model: sohbet eder. Bağlayıcıda araçlar açıksa klasörde dosya okuyup yazar, komut çalıştırmaz.';
     else if (engine === 'claude' && da) {
       // H39: where files go and what the agent may do, so out-of-folder requests don't surprise anyone.
       const sc = agentScope(da);

@@ -345,8 +345,14 @@ class RelayCspHost(unittest.TestCase):
         self.assertEqual(len(connect), 1)
         srcs = connect[0].split()[1:]
         self.assertEqual(srcs[0], "'self'")
-        self.assertEqual(len(srcs), 2, srcs)
         self.assertRegex(srcs[1], r"^wss://[a-z0-9.-]+$")
+        # E4 (docs/FAZ3_TASARIM.md D4, §3.3): besides the relay, exactly the fixed provider list, origins only.
+        from pixel_connector.config import PROVIDER_PRESETS
+        want = sorted({re.match(r"^https://[^/]+", p["url"]).group(0) for p in PROVIDER_PRESETS.values()})
+        self.assertEqual(sorted(srcs[2:]), want, srcs)
+        self.assertEqual(len(srcs), 2 + len(want), srcs)
+        for s in srcs[2:]:
+            self.assertRegex(s, r"^https://[a-z0-9.-]+$")
         self.assertNotIn("*", csp)
 
     def test_tool_normalises_and_rejects(self):
@@ -369,7 +375,8 @@ class RelayCspHost(unittest.TestCase):
                 once = f.read_text()
                 self.assertEqual(self.tool.main(["wss://pixel-relay.ornek-1.workers.dev", "--file", str(f)]), 0)
             self.assertEqual(f.read_text(), once)
-            self.assertIn("connect-src 'self' wss://pixel-relay.ornek-1.workers.dev;", once)
+            self.assertIn("connect-src 'self' wss://pixel-relay.ornek-1.workers.dev https://", once)
+            self.assertIn("https://api.groq.com", once)              # provider hosts are kept
             strip = lambda s: re.sub(r"connect-src [^;]*;", "", s)   # noqa: E731
             self.assertEqual(strip(once), strip(original))          # nothing else changed
             json.loads(once)
