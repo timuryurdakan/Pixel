@@ -3,7 +3,7 @@
 // then stripped from the address bar), invite + "Ajan bağla" dialogs, service worker, install prompt.
 // Untrusted strings (room names, owner names) only reach the DOM via textContent / input.value.
 
-import { t } from './i18n.js';
+import { t as tt } from './i18n.js';
 
 export const ROOM_RE = /^[a-z2-7]{26}$/;
 export const KEY_RE = /^[A-Za-z0-9_-]{32}$/;
@@ -171,7 +171,7 @@ export function buildSetupCommands({ origin, room, key, name, ownerId }) {
     'unix-uninstall': 'python3 ~/.pixel-office/pixel_hook.py uninstall',
     win: `powershell -NoProfile -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((irm ${o}/hook/install.ps1))) -Server ${o} -Room ${room} -Key ${key} -Name '${n}'"`,
     curl: `curl -X POST "${statusUrl}" \\\n  -H "Authorization: Bearer ${key}" -H "Content-Type: application/json" \\\n  -d '${curlBody}'`,
-    'curl-off': `# ${t('bitince (karakter kapıdan çıkar):')}\ncurl -X POST "${statusUrl}" \\\n  -H "Authorization: Bearer ${key}" -H "Content-Type: application/json" \\\n  -d '${curlOff}'`,
+    'curl-off': `# ${tt('bitince (karakter kapıdan çıkar):')}\ncurl -X POST "${statusUrl}" \\\n  -H "Authorization: Bearer ${key}" -H "Content-Type: application/json" \\\n  -d '${curlOff}'`,
     'agent-dl': `curl -fsSL ${o}/hook/pixel_agent.py -o pixel_agent.py`,
     'pixel-run': `python3 pixel_agent.py run ${target} --name aider -- aider --model ollama/qwen2.5-coder`,
     'pixel-proxy': `python3 pixel_agent.py proxy ${target} --listen 127.0.0.1:11435 --upstream http://127.0.0.1:11434 --name ollama`,
@@ -230,12 +230,12 @@ export function showLanding({ config, error = null }) {
         location.assign(`/?room=${d.roomId}&new=1`);
         return;
       }
-      showError(r.status === 403 ? t('Oluşturma parolası yanlış.')
-        : r.status === 429 ? t('Çok fazla oda oluşturuldu. Biraz sonra yeniden deneyin.')
-          : r.status === 400 ? t('Oda adı geçersiz.')
-            : t('Oda oluşturulamadı. Sunucuya ulaşılamıyor olabilir.'));
+      showError(r.status === 403 ? tt('Oluşturma parolası yanlış.')
+        : r.status === 429 ? tt('Çok fazla oda oluşturuldu. Biraz sonra yeniden deneyin.')
+          : r.status === 400 ? tt('Oda adı geçersiz.')
+            : tt('Oda oluşturulamadı. Sunucuya ulaşılamıyor olabilir.'));
     } catch {
-      showError(t('Oda oluşturulamadı. Sunucuya ulaşılamıyor.'));
+      showError(tt('Oda oluşturulamadı. Sunucuya ulaşılamıyor.'));
     }
     btn.disabled = false;
   });
@@ -244,7 +244,7 @@ export function showLanding({ config, error = null }) {
   join.addEventListener('submit', (e) => {
     e.preventDefault();
     const inv = parseInvite(join.elements.link.value);
-    if (!inv) { showError(t('Bağlantı tanınmadı. "?room=…" içeren davet bağlantısını yapıştırın.')); return; }
+    if (!inv) { showError(tt('Bağlantı tanınmadı. "?room=…" içeren davet bağlantısını yapıştırın.')); return; }
     rememberRoom(inv.roomId, { key: inv.key });
     location.assign(`/?room=${inv.roomId}`);
   });
@@ -259,16 +259,16 @@ export function showLanding({ config, error = null }) {
     const a = document.createElement('a');
     a.href = `/?room=${r.id}`;
     a.className = 'recent-name';
-    a.textContent = r.name || t('Adsız oda');
+    a.textContent = r.name || tt('Adsız oda');
     const role = document.createElement('span');
     role.className = 'tag ' + (r.key ? 'tag-key' : 'tag-view');
-    role.textContent = r.key ? t('katılımcı') : t('izleyici');
-    role.title = r.key ? t('Yazma anahtarı bu tarayıcıda kayıtlı') : t('Yalnızca izleme');
+    role.textContent = r.key ? tt('katılımcı') : tt('izleyici');
+    role.title = r.key ? tt('Yazma anahtarı bu tarayıcıda kayıtlı') : tt('Yalnızca izleme');
     const forget = document.createElement('button');
     forget.type = 'button';
     forget.className = 'btn ghost small';
     forget.textContent = 'Unut';
-    forget.title = t('Bu odayı (ve anahtarını) bu tarayıcıdan sil');
+    forget.title = tt('Bu odayı (ve anahtarını) bu tarayıcıdan sil');
     forget.addEventListener('click', () => { forgetRoom(r.id); li.remove(); if (!list.children.length) block.hidden = true; });
     li.append(a, role, forget);
     list.appendChild(li);
@@ -291,7 +291,7 @@ export function setupRoomUI({ roomId, key, ui, onSetupDialog = null }) {
   roomName.textContent = (r0 && r0.name) || 'Oda';
   if (!key) {
     // v2.md E4: opened with the view link (no write key) → say so, instead of silently missing controls.
-    roomName.title = t('Yalnızca izleme bağlantısı');
+    roomName.title = tt('Yalnızca izleme bağlantısı');
     $('view-only').hidden = false;
     $('view-only-hint').hidden = false;
   }
@@ -301,7 +301,7 @@ export function setupRoomUI({ roomId, key, ui, onSetupDialog = null }) {
     b.addEventListener('click', async () => {
       const input = $(b.dataset.copy);
       const ok = await copyText(input.value, input);
-      ui.toast(ok ? t('Panoya kopyalandı') : t('Kopyalanamadı, metni elle seçin'), { error: !ok });
+      ui.toast(ok ? tt('Panoya kopyalandı') : tt('Kopyalanamadı, metni elle seçin'), { error: !ok });
     });
   }
 
@@ -380,14 +380,14 @@ function renderCmd(box, text, ui) {
   btn.textContent = 'Kopyala';
   btn.addEventListener('click', async () => {
     const ok = await copyText(text);
-    ui.toast(ok ? t('Komut kopyalandı') : t('Kopyalanamadı, metni elle seçin'), { error: !ok });
+    ui.toast(ok ? tt('Komut kopyalandı') : tt('Kopyalanamadı, metni elle seçin'), { error: !ok });
   });
   box.append(pre, btn);
 }
 
 // --- PWA (§10) ---------------------------------------------------------------------------------------
 /** Release of the files this page was loaded from; equal to sw.js VERSION (tests/test_release.py checks it). */
-export const APP_VERSION = 'po-v4.0.14';
+export const APP_VERSION = 'po-v4.0.15';
 const SW_VERSION_RE = /^po-v[0-9.]{1,20}$/;
 
 /** v2.md H16: a newer service worker took over while this (older) page was open → offer a reload. */
@@ -398,7 +398,7 @@ function showUpdateNotice() {
   box.className = 'update-toast';
   box.setAttribute('role', 'status');
   const text = document.createElement('span');
-  text.textContent = t('Yeni sürüm hazır');
+  text.textContent = tt('Yeni sürüm hazır');
   const reload = document.createElement('button');
   reload.type = 'button';
   reload.className = 'btn small accent';

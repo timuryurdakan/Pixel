@@ -2,10 +2,12 @@
 // Number formatting is tr-TR: grouping "182.340", compact "12,4 B" (bin) / "1,2 Mn" (milyon), currency "0,18 $".
 // Every function returns plain strings or DOM nodes built with textContent (device data is untrusted).
 
-const NF0 = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 });
-const NF1 = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
-const NF2 = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const NF4 = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+import { t as tt } from './i18n.js';
+
+const NF0 = new Intl.NumberFormat(tt('tr-TR'), { maximumFractionDigits: 0 });
+const NF1 = new Intl.NumberFormat(tt('tr-TR'), { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+const NF2 = new Intl.NumberFormat(tt('tr-TR'), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const NF4 = new Intl.NumberFormat(tt('tr-TR'), { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
 const fin = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
@@ -41,7 +43,7 @@ export function weightedTokens(u) {
   return n('inTok') + n('outTok') + n('cacheWrite') + n('cacheRead') * 0.1;
 }
 
-export const WEIGHT_NOTE = 'Token = giriş + çıkış + önbelleğe yazılan + önbellekten okunan × 0,1 (önbellek okumaları ucuz olduğu için 0,1 ağırlıkla sayılır).';
+export const WEIGHT_NOTE = tt('Token = giriş + çıkış + önbelleğe yazılan + önbellekten okunan × 0,1 (önbellek okumaları ucuz olduğu için 0,1 ağırlıkla sayılır).');
 
 /** 125000 → "2 dk 5 sn"; 4000 → "4 sn"; 3 700 000 → "1 sa 1 dk" */
 export function fmtDuration(ms) {
@@ -60,7 +62,7 @@ export function fmtClock(ms) {
   return h ? `${h}:${two(m)}:${two(s)}` : `${m}:${two(s)}`;
 }
 
-export const ENGINE_LABELS = { claude: 'Claude Code', ollama: 'Ollama', openai: 'OpenAI uyumlu' };
+export const ENGINE_LABELS = { claude: 'Claude Code', ollama: 'Ollama', openai: tt('OpenAI uyumlu') };
 
 /**
  * Cost text with the honesty labels of §10.1/§11.3.
@@ -71,22 +73,22 @@ export const ENGINE_LABELS = { claude: 'Claude Code', ollama: 'Ollama', openai: 
  */
 export function costLabel(usd, basis, auth = null) {
   if (basis === 'local') {
-    return { text: 'maliyet yok (yerel model)', title: 'Yerel model: maliyet yok. Token sayıları Ollama\'dan gelir.' };
+    return { text: 'maliyet yok (yerel model)', title: tt('Yerel model: maliyet yok. Token sayıları Ollama\'dan gelir.') };
   }
   if (basis === 'claude-estimate') {
-    const claudeTip = 'Bu tutar Claude Code\'un kendi tahminidir. Abonelikte bu tutar faturalanmaz; abonelik limitinizin ne kadarının kaldığı bilinemez.';
+    const claudeTip = tt('Bu tutar Claude Code\'un kendi tahminidir. Abonelikte bu tutar faturalanmaz; abonelik limitinizin ne kadarının kaldığı bilinemez.');
     if (fin(usd) === null) return { text: 'maliyet bilinmiyor', title: claudeTip };
-    const tag = auth === 'subscription' ? 'API eşdeğeri tahmini' : 'tahmini';
+    const tag = auth === 'subscription' ? tt('API eşdeğeri tahmini') : 'tahmini';
     return { text: `≈ ${fmtUsd(usd)} (${tag})`, title: claudeTip };
   }
-  if (fin(usd) !== null && usd > 0) return { text: `≈ ${fmtUsd(usd)} (tahmini)`, title: 'Tahmini değer.' };
-  return { text: 'maliyet bilinmiyor', title: 'Bu motor için maliyet bilgisi yok.' };
+  if (fin(usd) !== null && usd > 0) return { text: `≈ ${fmtUsd(usd)} (tahmini)`, title: tt('Tahmini değer.') };
+  return { text: 'maliyet bilinmiyor', title: tt('Bu motor için maliyet bilgisi yok.') };
 }
 
 /** Cost label for a sum over a period (agent or device): basis follows the engine(s). */
 export function totalCostLabel(usd, engine, auth) {
   if (engine === 'ollama' || engine === 'openai') return costLabel(usd, 'local', auth);
-  if (!fin(usd)) return { text: '≈ 0,00 $', title: 'Bu dönemde Claude maliyeti yok.' };
+  if (!fin(usd)) return { text: '≈ 0,00 $', title: tt('Bu dönemde Claude maliyeti yok.') };
   return costLabel(usd, 'claude-estimate', auth);
 }
 
@@ -94,13 +96,13 @@ export function totalCostLabel(usd, engine, auth) {
 export function liveTokensText(live) {
   if (!live) return { text: '0 token', title: WEIGHT_NOTE };
   const w = weightedTokens(live);
-  const title = `Giriş ${fmtInt(live.inTok || 0)} · çıkış ${fmtInt(live.outTok || 0)} · önbelleğe yazılan ${fmtInt(live.cacheWrite || 0)} · önbellekten okunan ${fmtInt(live.cacheRead || 0)}\n${WEIGHT_NOTE}`;
-  return { text: `${fmtCompact(w)} token${live.estimated ? ' (tahmini)' : ''}`, title };
+  const title = `${tt('Giriş {i} · çıkış {o} · önbelleğe yazılan {cw} · önbellekten okunan {cr}', { i: fmtInt(live.inTok || 0), o: fmtInt(live.outTok || 0), cw: fmtInt(live.cacheWrite || 0), cr: fmtInt(live.cacheRead || 0) })}\n${WEIGHT_NOTE}`;
+  return { text: `${fmtCompact(w)} token${live.estimated ? ' ' + tt('(tahmini)') : ''}`, title };
 }
 
-const PERIOD_ADJ = { day: 'Günlük', week: 'Haftalık', month: 'Aylık' };
-const PERIOD_RESET = { day: 'gece yarısı sıfırlanır', week: 'pazartesi sıfırlanır', month: 'ay başında sıfırlanır' };
-export const PERIOD_NOUN = { day: 'Bugün', week: 'Bu hafta', month: 'Bu ay' };
+const PERIOD_ADJ = { day: tt('Günlük'), week: tt('Haftalık'), month: tt('Aylık') };
+const PERIOD_RESET = { day: tt('gece yarısı sıfırlanır'), week: tt('pazartesi sıfırlanır'), month: tt('ay başında sıfırlanır') };
+export const PERIOD_NOUN = { day: tt('Bugün'), week: tt('Bu hafta'), month: tt('Bu ay') };
 
 /** "Günlük bütçe %62 (1,2 Mn / 2 Mn token)" etc. → {label, state, pct, note} */
 export function budgetText(b) {
@@ -109,14 +111,14 @@ export function budgetText(b) {
   const amount = b.unit === 'usd'
     ? `${fmtUsd(b.used)} / ${fmtUsd(b.limit)}`
     : `${fmtCompact(b.used)} / ${fmtCompact(b.limit)} token`;
-  const label = `${PERIOD_ADJ[b.period] || 'Bütçe'} bütçe %${pct} (${amount})`;
+  const label = tt('{period} bütçe %{pct} ({amount})', { period: PERIOD_ADJ[b.period] || tt('Bütçe'), pct, amount });
   let note = '';
   if (state === 'over') {
     note = b.action === 'block'
-      ? `Bütçe doldu: yeni görev kabul edilmiyor (${PERIOD_RESET[b.period] || 'dönem başında sıfırlanır'})`
-      : 'Bütçe aşıldı (yalnızca uyarı, görevler sürüyor)';
+      ? tt('Bütçe doldu: yeni görev kabul edilmiyor ({reset})', { reset: PERIOD_RESET[b.period] || tt('dönem başında sıfırlanır') })
+      : tt('Bütçe aşıldı (yalnızca uyarı, görevler sürüyor)');
   } else if (state === 'warn') {
-    note = 'Bütçenin %80\'i geçildi';
+    note = tt('Bütçenin %80\'i geçildi');
   }
   return { label, state, pct, note };
 }
@@ -141,7 +143,7 @@ export function gaugeEl(b, { showScope = false } = {}) {
   lab.className = 'gauge-label';
   const scope = showScope ? SCOPE_LABEL(b.scope) : '';
   lab.textContent = (scope ? `${scope} · ` : '') + t.label + (b.locked ? ' 🔒' : '');
-  if (b.locked) lab.title = 'Bu bütçe cihazdaki connector.json dosyasında tanımlı, buradan değiştirilemez.';
+  if (b.locked) lab.title = tt('Bu bütçe cihazdaki connector.json dosyasında tanımlı, buradan değiştirilemez.');
   if (b.unit !== 'usd') lab.title = (lab.title ? lab.title + '\n' : '') + WEIGHT_NOTE;
   const bar = document.createElement('div');
   bar.className = 'gauge-bar';
@@ -165,17 +167,17 @@ export function gaugeEl(b, { showScope = false } = {}) {
 
 /** Text for usage.claudeLimit (verbatim, with its time) or the "no information" line (§11.3). */
 export function claudeLimitText(lim) {
-  if (!lim || typeof lim !== 'object') return 'Claude abonelik limiti hakkında bilgi yok.';
-  const at = fin(lim.at) ? new Date(lim.at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : '?';
-  const st = { allowed: 'sınırın altında', allowed_warning: 'sınıra yakın', rejected: 'sınıra ulaşıldı' }[lim.status]
-    || (typeof lim.status === 'string' ? lim.status.slice(0, 40) : 'durum bilinmiyor');
+  if (!lim || typeof lim !== 'object') return tt('Claude abonelik limiti hakkında bilgi yok.');
+  const at = fin(lim.at) ? new Date(lim.at).toLocaleTimeString(tt('tr-TR'), { hour: '2-digit', minute: '2-digit' }) : '?';
+  const st = { allowed: tt('sınırın altında'), allowed_warning: tt('sınıra yakın'), rejected: tt('sınıra ulaşıldı') }[lim.status]
+    || (typeof lim.status === 'string' ? lim.status.slice(0, 40) : tt('durum bilinmiyor'));
   const parts = [st];
   const u = fin(lim.utilization);
-  if (u !== null) parts.push(`%${NF0.format(u <= 1 ? u * 100 : u)} kullanıldı`);
+  if (u !== null) parts.push(tt('%{n} kullanıldı', { n: NF0.format(u <= 1 ? u * 100 : u) }));
   const r = fin(lim.resetsAt);
   if (r !== null && r > 0) {
     const ms = r > 1e12 ? r : r * 1000;
-    parts.push(`${new Date(ms).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}'da sıfırlanır`);
+    parts.push(tt("{time}'da sıfırlanır", { time: new Date(ms).toLocaleTimeString(tt('tr-TR'), { hour: '2-digit', minute: '2-digit' }) }));
   }
-  return `Claude bildirdi (${at}): ${parts.join(', ')}.`;
+  return tt('Claude bildirdi ({at}): {parts}.', { at, parts: parts.join(', ') });
 }

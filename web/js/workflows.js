@@ -9,6 +9,7 @@ import { CLAUDE_MODELS } from './devices.js';
 import { PROFILE_TEXT } from './prompt.js';
 import { TemplateBuilder } from './template_builder.js';
 import { PreviewDrawer } from './preview.js';
+import { t as tt } from './i18n.js';
 
 export const WORKFLOWS_FEATURE = 'workflows';
 export const BRIEF_MAX = 4096;               // = pixel_connector/workflows.py BRIEF_MAX (UTF-8 bytes)
@@ -25,23 +26,23 @@ function costCeiling(t) {
 const SHOW_FINISHED = 3;                     // finished runs listed per device
 
 export const STATE_TEXT = {
-  waiting: 'Bekliyor', running: 'Çalışıyor', approval: 'Onay bekliyor', done: 'Bitti', error: 'Hata', cancelled: 'İptal',
+  waiting: 'Bekliyor', running: tt('Çalışıyor'), approval: tt('Onay bekliyor'), done: 'Bitti', error: 'Hata', cancelled: tt('İptal'),
 };
 const STATE_MARK = { waiting: '…', running: '●', approval: '?', done: '✓', error: '✗', cancelled: '■' };
 const ENGINE_TEXT = { claude: 'Claude Code', ollama: 'Ollama' };
 
 /** Why a run or step stopped (codes of pixel_connector/workflows.py), else the generic device error text. */
 export const CODE_TEXT = {
-  cost_cap: 'Maliyet tavanı aşıldı',
-  max_turns: 'Tur sınırı aşıldı',
-  timeout: 'Süre sınırı doldu',
+  cost_cap: tt('Maliyet tavanı aşıldı'),
+  max_turns: tt('Tur sınırı aşıldı'),
+  timeout: tt('Süre sınırı doldu'),
   denied: 'Reddedildi',
-  approval_timeout: 'Onay süresi doldu (reddedildi sayıldı)',
-  cancelled: 'İptal edildi',
-  stopped: 'Bağlayıcı kapandı',
-  budget: 'Bütçe sınırına ulaşıldı',
-  error: 'Adım hata verdi',
-  revoked: 'Başlatan tarayıcının eşleşmesi kaldırıldı',
+  approval_timeout: tt('Onay süresi doldu (reddedildi sayıldı)'),
+  cancelled: tt('İptal edildi'),
+  stopped: tt('Bağlayıcı kapandı'),
+  budget: tt('Bütçe sınırına ulaşıldı'),
+  error: tt('Adım hata verdi'),
+  revoked: tt('Başlatan tarayıcının eşleşmesi kaldırıldı'),
 };
 
 export function codeText(code) {
@@ -76,7 +77,7 @@ const money = (n) => `$${(Number.isFinite(n) ? n : 0).toFixed(2)}`;
 /** "2/4 adım · $0.05 / $1.00 · 5 tur" */
 export function progressText(run) {
   const finished = run.steps.filter((s) => s.state === 'done').length;
-  const bits = [`${finished}/${run.steps.length} adım`];
+  const bits = [tt('{done}/{all} adım', { done: finished, all: run.steps.length })];
   const cap = run.limits && Number.isFinite(run.limits.maxCostUsd) ? ` / ${money(run.limits.maxCostUsd)}` : '';
   bits.push(`${money(run.costUsd)}${cap}`);
   if (Number.isFinite(run.turns) && run.turns > 0) bits.push(`${run.turns} tur`);
@@ -212,7 +213,7 @@ export class WorkflowDialog {
     let bar = this.dialog.querySelector('.wf-builder-bar');
     if (!bar) {
       bar = el('div', 'wf-builder-bar');
-      const toggleBtn = el('button', 'btn small', 'Kodsuz Şablon Oluşturucu');
+      const toggleBtn = el('button', 'btn small', tt('Kodsuz Şablon Oluşturucu'));
       toggleBtn.type = 'button';
       toggleBtn.dataset.action = 'toggle-builder';
       bar.appendChild(toggleBtn);
@@ -271,7 +272,7 @@ export class WorkflowDialog {
 
   open() {
     const devs = this._devices();
-    if (!devs.length) { this.toast('İş akışlarını destekleyen çevrimiçi cihaz yok (bağlayıcı 3.4.0 ve üstü).', { error: true, ms: 5000 }); return; }
+    if (!devs.length) { this.toast(tt('İş akışlarını destekleyen çevrimiçi cihaz yok (bağlayıcı 3.4.0 ve üstü).'), { error: true, ms: 5000 }); return; }
     const sel = this.f.device;
     const keep = sel.value;
     sel.replaceChildren(...devs.map((d) => { const o = el('option', null, d.label); o.value = d.id; return o; }));
@@ -288,7 +289,7 @@ export class WorkflowDialog {
   async _loadDevice() {
     const d = this._device();
     if (!d) return;
-    this.f.template.replaceChildren(el('option', null, 'Yükleniyor…'));
+    this.f.template.replaceChildren(el('option', null, tt('Yükleniyor…')));
     try {
       await this.store.load(d.id);
       if (!this.wsCache.has(d.id)) {
@@ -296,7 +297,7 @@ export class WorkflowDialog {
         this.wsCache.set(d.id, Array.isArray(r.workspaces) ? r.workspaces : []);
       }
     } catch (e) {
-      this._error(e instanceof ControlError ? e.text : 'Şablonlar alınamadı.');
+      this._error(e instanceof ControlError ? e.text : tt('Şablonlar alınamadı.'));
       return;
     }
     if (this._device() !== d) return;
@@ -309,7 +310,7 @@ export class WorkflowDialog {
     ws.replaceChildren(...list.map((w) => { const o = el('option', null, w.name); o.value = w.id; return o; }));
     if (list.some((w) => w.id === 'isler')) ws.value = 'isler';         // ~/PixelOfficeIsler (Phase 17 default)
     this._template();
-    if (t.invalid) this._error(`Cihazdaki workflows.json dosyasında ${t.invalid} geçersiz şablon atlandı.`);
+    if (t.invalid) this._error(tt('Cihazdaki workflows.json dosyasında {n} geçersiz şablon atlandı.', { n: t.invalid }));
   }
 
   _tpl() {
@@ -326,7 +327,7 @@ export class WorkflowDialog {
     this.f.cost.max = String(costCeiling(t));
     this.f.sub.value = t && t.folder ? t.folder : '';
     this.limits.textContent = t && t.limits
-      ? `Sınırlar: en fazla ${t.limits.maxTurns} tur, ${Math.round(t.limits.timeoutS / 60)} dk. Aşılırsa akış durur, sonraki adım başlamaz.`
+      ? tt('Sınırlar: en fazla {turns} tur, {min} dk. Aşılırsa akış durur, sonraki adım başlamaz.', { turns: t.limits.maxTurns, min: Math.round(t.limits.timeoutS / 60) })
       : '';
     this.stepsBox.replaceChildren();
     for (const s of t ? t.steps : []) this.stepsBox.appendChild(this._stepRow(s, d));
@@ -339,7 +340,7 @@ export class WorkflowDialog {
     li.dataset.step = s.id;
     li.appendChild(el('b', 'wf-step-role', s.role));
     if (s.type === 'approval') {
-      li.appendChild(el('span', 'muted small', ' — sizin onayınız (Onayla / Reddet)'));
+      li.appendChild(el('span', 'muted small', tt(' — sizin onayınız (Onayla / Reddet)')));
       return li;
     }
     const eng = (d && d.info && d.info.engines) || {};
@@ -365,13 +366,13 @@ export class WorkflowDialog {
       const models = e === 'claude' ? CLAUDE_MODELS
         : ((eng.ollama && eng.ollama.models) || []).map((m) => [m, m]);
       modelSel.replaceChildren(...models.map(([v, t]) => { const o = el('option', null, t); o.value = v; return o; }));
-      if (!models.length) { const o = el('option', null, 'Model yok'); o.value = ''; modelSel.appendChild(o); }
+      if (!models.length) { const o = el('option', null, tt('Model yok')); o.value = ''; modelSel.appendChild(o); }
       if (s.model && models.some(([v]) => v === s.model) && e === s.engine) modelSel.value = s.model;
     };
     engSel.addEventListener('change', fillModels);
     fillModels();
     const prof = (PROFILE_TEXT[s.profile] || { label: s.profile }).label;
-    const note = el('span', 'wf-step-note muted small', engSel.hidden ? `${ENGINE_TEXT[s.engine] || s.engine} · İzin: ${prof}` : `İzin: ${prof} (Claude)`);
+    const note = el('span', 'wf-step-note muted small', engSel.hidden ? `${ENGINE_TEXT[s.engine] || s.engine} · ${tt('İzin: {label}', { label: prof })}` : `${tt('İzin: {label}', { label: prof })} (Claude)`);
     row.append(engSel, modelSel, note);
     li.appendChild(row);
     return li;
@@ -391,28 +392,28 @@ export class WorkflowDialog {
   _updateStart() {
     const busy = this.store.list(this.f.device.value).some((x) => isActive(x.run));
     this.f.start.disabled = busy || !this._tpl() || !!this.starting;
-    this.f.start.title = busy ? 'Bu cihazda bir iş akışı çalışıyor; bitince yenisini başlatabilirsiniz.' : '';
+    this.f.start.title = busy ? tt('Bu cihazda bir iş akışı çalışıyor; bitince yenisini başlatabilirsiniz.') : '';
   }
 
   /** The workflow.start request from the form, or {error}. */
   request() {
     const t = this._tpl();
-    if (!t) return { error: 'Bir şablon seçin.' };
+    if (!t) return { error: tt('Bir şablon seçin.') };
     const brief = this.f.brief.value.trim();
-    if (t.needsBrief && !brief) return { error: 'Ne istediğinizi kısaca yazın.' };
-    if (new TextEncoder().encode(brief).length > BRIEF_MAX) return { error: 'İstek çok uzun (en fazla 4 KB).' };
+    if (t.needsBrief && !brief) return { error: tt('Ne istediğinizi kısaca yazın.') };
+    if (new TextEncoder().encode(brief).length > BRIEF_MAX) return { error: tt('İstek çok uzun (en fazla 4 KB).') };
     const cost = Number(String(this.f.cost.value).replace(',', '.'));
     const ceiling = costCeiling(t);
     if (!(cost >= COST_MIN && cost <= ceiling)) {
-      return { error: `Maliyet tavanı ${COST_MIN}–${ceiling} $ arasında olmalı (şablonun sınırı ${ceiling} $).` };
+      return { error: tt('Maliyet tavanı {min}–{max} $ arasında olmalı (şablonun sınırı {max} $).', { min: COST_MIN, max: ceiling }) };
     }
-    if (!this.f.workspace.value) return { error: 'Bir çalışma klasörü seçin.' };
+    if (!this.f.workspace.value) return { error: tt('Bir çalışma klasörü seçin.') };
     const steps = {};
     for (const s of t.steps) {
       if (s.type !== 'agent') continue;
       const engine = this.form.querySelector(`[name="engine-${s.id}"]`).value;
       const model = this.form.querySelector(`[name="model-${s.id}"]`).value || null;
-      if (engine === 'ollama' && !model) return { error: `${s.role}: Ollama için bir model seçin.` };
+      if (engine === 'ollama' && !model) return { error: `${s.role}: ${tt('Ollama için bir model seçin.')}` };
       steps[s.id] = { engine, model };
     }
     const sub = this.subRow.hidden ? null : this.f.sub.value.trim() || null;
@@ -430,15 +431,15 @@ export class WorkflowDialog {
     try {
       const res = await this.hub.request(d.id, r.msg, { timeout: 130000 });   // may wait for a confirmation on the computer
       this.store.put(d.id, res.run);
-      this.toast('İş akışı başladı', { ms: 3000 });
+      this.toast(tt('İş akışı başladı'), { ms: 3000 });
       this.f.brief.value = '';
       this.runsBox.scrollIntoView({ block: 'nearest' });
     } catch (e) {
-      const t = { workspace_denied: 'Bu klasör cihazın izin listesinde değil ya da kullanılamıyor.',
-        busy: 'Bu cihazda bir iş akışı ya da adım ajanı zaten çalışıyor.',
-        not_allowed: 'Bu cihaz uzaktan ajan oluşturmaya izin vermiyor (iş akışları ajan oluşturur).',
-        unknown_template: 'Şablon cihazda bulunamadı.' }[e && e.code];
-      this._error(t || (e instanceof ControlError ? e.text : 'İş akışı başlatılamadı.'));
+      const t = { workspace_denied: tt('Bu klasör cihazın izin listesinde değil ya da kullanılamıyor.'),
+        busy: tt('Bu cihazda bir iş akışı ya da adım ajanı zaten çalışıyor.'),
+        not_allowed: tt('Bu cihaz uzaktan ajan oluşturmaya izin vermiyor (iş akışları ajan oluşturur).'),
+        unknown_template: tt('Şablon cihazda bulunamadı.') }[e && e.code];
+      this._error(t || (e instanceof ControlError ? e.text : tt('İş akışı başlatılamadı.')));
     } finally {
       this.starting = false;
       this._updateStart();
@@ -453,7 +454,7 @@ export class WorkflowDialog {
       await this.hub.request(dev, { ...msg, run: run.id });
       if (okText) this.toast(okText, { ms: 2500 });
     } catch (e) {
-      this.toast(e instanceof ControlError ? e.text : 'İşlem yapılamadı', { error: true });
+      this.toast(e instanceof ControlError ? e.text : tt('İşlem yapılamadı'), { error: true });
     } finally {
       this.busy.delete(run.id);
       this.renderRuns();
@@ -466,7 +467,7 @@ export class WorkflowDialog {
     box.replaceChildren();
     box.hidden = !items.length;
     if (!items.length) return;
-    box.appendChild(el('h3', null, 'İş akışları'));
+    box.appendChild(el('h3', null, tt('İş akışları')));
     for (const { device, run } of items) box.appendChild(this._runCard(device, run));
   }
 
@@ -478,7 +479,7 @@ export class WorkflowDialog {
     card.appendChild(head);
     const ws = run.workspace || {};
     const folder = ws.name ? `${ws.name}${ws.sub ? '/' + ws.sub : ''}` : '';
-    card.appendChild(el('div', 'wf-run-meta muted small', `${folder ? 'Klasör: ' + folder + ' · ' : ''}${progressText(run)}`));
+    card.appendChild(el('div', 'wf-run-meta muted small', `${folder ? tt('Klasör: ') + folder + ' · ' : ''}${progressText(run)}`));
     const ol = el('ol', 'wf-step-list');
     for (const s of run.steps) {
       const li = el('li', `wf-step st-${s.state}`);
@@ -488,7 +489,7 @@ export class WorkflowDialog {
       if (s.code && s.state !== 'done') extra += ` · ${codeText(s.code)}`;
       li.appendChild(el('span', 'wf-step-meta muted small', extra));
       if (s.type === 'agent' && s.state === 'done' && typeof s.task === 'string' && s.task) {
-        const prevBtn = el('button', 'btn small ghost wf-preview-btn', 'Önizle');
+        const prevBtn = el('button', 'btn small ghost wf-preview-btn', tt('Önizle'));
         prevBtn.type = 'button';
         prevBtn.dataset.action = 'preview-step';
         prevBtn.addEventListener('click', () => this._previewStep(dev, run, s));
@@ -503,19 +504,19 @@ export class WorkflowDialog {
     const cur = run.steps.find((s) => s.id === run.current);
     if (run.state === 'approval' && cur && cur.type === 'approval') {
       const left = Number.isFinite(cur.expiresAt) ? Math.max(0, Math.round((cur.expiresAt - Date.now()) / 60000)) : null;
-      card.appendChild(el('p', 'wf-run-note small', `Önceki adımın çıktısını o ajanın panelinde okuyun.${left !== null ? ` Yanıt verilmezse ${left} dk sonra reddedilmiş sayılır.` : ''}`));
+      card.appendChild(el('p', 'wf-run-note small', tt('Önceki adımın çıktısını o ajanın panelinde okuyun.') + (left !== null ? ' ' + tt('Yanıt verilmezse {n} dk sonra reddedilmiş sayılır.', { n: left }) : '')));
       const yes = el('button', 'btn small accent wf-approve', 'Onayla');
       const no = el('button', 'btn small wf-deny', 'Reddet');
       for (const b of [yes, no]) { b.type = 'button'; b.disabled = busy; }
-      yes.addEventListener('click', () => this._act(dev, run, { type: 'workflow.answer', decision: 'approve' }, 'Onaylandı'));
+      yes.addEventListener('click', () => this._act(dev, run, { type: 'workflow.answer', decision: 'approve' }, tt('Onaylandı')));
       no.addEventListener('click', () => this._act(dev, run, { type: 'workflow.answer', decision: 'deny' }, 'Reddedildi'));
       actions.append(yes, no);
     }
     if (isActive(run)) {
-      const stop = el('button', 'btn small ghost wf-cancel', 'İptal');
+      const stop = el('button', 'btn small ghost wf-cancel', tt('İptal'));
       stop.type = 'button';
       stop.disabled = busy;
-      stop.addEventListener('click', () => this._act(dev, run, { type: 'workflow.cancel' }, 'İş akışı durduruluyor'));
+      stop.addEventListener('click', () => this._act(dev, run, { type: 'workflow.cancel' }, tt('İş akışı durduruluyor')));
       actions.appendChild(stop);
     }
     if (actions.childElementCount) card.appendChild(actions);
@@ -530,12 +531,12 @@ export class WorkflowDialog {
       const drawer = this._getPreviewDrawer();
       if (drawer) {
         drawer.open({
-          title: `${run.name || run.template || 'İş akışı'} · ${step.role || step.id}`,
+          title: `${run.name || run.template || tt('İş akışı')} · ${step.role || step.id}`,
           content: text,
         });
       }
     } catch (e) {
-      this.toast(e instanceof ControlError ? e.text : 'Adım çıktısı alınamadı.', { error: true });
+      this.toast(e instanceof ControlError ? e.text : tt('Adım çıktısı alınamadı.'), { error: true });
     }
   }
 }

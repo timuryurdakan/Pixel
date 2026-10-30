@@ -6,7 +6,7 @@
 // device.info.features has "boss" gets the form; a viewer or an unpaired browser sees an info text only.
 
 import { ControlError, errorText } from './control.js';
-import { t } from './i18n.js';
+import { t as tt } from './i18n.js';
 import { BOSS_FEATURE } from './boss_scene.js';
 import { makeExportActions, defaultNotifier } from './notify.js';
 
@@ -32,46 +32,46 @@ export const DEFAULT_DEPARTMENT = 'yazilim';
 const MAX_DEPARTMENTS = 10;
 
 export const DEPARTMENT_NAMES = Object.freeze({
-  yazilim: t('Yazılım'),
-  icerik: t('İçerik ve Medya'),
-  akademik: t('Akademik ve Eğitim'),
-  girisim: t('Girişim ve Pazarlama'),
-  kisisel: t('Kişisel Yaşam'),
+  yazilim: tt('Yazılım'),
+  icerik: tt('İçerik ve Medya'),
+  akademik: tt('Akademik ve Eğitim'),
+  girisim: tt('Girişim ve Pazarlama'),
+  kisisel: tt('Kişisel Yaşam'),
 });
 
 export const DEPARTMENT_HINTS = Object.freeze({
-  yazilim: t('Kod, mimari, ön yüz, arka yüz, test ve güvenlik'),
-  icerik: t('Blog, video metni, sosyal medya'),
-  akademik: t('Literatür özeti, sınav soruları, çalışma planı'),
-  girisim: t('Pazar analizi, büyüme metinleri, iş modeli incelemesi'),
-  kisisel: t('Haftalık plan, gezi/etkinlik hazırlığı, yapılacaklar'),
+  yazilim: tt('Kod, mimari, ön yüz, arka yüz, test ve güvenlik'),
+  icerik: tt('Blog, video metni, sosyal medya'),
+  akademik: tt('Literatür özeti, sınav soruları, çalışma planı'),
+  girisim: tt('Pazar analizi, büyüme metinleri, iş modeli incelemesi'),
+  kisisel: tt('Haftalık plan, gezi/etkinlik hazırlığı, yapılacaklar'),
 });
 
 export const STATE_TEXT = {
-  idle: t('Boşta'), planning: t('Planlıyor'), approval: t('Onay bekliyor'), approved: t('Onaylandı'), running: t('Çalışıyor'),
-  reviewing: t('Değerlendiriyor'), reporting: t('Rapor yazıyor'), done: t('Bitti'), error: t('Hata'), cancelled: t('İptal'),
+  idle: tt('Boşta'), planning: tt('Planlıyor'), approval: tt('Onay bekliyor'), approved: tt('Onaylandı'), running: tt('Çalışıyor'),
+  reviewing: tt('Değerlendiriyor'), reporting: tt('Rapor yazıyor'), done: tt('Bitti'), error: tt('Hata'), cancelled: tt('İptal'),
 };
 const TERMINAL = new Set(['done', 'error', 'cancelled']);
 export const ORDER_TEXT = {
-  waiting: t('Sırada'), running: t('Çalışıyor'), approval: t('Onay bekliyor'), done: t('Bitti'), error: t('Hata'), cancelled: t('Yapılmadı'),
+  waiting: tt('Sırada'), running: tt('Çalışıyor'), approval: tt('Onay bekliyor'), done: tt('Bitti'), error: tt('Hata'), cancelled: tt('Yapılmadı'),
 };
 const ORDER_MARK = { waiting: '…', running: '●', approval: '?', done: '✓', error: '✗', cancelled: '■' };
 const STATE_NOTE = {
-  planning: t('Patron klasörü yalnızca okuyarak inceliyor ve bir plan yazıyor.'),
-  approved: t('Plan onaylandı; uzmanlar geliyor.'),
-  reviewing: t('Uzmanlar bitirdi. Patron sonuçları kontrol ediyor.'),
-  reporting: t('Patron raporunu yazıyor.'),
+  planning: tt('Patron klasörü yalnızca okuyarak inceliyor ve bir plan yazıyor.'),
+  approved: tt('Plan onaylandı; uzmanlar geliyor.'),
+  reviewing: tt('Uzmanlar bitirdi. Patron sonuçları kontrol ediyor.'),
+  reporting: tt('Patron raporunu yazıyor.'),
 };
 
 /** Why a job or an order stopped (pixel_connector/boss.py codes); unknown codes get the generic text. */
 export const CODE_TEXT = {
-  cancelled: t('İptal edildi'), revoked: t('Başlatan tarayıcının eşleşmesi kaldırıldı'), stopped: t('Bağlayıcı kapandı'),
-  cost_cap: t('Maliyet tavanı doldu'), max_turns: t('Tur tavanı doldu'), timeout: t('Süre tavanı doldu'),
-  denied: t('Reddedildi'), approval_timeout: t('Onay süresi doldu (reddedildi sayıldı)'),
-  bad_plan: t('Patron geçerli bir plan yazamadı'), role_unavailable: t('Planın istediği uzman bu bilgisayarda kullanılamıyor'),
-  skipped: t('Bağlı olduğu iş emri yapılmadı'), busy: t('Ajan meşguldü'), not_allowed: t('İzin verilmedi'),
-  workspace_denied: t('Çalışma klasörüne erişilemedi'), engine_error: t('Uzman hata verdi'), engine_exit: t('Motor beklenmedik biçimde kapandı'),
-  engine_unavailable: t('Claude Code bulunamadı'), rate_limited: t('Görev hız sınırına takıldı'), budget_exceeded: t('Bütçe sınırına ulaşıldı'),
+  cancelled: tt('İptal edildi'), revoked: tt('Başlatan tarayıcının eşleşmesi kaldırıldı'), stopped: tt('Bağlayıcı kapandı'),
+  cost_cap: tt('Maliyet tavanı doldu'), max_turns: tt('Tur tavanı doldu'), timeout: tt('Süre tavanı doldu'),
+  denied: tt('Reddedildi'), approval_timeout: tt('Onay süresi doldu (reddedildi sayıldı)'),
+  bad_plan: tt('Patron geçerli bir plan yazamadı'), role_unavailable: tt('Planın istediği uzman bu bilgisayarda kullanılamıyor'),
+  skipped: tt('Bağlı olduğu iş emri yapılmadı'), busy: tt('Ajan meşguldü'), not_allowed: tt('İzin verilmedi'),
+  workspace_denied: tt('Çalışma klasörüne erişilemedi'), engine_error: tt('Uzman hata verdi'), engine_exit: tt('Motor beklenmedik biçimde kapandı'),
+  engine_unavailable: tt('Claude Code bulunamadı'), rate_limited: tt('Görev hız sınırına takıldı'), budget_exceeded: tt('Bütçe sınırına ulaşıldı'),
 };
 
 /** Turkish text of a stop code; never the raw code. */
@@ -82,35 +82,35 @@ export function codeText(code) {
 
 /** Errors of the panel's requests (boss.ask / approve / cancel / reset, workflow.answer). */
 const REQUEST_TEXT = {
-  busy: t('Bu bilgisayarda Patronun ya da bir iş akışının işi sürüyor; bitince yenisini verebilirsiniz.'),
-  not_allowed: t('Bu bilgisayar uzaktan ajan oluşturmaya izin vermiyor (Patronun uzmanları ajan oluşturur).'),
-  workspace_denied: t('Bu klasör bilgisayarın izin listesinde değil ya da alt klasör yok.'),
-  engine_unavailable: t('Claude Code bu bilgisayarda bulunamadı. Patron yalnızca Claude Code ile çalışır.'),
-  too_large: t('İstek çok uzun (en fazla 4 KB).'),
-  bad_request: t('Bilgisayar isteği geçersiz buldu (metin ya da maliyet tavanı).'),
-  unknown_job: t('Bu iş bulunamadı ya da zaten bitti.'),
-  not_retryable: t('Bu iş emri artık yeniden denenemez (iş sürüyor ya da daha yeni bir iş var).'),
-  retry_used: t('Bu iş emri bu turda zaten bir kez yeniden denendi.'),
-  cost_cap: t('İşin maliyet tavanı doldu; yeniden deneme için bütçe kalmadı.'),
-  max_turns: t('İşin tur tavanı doldu; yeniden deneme yapılamaz.'),
-  timeout: t('İşin süre tavanı doldu; yeniden deneme yapılamaz.'),
+  busy: tt('Bu bilgisayarda Patronun ya da bir iş akışının işi sürüyor; bitince yenisini verebilirsiniz.'),
+  not_allowed: tt('Bu bilgisayar uzaktan ajan oluşturmaya izin vermiyor (Patronun uzmanları ajan oluşturur).'),
+  workspace_denied: tt('Bu klasör bilgisayarın izin listesinde değil ya da alt klasör yok.'),
+  engine_unavailable: tt('Claude Code bu bilgisayarda bulunamadı. Patron yalnızca Claude Code ile çalışır.'),
+  too_large: tt('İstek çok uzun (en fazla 4 KB).'),
+  bad_request: tt('Bilgisayar isteği geçersiz buldu (metin ya da maliyet tavanı).'),
+  unknown_job: tt('Bu iş bulunamadı ya da zaten bitti.'),
+  not_retryable: tt('Bu iş emri artık yeniden denenemez (iş sürüyor ya da daha yeni bir iş var).'),
+  retry_used: tt('Bu iş emri bu turda zaten bir kez yeniden denendi.'),
+  cost_cap: tt('İşin maliyet tavanı doldu; yeniden deneme için bütçe kalmadı.'),
+  max_turns: tt('İşin tur tavanı doldu; yeniden deneme yapılamaz.'),
+  timeout: tt('İşin süre tavanı doldu; yeniden deneme yapılamaz.'),
 };
 /** S29-03: the approval before each Test order (§10/3); the same warning is the local approval item's preview. */
-export const GATE_TEXT = t('Test uzmanı test komutlarını çalıştıracak. Bu komutlar uzmanların yazdığı kodu (test dosyaları, '
+export const GATE_TEXT = tt('Test uzmanı test komutlarını çalıştıracak. Bu komutlar uzmanların yazdığı kodu (test dosyaları, '
   + 'package.json betikleri) bilgisayarınızda sizin yetkilerinizle çalıştırır; bu kod klasörle ve Patron işinin '
   + 'tavanlarıyla sınırlı değildir. Başlasın mı? Reddederseniz bu iş emri atlanır.');
-const RESET_BUSY_TEXT = t('Patron çalışırken hafızası sıfırlanamaz. İş bitince tekrar deneyin.');
+const RESET_BUSY_TEXT = tt('Patron çalışırken hafızası sıfırlanamaz. İş bitince tekrar deneyin.');
 
 function requestText(e) {
   const code = e && e.code;
   if (code && Object.hasOwn(REQUEST_TEXT, code)) return REQUEST_TEXT[code];
-  return e instanceof ControlError || code ? errorText(code) : t('İşlem yapılamadı.');
+  return e instanceof ControlError || code ? errorText(code) : tt('İşlem yapılamadı.');
 }
 
 export const INFO_TEXT = {
-  viewer: t('Bu oda yalnızca izleme bağlantısıyla açık. Patrona iş vermek için davet bağlantısıyla girip bir bilgisayar eşleştirin.'),
-  unpaired: t('Patrona iş vermek için önce bir bilgisayar eşleştirin.'),
-  offline: t('Eşleşmiş bilgisayarınız şu an bağlı değil ya da bağlayıcısı Patron Odası\'nı desteklemiyor (bağlayıcı 3.8.0 ve üstü).'),
+  viewer: tt('Bu oda yalnızca izleme bağlantısıyla açık. Patrona iş vermek için davet bağlantısıyla girip bir bilgisayar eşleştirin.'),
+  unpaired: tt('Patrona iş vermek için önce bir bilgisayar eşleştirin.'),
+  offline: tt('Eşleşmiş bilgisayarınız şu an bağlı değil ya da bağlayıcısı Patron Odası\'nı desteklemiyor (bağlayıcı 3.8.0 ve üstü).'),
 };
 
 function el(tag, cls, text) {
@@ -180,7 +180,7 @@ export function parseCost(raw, ceiling) {
   const text = String(raw ?? '').trim().replace(',', '.');
   const v = /^\d+(\.\d+)?$/.test(text) ? Number(text) : NaN;
   if (!(v >= COST_MIN && v <= ceiling)) {
-    return { error: t('Maliyet tavanı {min}–{max} $ arasında olmalı (bu bilgisayarın sınırı; yalnızca düşürebilirsiniz).', { min: COST_MIN.toFixed(2), max: ceiling.toFixed(2) }) };
+    return { error: tt('Maliyet tavanı {min}–{max} $ arasında olmalı (bu bilgisayarın sınırı; yalnızca düşürebilirsiniz).', { min: COST_MIN.toFixed(2), max: ceiling.toFixed(2) }) };
   }
   return { value: Math.round(v * 100) / 100 };
 }
@@ -514,7 +514,7 @@ export class BossPanel {
     this.deptRow.hidden = false;
     const keep = this.f.department.value;
     this.f.department.replaceChildren(...depts.map((dep) => {
-      const o = el('option', null, t(dep.name));
+      const o = el('option', null, tt(dep.name));
       o.value = dep.id;
       return o;
     }));
@@ -539,7 +539,7 @@ export class BossPanel {
       const r = await this.hub.request(d.id, { type: 'workspace.list' });
       this.wsCache.set(d.id, Array.isArray(r && r.workspaces) ? r.workspaces : []);
     } catch (e) {
-      this._error(e instanceof ControlError ? e.text : t('Çalışma klasörleri alınamadı.'));
+      this._error(e instanceof ControlError ? e.text : tt('Çalışma klasörleri alınamadı.'));
       return;
     }
     if (this._device() === d) this._fillForm();
@@ -559,7 +559,7 @@ export class BossPanel {
     this.f.cost.max = String(ceiling);
     this.f.cost.min = String(COST_MIN);
     if (!this.f.cost.value || !(parseCost(this.f.cost.value, ceiling).value >= 0)) this.f.cost.value = ceiling.toFixed(2);
-    this.capHint.textContent = t('Bu bilgisayarda en fazla {max} $. Yalnızca düşürebilirsiniz; tavana gelince iş durur. '
+    this.capHint.textContent = tt('Bu bilgisayarda en fazla {max} $. Yalnızca düşürebilirsiniz; tavana gelince iş durur. '
       + 'Abonelikle kullanımda bu tutar kullanım kotanızdan düşen eşdeğer maliyettir.', { max: ceiling.toFixed(2) });
     this._ws();
     this._updateAsk();
@@ -597,9 +597,9 @@ export class BossPanel {
     const d = this._device();
     if (!d) return { error: INFO_TEXT.offline };
     const brief = this.f.brief.value.trim();
-    if (!brief) return { error: t('Patrona ne yaptırmak istediğinizi kısaca yazın.') };
-    if (bytes(brief) > BRIEF_MAX) return { error: t('İstek çok uzun (en fazla 4 KB).') };
-    if (!this.f.workspace.value) return { error: t('Bir çalışma klasörü seçin.') };
+    if (!brief) return { error: tt('Patrona ne yaptırmak istediğinizi kısaca yazın.') };
+    if (bytes(brief) > BRIEF_MAX) return { error: tt('İstek çok uzun (en fazla 4 KB).') };
+    if (!this.f.workspace.value) return { error: tt('Bir çalışma klasörü seçin.') };
     const cost = parseCost(this.f.cost.value, costCeiling(d));
     if (cost.error) return { error: cost.error };
     const msg = { type: 'boss.ask', workspace: this._workspace(), brief, maxCostUsd: cost.value };
@@ -622,7 +622,7 @@ export class BossPanel {
       const res = await this.hub.request(d.id, r.msg, { timeout: ASK_TIMEOUT_MS });
       if (this.store && res) this.store.acceptAck(d.id, res.job);
       this.f.brief.value = '';
-      this.toast(t('Patron işi aldı, plan yazıyor'), { ms: 3000 });
+      this.toast(tt('Patron işi aldı, plan yazıyor'), { ms: 3000 });
     } catch (e) {
       this._error(requestText(e));
     } finally {
@@ -640,13 +640,13 @@ export class BossPanel {
   async reset() {
     if (!this.hub || this.inflight.has('reset')) return;
     const d = this._device();
-    if (!d || !this.f.workspace.value) { this._error(t('Bir çalışma klasörü seçin.')); return; }
+    if (!d || !this.f.workspace.value) { this._error(tt('Bir çalışma klasörü seçin.')); return; }
     this.inflight.add('reset');
     this._updateAsk();
     try {
       const r = await this.hub.request(d.id, { type: 'boss.reset', workspace: this._workspace() });
       this._askReset(false);
-      const text = r && r.reset ? t('Patronun bu klasördeki hafızası sıfırlandı.') : t('Bu klasör için Patronun hafızası zaten boş.');
+      const text = r && r.reset ? tt('Patronun bu klasördeki hafızası sıfırlandı.') : tt('Bu klasör için Patronun hafızası zaten boş.');
       this._note(text);
       this.toast(text, { ms: 3000 });
     } catch (e) {
@@ -680,12 +680,12 @@ export class BossPanel {
     const card = el('article', `boss-card wf-run st-${job.state}`);
     card.dataset.job = job.job;
     const head = el('div', 'wf-run-head');
-    head.append(el('b', 'wf-run-name', job.round ? t('Patron işi · düzeltme turu') : t('Patron işi')),
+    head.append(el('b', 'wf-run-name', job.round ? tt('Patron işi · düzeltme turu') : tt('Patron işi')),
       el('span', `wf-badge st-${job.state}`, STATE_TEXT[job.state]));
     card.appendChild(head);
     const name = this._folderName(job.workspace.id);
-    const ws = name ? `${t('Klasör:')} ${name}${job.workspace.sub ? '/' + job.workspace.sub : ''} · ` : '';
-    const dept = job.department ? `${t('Departman:')} ${this._departmentName(job.department)} · ` : '';
+    const ws = name ? `${tt('Klasör:')} ${name}${job.workspace.sub ? '/' + job.workspace.sub : ''} · ` : '';
+    const dept = job.department ? `${tt('Departman:')} ${this._departmentName(job.department)} · ` : '';
     card.appendChild(el('div', 'wf-run-meta muted small', `${dept}${ws}${money(job.costUsd)} / ${money(job.maxCostUsd)}`));
     if (STATE_NOTE[job.state]) card.appendChild(el('p', 'wf-run-note small', STATE_NOTE[job.state]));
     if (this.actError) {
@@ -695,14 +695,14 @@ export class BossPanel {
     }
     const thePlan = plan && plan.job === job.job ? plan : null;
     if (job.state === 'approval' && thePlan) card.appendChild(this._planCard(job, thePlan));
-    else if (job.state === 'approval') card.appendChild(el('p', 'wf-run-note small', t('Plan yükleniyor…')));
+    else if (job.state === 'approval') card.appendChild(el('p', 'wf-run-note small', tt('Plan yükleniyor…')));
     if (job.orderStates.length && job.state !== 'approval') card.appendChild(this._orders(job, thePlan));
     if (TERMINAL.has(job.state)) {
-      const end = job.state === 'done' ? t('İş bitti.') : `${t('İş durdu')}${job.code ? ': ' + codeText(job.code) : ''}.`;
+      const end = job.state === 'done' ? tt('İş bitti.') : `${tt('İş durdu')}${job.code ? ': ' + codeText(job.code) : ''}.`;
       card.appendChild(el('p', 'wf-run-note small', end));
       const rep = report && report.job === job.job ? report : null;
       if (rep) {
-        card.appendChild(el('h4', null, rep.partial ? t('Rapor (iş yarım kaldı)') : t('Rapor')));
+        card.appendChild(el('h4', null, rep.partial ? tt('Rapor (iş yarım kaldı)') : tt('Rapor')));
         card.appendChild(el('pre', 'boss-report', rep.report));
         card.appendChild(makeExportActions(() => rep.report, `patron-rapor-${job.job}`, {
           btnClass: 'btn small ghost',
@@ -711,8 +711,8 @@ export class BossPanel {
       }
     } else {
       const actions = el('div', 'wf-run-actions');
-      actions.appendChild(button('btn small ghost boss-cancel', t('İptal'),
-        () => this._act('cancel', { type: 'boss.cancel', job: job.job }, t('Patron işi durduruluyor')), this.inflight.has('cancel')));
+      actions.appendChild(button('btn small ghost boss-cancel', tt('İptal'),
+        () => this._act('cancel', { type: 'boss.cancel', job: job.job }, tt('Patron işi durduruluyor')), this.inflight.has('cancel')));
       card.appendChild(actions);
     }
     return card;
@@ -728,17 +728,17 @@ export class BossPanel {
   _departmentName(id) {
     if (!id) return '';
     const found = readDepartments(this._device()).find((x) => x.id === id);
-    if (found) return t(found.name);                // the connector's names are Turkish: translated by exact text
+    if (found) return tt(found.name);                // the connector's names are Turkish: translated by exact text
     return Object.hasOwn(DEPARTMENT_NAMES, id) ? DEPARTMENT_NAMES[id] : id;
   }
 
   _roleName(plan, id) {
-    return plan && plan.roles[id] ? t(plan.roles[id].name) : (id === 'patron' ? t('Patron') : id || t('Uzman'));
+    return plan && plan.roles[id] ? tt(plan.roles[id].name) : (id === 'patron' ? tt('Patron') : id || tt('Uzman'));
   }
 
   _planCard(job, plan) {
     const box = el('section', 'boss-plan');
-    box.appendChild(el('h4', null, plan.round ? t('Düzeltme planı') : t('Patronun planı')));
+    box.appendChild(el('h4', null, plan.round ? tt('Düzeltme planı') : tt('Patronun planı')));
     box.appendChild(el('p', 'boss-summary', plan.summary));
     const ol = el('ol', 'boss-plan-orders');
     for (const o of plan.orders) {
@@ -750,26 +750,26 @@ export class BossPanel {
       if (o.accept.length) {
         const ul = el('ul', 'boss-accept small');
         for (const a of o.accept) ul.appendChild(el('li', null, a));
-        li.appendChild(el('div', 'muted small', t('Bitti sayılması için:')));
+        li.appendChild(el('div', 'muted small', tt('Bitti sayılması için:')));
         li.appendChild(ul);
       }
       const bits = [];
-      if (o.files.length) bits.push(`${t('Dosyalar:')} ${o.files.join(', ')}`);
-      if (o.after.length) bits.push(t('{ids} bitince başlar', { ids: o.after.join(', ') }));
+      if (o.files.length) bits.push(`${tt('Dosyalar:')} ${o.files.join(', ')}`);
+      if (o.after.length) bits.push(tt('{ids} bitince başlar', { ids: o.after.join(', ') }));
       if (bits.length) li.appendChild(el('div', 'boss-order-meta muted small', bits.join(' · ')));
       ol.appendChild(li);
     }
     box.appendChild(ol);
     const est = plan.estimateUsd ?? job.estimateUsd;
-    box.appendChild(el('p', 'boss-cost', t('Tahmini maliyet: {est} · Kesin tavan: {cap}', { est: money(est), cap: money(plan.maxCostUsd ?? job.maxCostUsd) })));
+    box.appendChild(el('p', 'boss-cost', tt('Tahmini maliyet: {est} · Kesin tavan: {cap}', { est: money(est), cap: money(plan.maxCostUsd ?? job.maxCostUsd) })));
     const exp = plan.expiresAt ?? job.expiresAt;
     const left = isNum(exp) ? Math.max(0, Math.round((exp - Date.now()) / 60000)) : null;
-    box.appendChild(el('p', 'muted small', t('Onaylamazsanız hiçbir uzman çalışmaz.') + (left !== null ? ' ' + t('Yanıt verilmezse {n} dk sonra reddedilmiş sayılır.', { n: left }) : '')));
+    box.appendChild(el('p', 'muted small', tt('Onaylamazsanız hiçbir uzman çalışmaz.') + (left !== null ? ' ' + tt('Yanıt verilmezse {n} dk sonra reddedilmiş sayılır.', { n: left }) : '')));
     const actions = el('div', 'wf-run-actions');
     const busy = this.inflight.has('plan');
     actions.append(
-      button('btn small accent boss-approve', t('Onayla'), () => this._act('plan', { type: 'boss.approve', job: job.job, approve: true }, t('Plan onaylandı')), busy),
-      button('btn small boss-deny', t('Reddet'), () => this._act('plan', { type: 'boss.approve', job: job.job, approve: false }, t('Plan reddedildi')), busy));
+      button('btn small accent boss-approve', tt('Onayla'), () => this._act('plan', { type: 'boss.approve', job: job.job, approve: true }, tt('Plan onaylandı')), busy),
+      button('btn small boss-deny', tt('Reddet'), () => this._act('plan', { type: 'boss.approve', job: job.job, approve: false }, tt('Plan reddedildi')), busy));
     box.appendChild(actions);
     return box;
   }
@@ -780,7 +780,7 @@ export class BossPanel {
     for (const o of job.orderStates) {
       const li = el('li', `wf-step boss-order st-${o.state}`);
       const known = plan ? plan.orders.find((x) => x.id === o.id) : null;
-      const name = o.id === 'patron' ? t('Patronun değerlendirmesi') : known ? known.title : o.id;
+      const name = o.id === 'patron' ? tt('Patronun değerlendirmesi') : known ? known.title : o.id;
       li.append(el('span', 'wf-step-st', ORDER_MARK[o.state] || '·'), el('span', 'wf-step-name', name));
       let extra = `${this._roleName(plan, o.role)} · ${ORDER_TEXT[o.state]}`;
       if (o.code && o.state !== 'done') extra += ` · ${codeText(o.code)}`;
@@ -796,8 +796,8 @@ export class BossPanel {
   _retry(job, o) {
     const key = `retry:${o.id}`;
     const actions = el('div', 'wf-run-actions');
-    actions.appendChild(button('btn small boss-retry', t('Yeniden dene'),
-      () => this._act(key, { type: 'boss.retry_step', job: job.job, order: o.id }, t('İş emri yeniden deneniyor')),
+    actions.appendChild(button('btn small boss-retry', tt('Yeniden dene'),
+      () => this._act(key, { type: 'boss.retry_step', job: job.job, order: o.id }, tt('İş emri yeniden deneniyor')),
       this.inflight.has(key)));
     return actions;
   }
@@ -810,8 +810,8 @@ export class BossPanel {
     const busy = this.inflight.has(key);
     const actions = el('div', 'wf-run-actions');
     const answer = (decision, text) => this._act(key, { type: 'workflow.answer', run: job.run, decision, step: o.id }, text);
-    actions.append(button('btn small accent boss-gate-approve', t('Onayla'), () => answer('approve', t('Test başlıyor')), busy),
-      button('btn small boss-gate-deny', t('Reddet'), () => answer('deny', t('Test iş emri atlanacak')), busy));
+    actions.append(button('btn small accent boss-gate-approve', tt('Onayla'), () => answer('approve', tt('Test başlıyor')), busy),
+      button('btn small boss-gate-deny', tt('Reddet'), () => answer('deny', tt('Test iş emri atlanacak')), busy));
     box.appendChild(actions);
     return box;
   }

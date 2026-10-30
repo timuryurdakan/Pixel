@@ -9,6 +9,8 @@
 // Security: every DOM node is constructed with document.createElement and populated via
 // textContent / value. Never uses innerHTML, insertAdjacentHTML or document.write.
 
+import { t as tt } from './i18n.js';
+
 export const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 export const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$/;
 export const RESERVED_TEMPLATE_IDS = Object.freeze(['statik-site', 'patron']);
@@ -440,7 +442,7 @@ function defaultAgentStep(index) {
   return {
     id: `adim-${index}`,
     type: 'agent',
-    role: index === 1 ? 'Araştırmacı' : `Uzman ${index}`,
+    role: index === 1 ? tt('Araştırmacı') : `Uzman ${index}`,
     engine: 'claude',
     engines: ['claude', 'ollama'],
     profile: index === 1 ? 'readonly' : 'edit',
@@ -455,7 +457,7 @@ function defaultApprovalStep(index) {
   return {
     id: `onay-${index}`,
     type: 'approval',
-    title: 'Devam edilsin mi?',
+    title: tt('Devam edilsin mi?'),
     timeoutS: 900,
   };
 }
@@ -558,7 +560,7 @@ export class TemplateBuilder {
     this._idManuallyEdited = true;
     this._editingId = found.id;
     this._error = '';
-    this._notice = `"${found.name}" düzenleniyor.`;
+    this._notice = tt('"{name}" düzenleniyor.', { name: found.name });
     this.render();
     return true;
   }
@@ -628,7 +630,7 @@ export class TemplateBuilder {
     this._idManuallyEdited = false;
     this._editingId = null;
     this._error = '';
-    this._notice = `"${res.value.name}" kaydedildi. Cihazda çalıştırmak için workflows.json dosyasını indirip ~/.pixel-office/connector/workflows.json konumuna koyun ve "Cihazdan Yenile"ye basın.`;
+    this._notice = tt('"{name}" kaydedildi. Cihazda çalıştırmak için workflows.json dosyasını indirip ~/.pixel-office/connector/workflows.json konumuna koyun ve "Cihazdan Yenile"ye basın.', { name: res.value.name });
     if (this.onChange) this.onChange(this.listTemplates());
     this.render();
     return res;
@@ -644,7 +646,7 @@ export class TemplateBuilder {
     }
     this._persist();
     this._error = '';
-    this._notice = `Şablon silindi (${templateId}).`;
+    this._notice = tt('Şablon silindi ({id}).', { id: templateId });
     if (this.onChange) this.onChange(this.listTemplates());
     this.render();
     return true;
@@ -669,18 +671,18 @@ export class TemplateBuilder {
     root.dataset.tbRoot = '1';
 
     const head = el(doc, 'div', 'tb-head');
-    head.appendChild(el(doc, 'h4', 'tb-title', this._editingId ? `Şablonu Düzenle (${this._editingId})` : 'Kodsuz Şablon Oluşturucu'));
+    head.appendChild(el(doc, 'h4', 'tb-title', this._editingId ? tt('Şablonu Düzenle ({id})', { id: this._editingId }) : tt('Kodsuz Şablon Oluşturucu')));
     const sub = el(
       doc,
       'p',
       'muted small',
-      'Adımları görsel olarak dizin. Bağlayıcı şablonları ~/.pixel-office/connector/workflows.json dosyasından okur; buradan dışa aktarıp "Cihazdan Yenile" ile anında yükleyebilirsiniz.',
+      tt('Adımları görsel olarak dizin. Bağlayıcı şablonları ~/.pixel-office/connector/workflows.json dosyasından okur; buradan dışa aktarıp "Cihazdan Yenile" ile anında yükleyebilirsiniz.'),
     );
     head.appendChild(sub);
     root.appendChild(head);
 
     if (this._error) {
-      const errEl = el(doc, 'p', 'wf-error tb-error', `Doğrulama hatası: ${this._error}`);
+      const errEl = el(doc, 'p', 'wf-error tb-error', tt('Doğrulama hatası: {error}', { error: this._error }));
       errEl.dataset.tbError = '1';
       root.appendChild(errEl);
     }
@@ -693,19 +695,19 @@ export class TemplateBuilder {
     // Top metadata fields
     const metaGrid = el(doc, 'div', 'tb-grid');
 
-    const nameLbl = el(doc, 'label', 'wf-field', 'Şablon Adı');
+    const nameLbl = el(doc, 'label', 'wf-field', tt('Şablon Adı'));
     const nameInp = el(doc, 'input', 'wf-input');
     nameInp.type = 'text';
     nameInp.maxLength = NAME_MAX;
-    nameInp.placeholder = 'ör. Blog ve Bülten Hattı';
+    nameInp.placeholder = tt('ör. Blog ve Bülten Hattı');
     nameInp.value = this._draft.name;
     nameInp.dataset.tbField = 'name';
 
-    const idLbl = el(doc, 'label', 'wf-field', 'Şablon Kimliği (slug)');
+    const idLbl = el(doc, 'label', 'wf-field', tt('Şablon Kimliği (slug)'));
     const idInp = el(doc, 'input', 'wf-input mono');
     idInp.type = 'text';
     idInp.maxLength = 32;
-    idInp.placeholder = 'ör. blog-bulten';
+    idInp.placeholder = tt('ör. blog-bulten');
     idInp.value = this._draft.id;
     idInp.dataset.tbField = 'id';
 
@@ -725,21 +727,21 @@ export class TemplateBuilder {
     idLbl.appendChild(idInp);
     metaGrid.append(nameLbl, idLbl);
 
-    const descLbl = el(doc, 'label', 'wf-field', 'Açıklama (isteğe bağlı)');
+    const descLbl = el(doc, 'label', 'wf-field', tt('Açıklama (isteğe bağlı)'));
     const descInp = el(doc, 'input', 'wf-input');
     descInp.type = 'text';
     descInp.maxLength = DESCRIPTION_MAX;
-    descInp.placeholder = 'Kısa açıklama (en fazla 300 karakter)';
+    descInp.placeholder = tt('Kısa açıklama (en fazla 300 karakter)');
     descInp.value = this._draft.description;
     descInp.dataset.tbField = 'description';
     descInp.addEventListener('input', () => { this._draft.description = descInp.value; });
     descLbl.appendChild(descInp);
 
-    const folderLbl = el(doc, 'label', 'wf-field', 'Varsayılan Alt Klasör');
+    const folderLbl = el(doc, 'label', 'wf-field', tt('Varsayılan Alt Klasör'));
     const folderInp = el(doc, 'input', 'wf-input mono');
     folderInp.type = 'text';
     folderInp.maxLength = FOLDER_MAX;
-    folderInp.placeholder = 'ör. icerik/bulten (boş bırakılabilir)';
+    folderInp.placeholder = tt('ör. icerik/bulten (boş bırakılabilir)');
     folderInp.value = this._draft.folder || '';
     folderInp.dataset.tbField = 'folder';
     folderInp.addEventListener('input', () => { this._draft.folder = folderInp.value; });
@@ -750,7 +752,7 @@ export class TemplateBuilder {
 
     // Guardrails row
     const grRow = el(doc, 'div', 'tb-guardrails');
-    const costLbl = el(doc, 'label', 'wf-field', 'Bütçe Sınırı (USD, 0.01–20)');
+    const costLbl = el(doc, 'label', 'wf-field', tt('Bütçe Sınırı (USD, 0.01–20)'));
     const costInp = el(doc, 'input', 'wf-input mono');
     costInp.type = 'number';
     costInp.min = '0.01';
@@ -763,7 +765,7 @@ export class TemplateBuilder {
     });
     costLbl.appendChild(costInp);
 
-    const turnsLbl = el(doc, 'label', 'wf-field', 'Tur Sınırı (1–500)');
+    const turnsLbl = el(doc, 'label', 'wf-field', tt('Tur Sınırı (1–500)'));
     const turnsInp = el(doc, 'input', 'wf-input mono');
     turnsInp.type = 'number';
     turnsInp.min = '1';
@@ -776,7 +778,7 @@ export class TemplateBuilder {
     });
     turnsLbl.appendChild(turnsInp);
 
-    const toLbl = el(doc, 'label', 'wf-field', 'Zaman Aşımı (sn, 60–14400)');
+    const toLbl = el(doc, 'label', 'wf-field', tt('Zaman Aşımı (sn, 60–14400)'));
     const toInp = el(doc, 'input', 'wf-input mono');
     toInp.type = 'number';
     toInp.min = '60';
@@ -795,10 +797,10 @@ export class TemplateBuilder {
     // Steps list
     const stepsWrap = el(doc, 'div', 'tb-steps');
     const stepsHead = el(doc, 'div', 'tb-steps-head');
-    stepsHead.appendChild(el(doc, 'h5', '', `Adımlar (${this._draft.steps.length}/${MAX_STEPS})`));
+    stepsHead.appendChild(el(doc, 'h5', '', tt('Adımlar ({n}/{max})', { n: this._draft.steps.length, max: MAX_STEPS })));
 
     const stepAddBtns = el(doc, 'div', 'tb-step-actions');
-    const addAgentBtn = el(doc, 'button', 'btn small', '+ Ajan Adımı');
+    const addAgentBtn = el(doc, 'button', 'btn small', tt('+ Ajan Adımı'));
     addAgentBtn.type = 'button';
     addAgentBtn.dataset.tbAction = 'add-agent';
     addAgentBtn.disabled = this._draft.steps.length >= MAX_STEPS;
@@ -809,7 +811,7 @@ export class TemplateBuilder {
       this.render();
     });
 
-    const addApprovalBtn = el(doc, 'button', 'btn small', '+ Onay Kapısı');
+    const addApprovalBtn = el(doc, 'button', 'btn small', tt('+ Onay Kapısı'));
     addApprovalBtn.type = 'button';
     addApprovalBtn.dataset.tbAction = 'add-approval';
     addApprovalBtn.disabled = this._draft.steps.length >= MAX_STEPS;
@@ -833,14 +835,14 @@ export class TemplateBuilder {
 
     // Form actions
     const actions = el(doc, 'div', 'tb-actions');
-    const saveBtn = el(doc, 'button', 'btn primary', this._editingId ? 'Değişiklikleri Kaydet' : 'Şablonu Kaydet');
+    const saveBtn = el(doc, 'button', 'btn primary', this._editingId ? tt('Değişiklikleri Kaydet') : tt('Şablonu Kaydet'));
     saveBtn.type = 'button';
     saveBtn.dataset.tbAction = 'save';
     saveBtn.addEventListener('click', () => this.saveTemplate());
     actions.appendChild(saveBtn);
 
     if (this._editingId) {
-      const cancelEditBtn = el(doc, 'button', 'btn small', 'Yeni Şablona Geç');
+      const cancelEditBtn = el(doc, 'button', 'btn small', tt('Yeni Şablona Geç'));
       cancelEditBtn.type = 'button';
       cancelEditBtn.dataset.tbAction = 'cancel-edit';
       cancelEditBtn.addEventListener('click', () => this.resetDraft());
@@ -855,23 +857,23 @@ export class TemplateBuilder {
       if (navigator.clipboard?.writeText) {
         navigator.clipboard.writeText(jsonText).catch(() => {});
       }
-      this._notice = 'workflows.json panoya kopyalandı.';
+      this._notice = tt('workflows.json panoya kopyalandı.');
       this.render();
     });
 
-    const dlJsonBtn = el(doc, 'button', 'btn small', 'workflows.json İndir');
+    const dlJsonBtn = el(doc, 'button', 'btn small', tt('workflows.json İndir'));
     dlJsonBtn.type = 'button';
     dlJsonBtn.dataset.tbAction = 'download-json';
     dlJsonBtn.addEventListener('click', () => {
       this._downloadWorkflowsJson();
     });
 
-    const reloadBtn = el(doc, 'button', 'btn small', 'Cihazdan Yenile');
+    const reloadBtn = el(doc, 'button', 'btn small', tt('Cihazdan Yenile'));
     reloadBtn.type = 'button';
     reloadBtn.dataset.tbAction = 'reload-device';
     reloadBtn.addEventListener('click', () => {
       if (this.onReload) this.onReload();
-      this._notice = 'Cihazdan şablon listesi (workflow.list) istendi.';
+      this._notice = tt('Cihazdan şablon listesi (workflow.list) istendi.');
       this.render();
     });
 
@@ -881,9 +883,9 @@ export class TemplateBuilder {
     // Saved custom templates list
     const savedSec = el(doc, 'div', 'tb-saved');
     savedSec.dataset.tbSavedList = '1';
-    savedSec.appendChild(el(doc, 'h5', '', `Kaydedilen Taslak Şablonlar (${this._templates.length})`));
+    savedSec.appendChild(el(doc, 'h5', '', tt('Kaydedilen Taslak Şablonlar ({n})', { n: this._templates.length })));
     if (this._templates.length === 0) {
-      savedSec.appendChild(el(doc, 'p', 'muted small', 'Henüz kaydedilmiş özel şablon yok.'));
+      savedSec.appendChild(el(doc, 'p', 'muted small', tt('Henüz kaydedilmiş özel şablon yok.')));
     } else {
       for (const tpl of this._templates) {
         const row = el(doc, 'div', 'tb-saved-item');
@@ -894,7 +896,7 @@ export class TemplateBuilder {
         row.appendChild(info);
 
         const btns = el(doc, 'div', 'tb-saved-btns');
-        const editB = el(doc, 'button', 'btn small', 'Düzenle');
+        const editB = el(doc, 'button', 'btn small', tt('Düzenle'));
         editB.type = 'button';
         editB.dataset.tbAction = 'edit-saved';
         editB.addEventListener('click', () => this.loadIntoDraft(tpl.id));
@@ -921,14 +923,14 @@ export class TemplateBuilder {
 
     const head = el(doc, 'div', 'tb-step-head');
     head.appendChild(
-      el(doc, 'strong', '', `${idx + 1}. ${step.type === 'approval' ? 'Onay Kapısı' : 'Ajan Adımı'}`),
+      el(doc, 'strong', '', `${idx + 1}. ${step.type === 'approval' ? tt('Onay Kapısı') : tt('Ajan Adımı')}`),
     );
 
     const moveBtns = el(doc, 'div', 'tb-step-move');
     const upBtn = el(doc, 'button', 'btn small', '↑');
     upBtn.type = 'button';
     upBtn.disabled = idx === 0;
-    upBtn.setAttribute('aria-label', 'Adımı yukarı taşı');
+    upBtn.setAttribute('aria-label', tt('Adımı yukarı taşı'));
     upBtn.addEventListener('click', () => {
       if (idx <= 0) return;
       const tmp = this._draft.steps[idx - 1];
@@ -941,7 +943,7 @@ export class TemplateBuilder {
     const downBtn = el(doc, 'button', 'btn small', '↓');
     downBtn.type = 'button';
     downBtn.disabled = idx >= this._draft.steps.length - 1;
-    downBtn.setAttribute('aria-label', 'Adımı aşağı taşı');
+    downBtn.setAttribute('aria-label', tt('Adımı aşağı taşı'));
     downBtn.addEventListener('click', () => {
       if (idx >= this._draft.steps.length - 1) return;
       const tmp = this._draft.steps[idx + 1];
@@ -966,7 +968,7 @@ export class TemplateBuilder {
     card.appendChild(head);
 
     const grid = el(doc, 'div', 'tb-step-grid');
-    const idLbl = el(doc, 'label', 'wf-field', 'Adım Kimliği (slug)');
+    const idLbl = el(doc, 'label', 'wf-field', tt('Adım Kimliği (slug)'));
     const idInp = el(doc, 'input', 'wf-input mono');
     idInp.type = 'text';
     idInp.maxLength = 32;
@@ -977,7 +979,7 @@ export class TemplateBuilder {
     grid.appendChild(idLbl);
 
     if (step.type === 'approval') {
-      const titleLbl = el(doc, 'label', 'wf-field', 'Onay Sorusu / Başlığı');
+      const titleLbl = el(doc, 'label', 'wf-field', tt('Onay Sorusu / Başlığı'));
       const titleInp = el(doc, 'input', 'wf-input');
       titleInp.type = 'text';
       titleInp.maxLength = TITLE_MAX;
@@ -986,7 +988,7 @@ export class TemplateBuilder {
       titleInp.addEventListener('input', () => { step.title = titleInp.value; });
       titleLbl.appendChild(titleInp);
 
-      const toLbl = el(doc, 'label', 'wf-field', 'Onay Zaman Aşımı (sn, 30–3600)');
+      const toLbl = el(doc, 'label', 'wf-field', tt('Onay Zaman Aşımı (sn, 30–3600)'));
       const toInp = el(doc, 'input', 'wf-input mono');
       toInp.type = 'number';
       toInp.min = '30';
@@ -1001,11 +1003,11 @@ export class TemplateBuilder {
       return card;
     }
 
-    const roleLbl = el(doc, 'label', 'wf-field', 'Ajan Rolü');
+    const roleLbl = el(doc, 'label', 'wf-field', tt('Ajan Rolü'));
     const roleInp = el(doc, 'input', 'wf-input');
     roleInp.type = 'text';
     roleInp.maxLength = ROLE_MAX;
-    roleInp.placeholder = 'ör. Araştırmacı, Yazar, Denetçi';
+    roleInp.placeholder = tt('ör. Araştırmacı, Yazar, Denetçi');
     roleInp.value = step.role || '';
     roleInp.dataset.tbStepField = 'role';
     roleInp.addEventListener('input', () => { step.role = roleInp.value; });
@@ -1015,7 +1017,7 @@ export class TemplateBuilder {
     const engSel = el(doc, 'select', 'wf-input');
     engSel.dataset.tbStepField = 'engine';
     for (const eng of ENGINES) {
-      const opt = el(doc, 'option', '', eng === 'claude' ? 'Claude Code' : 'Ollama (Yerel)');
+      const opt = el(doc, 'option', '', eng === 'claude' ? 'Claude Code' : tt('Ollama (Yerel)'));
       opt.value = eng;
       opt.selected = step.engine === eng;
       engSel.appendChild(opt);
@@ -1028,13 +1030,13 @@ export class TemplateBuilder {
     });
     engLbl.appendChild(engSel);
 
-    const profLbl = el(doc, 'label', 'wf-field', 'Yetki Profili');
+    const profLbl = el(doc, 'label', 'wf-field', tt('Yetki Profili'));
     const profSel = el(doc, 'select', 'wf-input');
     profSel.dataset.tbStepField = 'profile';
     const profileLabels = {
-      readonly: 'Salt Okunur (readonly)',
-      edit: 'Dosya Düzenleme (edit)',
-      dev: 'Geliştirici / Komut (dev)',
+      readonly: tt('Salt Okunur (readonly)'),
+      edit: tt('Dosya Düzenleme (edit)'),
+      dev: tt('Geliştirici / Komut (dev)'),
     };
     for (const p of ['readonly', 'edit', 'dev']) {
       const opt = el(doc, 'option', '', profileLabels[p]);
@@ -1045,11 +1047,11 @@ export class TemplateBuilder {
     profSel.addEventListener('change', () => { step.profile = profSel.value; });
     profLbl.appendChild(profSel);
 
-    const modLbl = el(doc, 'label', 'wf-field', 'Model (isteğe bağlı)');
+    const modLbl = el(doc, 'label', 'wf-field', tt('Model (isteğe bağlı)'));
     const modInp = el(doc, 'input', 'wf-input mono');
     modInp.type = 'text';
     modInp.maxLength = 64;
-    modInp.placeholder = 'varsayılan';
+    modInp.placeholder = tt('varsayılan');
     modInp.value = step.model || '';
     modInp.dataset.tbStepField = 'model';
     modInp.addEventListener('input', () => {
@@ -1060,11 +1062,11 @@ export class TemplateBuilder {
     grid.append(roleLbl, engLbl, profLbl, modLbl);
     card.appendChild(grid);
 
-    const promptLbl = el(doc, 'label', 'wf-field', 'Adım İstemi (Prompt)');
+    const promptLbl = el(doc, 'label', 'wf-field', tt('Adım İstemi (Prompt)'));
     const promptInp = el(doc, 'textarea', 'wf-input wf-textarea');
     promptInp.rows = 2;
     promptInp.maxLength = PROMPT_MAX;
-    promptInp.placeholder = 'Bu adımdaki ajanın ne yapacağını yazın...';
+    promptInp.placeholder = tt('Bu adımdaki ajanın ne yapacağını yazın...');
     promptInp.value = step.prompt || '';
     promptInp.dataset.tbStepField = 'prompt';
     promptInp.addEventListener('input', () => { step.prompt = promptInp.value; });
@@ -1079,7 +1081,7 @@ export class TemplateBuilder {
     prevChk.disabled = !hasEarlierAgent;
     prevChk.dataset.tbStepField = 'usePrevious';
     prevChk.addEventListener('change', () => { step.usePrevious = prevChk.checked; });
-    prevLbl.append(prevChk, doc.createTextNode(' Önceki adımın çıktısını girdi olarak al'));
+    prevLbl.append(prevChk, doc.createTextNode(tt(' Önceki adımın çıktısını girdi olarak al')));
 
     const briefLbl = el(doc, 'label', 'check small');
     const briefChk = el(doc, 'input');
@@ -1087,7 +1089,7 @@ export class TemplateBuilder {
     briefChk.checked = step.useBrief !== false;
     briefChk.dataset.tbStepField = 'useBrief';
     briefChk.addEventListener('change', () => { step.useBrief = briefChk.checked; });
-    briefLbl.append(briefChk, doc.createTextNode(' Kullanıcı görev özetini (brief) ekle'));
+    briefLbl.append(briefChk, doc.createTextNode(tt(' Kullanıcı görev özetini (brief) ekle')));
 
     flagsRow.append(prevLbl, briefLbl);
     card.appendChild(flagsRow);

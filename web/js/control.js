@@ -10,6 +10,7 @@
 import { RelayClient } from './relay.js';
 import { IdbStore } from './idb.js';
 import * as E from './e2e.js';
+import { t as tt } from './i18n.js';
 
 export const REQUEST_TIMEOUT_MS = 15000;     // §3.5
 export const HANDSHAKE_TIMEOUT_MS = 10000;   // §7.4
@@ -18,40 +19,40 @@ export const PAIR4_TIMEOUT_MS = 90000;       // the terminal question waits 60 s
 
 /** §11.7 + the remaining device codes. */
 export const ERROR_TEXT = {
-  device_offline: 'Cihaz çevrimdışı.',
-  conn_gone: 'Bağlantı koptu.',
-  rate_limited: 'Çok hızlı. Biraz bekleyip tekrar deneyin.',
-  busy: 'Ajan meşgul.',
-  budget_exceeded: 'Bütçe sınırına ulaşıldı.',
-  workspace_denied: 'Bu klasöre izin verilmiyor.',
-  engine_unavailable: 'Motor cihazda bulunamadı ya da çalışmıyor.',
-  model_not_found: 'Model cihazda yüklü değil.',
-  confirm_denied: 'Cihazda reddedildi.',
-  confirm_timeout: 'Cihazda onay süresi doldu.',
-  runtime_unknown: 'Bu ortam cihazın listesinde yok.',
-  runtime_failed: 'Çalışma ortamı komutu başarısız oldu.',
-  not_allowed: 'Bu işlem cihaz ayarlarında kapalı.',
-  too_large: 'Metin çok uzun (en fazla 32 KB).',
-  version: 'Bağlayıcı sürümü uyumsuz. Bağlayıcıyı güncelleyin.',
-  handshake: 'Cihazla güvenli bağlantı kurulamadı.',
-  timeout: 'Cihaz yanıt vermedi.',
-  internal: 'Cihazda beklenmeyen bir hata oluştu.',
-  unknown_task: 'Görev bulunamadı ya da zaten bitti.',
-  unknown_agent: 'Ajan cihazda bulunamadı.',
-  bad_request: 'Cihaz isteği geçersiz buldu.',
-  max_turns: 'Tur sınırına ulaşıldı.',
-  engine_exit: 'Motor beklenmedik biçimde kapandı.',
-  relay: 'Röleye bağlanılamadı.',
-  relay_csp: 'Röle adresi sitenin güvenlik politikasında (CSP) yok. Yönetici vercel.json dosyasındaki röle adresini düzeltmeli (README: "Röle adresini ayarlama").',
-  not_paired: 'Bu tarayıcı cihazla eşleşmemiş.',
-  unknown_approval: 'Bu istek başka yerden cevaplandı ya da süresi doldu.',
-  unknown_template: 'Şablon cihazda bulunamadı.',
-  unknown_workflow: 'İş akışı bulunamadı ya da zaten bitti.',
+  device_offline: tt('Cihaz çevrimdışı.'),
+  conn_gone: tt('Bağlantı koptu.'),
+  rate_limited: tt('Çok hızlı. Biraz bekleyip tekrar deneyin.'),
+  busy: tt('Ajan meşgul.'),
+  budget_exceeded: tt('Bütçe sınırına ulaşıldı.'),
+  workspace_denied: tt('Bu klasöre izin verilmiyor.'),
+  engine_unavailable: tt('Motor cihazda bulunamadı ya da çalışmıyor.'),
+  model_not_found: tt('Model cihazda yüklü değil.'),
+  confirm_denied: tt('Cihazda reddedildi.'),
+  confirm_timeout: tt('Cihazda onay süresi doldu.'),
+  runtime_unknown: tt('Bu ortam cihazın listesinde yok.'),
+  runtime_failed: tt('Çalışma ortamı komutu başarısız oldu.'),
+  not_allowed: tt('Bu işlem cihaz ayarlarında kapalı.'),
+  too_large: tt('Metin çok uzun (en fazla 32 KB).'),
+  version: tt('Bağlayıcı sürümü uyumsuz. Bağlayıcıyı güncelleyin.'),
+  handshake: tt('Cihazla güvenli bağlantı kurulamadı.'),
+  timeout: tt('Cihaz yanıt vermedi.'),
+  internal: tt('Cihazda beklenmeyen bir hata oluştu.'),
+  unknown_task: tt('Görev bulunamadı ya da zaten bitti.'),
+  unknown_agent: tt('Ajan cihazda bulunamadı.'),
+  bad_request: tt('Cihaz isteği geçersiz buldu.'),
+  max_turns: tt('Tur sınırına ulaşıldı.'),
+  engine_exit: tt('Motor beklenmedik biçimde kapandı.'),
+  relay: tt('Röleye bağlanılamadı.'),
+  relay_csp: tt('Röle adresi sitenin güvenlik politikasında (CSP) yok. Yönetici vercel.json dosyasındaki röle adresini düzeltmeli (README: "Röle adresini ayarlama").'),
+  not_paired: tt('Bu tarayıcı cihazla eşleşmemiş.'),
+  unknown_approval: tt('Bu istek başka yerden cevaplandı ya da süresi doldu.'),
+  unknown_template: tt('Şablon cihazda bulunamadı.'),
+  unknown_workflow: tt('İş akışı bulunamadı ya da zaten bitti.'),
 };
 
 /** Turkish text for an error code (unknown codes → generic text, never the raw device message). */
 export function errorText(code) {
-  return Object.hasOwn(ERROR_TEXT, code) ? ERROR_TEXT[code] : 'İşlem başarısız oldu.';
+  return Object.hasOwn(ERROR_TEXT, code) ? ERROR_TEXT[code] : tt('İşlem başarısız oldu.');
 }
 
 export class ControlError extends Error {
@@ -64,18 +65,18 @@ export class ControlError extends Error {
 
 /** Pairing failures → Turkish (§11.5). */
 export const PAIR_ERROR_TEXT = {
-  bad_code: 'Kod 12 karakter olmalı (ör. K7Q2-M4X5-Z6A9).',
-  slot: 'Kod bulunamadı ya da süresi doldu.',
-  code: 'Kod yanlış. Bu kod artık geçersiz; cihazda yeni kod üretin.',
-  refused: 'Eşleştirme cihazda reddedildi.',
-  timeout: 'Cihazda onay süresi doldu. Cihazda yeni kod üretin.',
-  mac: 'Cihazın kimliği doğrulanamadı (araya girilmiş olabilir). Cihazda yeni kod üretin.',
-  relay: 'Röleye bağlanılamadı. İnternet bağlantınızı kontrol edin.',
-  busy: 'Başka bir eşleştirme sürüyor.',
-  unauthorized: 'Bu tarayıcıdaki oda anahtarı geçersiz. Odanın katılım bağlantısını (#key=… içeren) yeniden açın.',
-  relay_not_configured: 'Sunucuda röle ayarlı değil.',
+  bad_code: tt('Kod 12 karakter olmalı (ör. K7Q2-M4X5-Z6A9).'),
+  slot: tt('Kod bulunamadı ya da süresi doldu.'),
+  code: tt('Kod yanlış. Bu kod artık geçersiz; cihazda yeni kod üretin.'),
+  refused: tt('Eşleştirme cihazda reddedildi.'),
+  timeout: tt('Cihazda onay süresi doldu. Cihazda yeni kod üretin.'),
+  mac: tt('Cihazın kimliği doğrulanamadı (araya girilmiş olabilir). Cihazda yeni kod üretin.'),
+  relay: tt('Röleye bağlanılamadı. İnternet bağlantınızı kontrol edin.'),
+  busy: tt('Başka bir eşleştirme sürüyor.'),
+  unauthorized: tt('Bu tarayıcıdaki oda anahtarı geçersiz. Odanın katılım bağlantısını (#key=… içeren) yeniden açın.'),
+  relay_not_configured: tt('Sunucuda röle ayarlı değil.'),
   relay_csp: ERROR_TEXT.relay_csp,
-  relay_ticket: 'Sunucu röle bileti vermedi. Biraz sonra tekrar deneyin.',
+  relay_ticket: tt('Sunucu röle bileti vermedi. Biraz sonra tekrar deneyin.'),
 };
 
 /**
@@ -92,7 +93,7 @@ export function relayErrorCode(error) {
 /** "Chrome · Linux", "Safari · iPhone" … (≤ 40 chars, shown in the device terminal). */
 export function browserLabel(ua = (globalThis.navigator && navigator.userAgent) || '') {
   const b = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox'
-    : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Tarayıcı';
+    : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : tt('Tarayıcı');
   const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android'
     : /Windows/.test(ua) ? 'Windows' : /Mac OS X|Macintosh/.test(ua) ? 'macOS' : /CrOS/.test(ua) ? 'ChromeOS'
       : /Linux/.test(ua) ? 'Linux' : '';
@@ -586,7 +587,7 @@ export class DeviceHub {
     E.removeDevice(this.store, d.id).catch((e) => console.error('[pixel-office] removeDevice', e));
     this.updateRoom();
     this._changed();
-    this._emit('notice', `Bu tarayıcının «${d.name || d.id}» ile eşleşmesi kaldırıldı (bilgisayarda ya da başka bir tarayıcıdan).`);
+    this._emit('notice', tt('Bu tarayıcının «{name}» ile eşleşmesi kaldırıldı (bilgisayarda ya da başka bir tarayıcıdan).', { name: d.name || d.id }));
   }
 
   destroy() {

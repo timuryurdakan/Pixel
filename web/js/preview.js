@@ -6,6 +6,7 @@
 // Host page DOM elements are built exclusively with `document.createElement` and `textContent`.
 
 import { utf8ByteLength, slugify } from './template_builder.js';
+import { t as tt } from './i18n.js';
 
 export const PREVIEW_MAX_BYTES = 262144; // 256 KB
 export const PREVIEW_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';";
@@ -260,12 +261,12 @@ const SRCDOC_STYLE = `
   a { color: #58a6ff; text-decoration: underline; }
 `;
 
-export function buildPreviewSrcdoc(content, { kind = 'auto', title = 'Önizleme' } = {}) {
+export function buildPreviewSrcdoc(content, { kind = 'auto', title = tt('Önizleme') } = {}) {
   const raw = String(content ?? '');
   const empty = raw.trim().length === 0;
   const { text, truncated } = truncateToMaxBytes(raw, PREVIEW_MAX_BYTES);
   const resolvedKind = detectArtifactKind(text, kind === 'auto' ? '' : kind);
-  const safeTitle = escapeHtmlText(title || 'Önizleme');
+  const safeTitle = escapeHtmlText(title || tt('Önizleme'));
   const cspMeta = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}">`;
 
   if (resolvedKind === 'html') {
@@ -280,7 +281,7 @@ export function buildPreviewSrcdoc(content, { kind = 'auto', title = 'Önizleme'
   }
 
   const bodyHtml = empty
-    ? `<p class="empty-msg">Önizlenecek içerik boş.</p>`
+    ? `<p class="empty-msg">${escapeHtmlText(tt('Önizlenecek içerik boş.'))}</p>`
     : markdownToSafeHtmlBody(text);
   const srcdoc = `<!doctype html><html><head>${cspMeta}<title>${safeTitle}</title><style>${SRCDOC_STYLE}</style></head><body>${bodyHtml}</body></html>`;
   return { srcdoc, kind: 'markdown', truncated, empty, text };
@@ -297,7 +298,7 @@ export class PreviewDrawer {
   constructor({ dialog = null, doc = document } = {}) {
     this.doc = dialog?.ownerDocument || doc;
     this.dialog = dialog || this.doc.getElementById('dlg-preview');
-    this._title = 'Eser Önizleme';
+    this._title = tt('Eser Önizleme');
     this._content = '';
     this._kind = 'markdown';
     this._mode = 'rendered'; // 'rendered' | 'source'
@@ -334,12 +335,12 @@ export class PreviewDrawer {
     const toolbar = el(doc, 'div', 'preview-toolbar');
 
     const modeGroup = el(doc, 'div', 'preview-btn-group');
-    const renderedBtn = el(doc, 'button', 'btn small primary', 'Önizleme');
+    const renderedBtn = el(doc, 'button', 'btn small primary', tt('Önizleme'));
     renderedBtn.type = 'button';
     renderedBtn.dataset.previewAction = 'mode-rendered';
     renderedBtn.addEventListener('click', () => this.setMode('rendered'));
 
-    const sourceBtn = el(doc, 'button', 'btn small', 'Kaynak Kodu');
+    const sourceBtn = el(doc, 'button', 'btn small', tt('Kaynak Kodu'));
     sourceBtn.type = 'button';
     sourceBtn.dataset.previewAction = 'mode-source';
     sourceBtn.addEventListener('click', () => this.setMode('source'));
@@ -363,12 +364,12 @@ export class PreviewDrawer {
     copyBtn.dataset.previewAction = 'copy';
     copyBtn.addEventListener('click', () => this.copySource());
 
-    const dlMdBtn = el(doc, 'button', 'btn small', '.md İndir');
+    const dlMdBtn = el(doc, 'button', 'btn small', tt('.md İndir'));
     dlMdBtn.type = 'button';
     dlMdBtn.dataset.previewAction = 'dl-md';
     dlMdBtn.addEventListener('click', () => this.downloadAs('md'));
 
-    const dlHtmlBtn = el(doc, 'button', 'btn small', '.html İndir');
+    const dlHtmlBtn = el(doc, 'button', 'btn small', tt('.html İndir'));
     dlHtmlBtn.type = 'button';
     dlHtmlBtn.dataset.previewAction = 'dl-html';
     dlHtmlBtn.addEventListener('click', () => this.downloadAs('html'));
@@ -385,7 +386,7 @@ export class PreviewDrawer {
     // Mandatory Rule 2: sandbox attribute MUST be empty string (zero permissions)
     iframe.setAttribute('sandbox', '');
     iframe.setAttribute('referrerpolicy', 'no-referrer');
-    iframe.setAttribute('title', 'Güvenli Eser Önizleme');
+    iframe.setAttribute('title', tt('Güvenli Eser Önizleme'));
     iframe.srcdoc = '';
 
     const sourcePre = el(doc, 'pre', 'preview-source mono', '');
@@ -409,10 +410,10 @@ export class PreviewDrawer {
     this._built = true;
   }
 
-  open({ title = 'Eser Önizleme', content = '', kind = 'auto' } = {}) {
+  open({ title = tt('Eser Önizleme'), content = '', kind = 'auto' } = {}) {
     if (!this.dialog) return;
     this._ensureStructure();
-    this._title = String(title || 'Eser Önizleme');
+    this._title = String(title || tt('Eser Önizleme'));
     this._content = String(content ?? '');
     this._kind = detectArtifactKind(this._content, kind === 'auto' ? '' : kind);
     this._mode = 'rendered';
@@ -475,10 +476,10 @@ export class PreviewDrawer {
 
     if (res.empty) {
       noticeEl.hidden = false;
-      noticeEl.textContent = 'Bu adımda henüz önizlenecek çıktı metni yok.';
+      noticeEl.textContent = tt('Bu adımda henüz önizlenecek çıktı metni yok.');
     } else if (res.truncated) {
       noticeEl.hidden = false;
-      noticeEl.textContent = `Çıktı güvenlik sınırını (${Math.round(PREVIEW_MAX_BYTES / 1024)} KB) aştığı için önizlemede kısaltıldı.`;
+      noticeEl.textContent = tt('Çıktı güvenlik sınırını ({kb} KB) aştığı için önizlemede kısaltıldı.', { kb: Math.round(PREVIEW_MAX_BYTES / 1024) });
     } else {
       noticeEl.hidden = true;
       noticeEl.textContent = '';
@@ -494,7 +495,7 @@ export class PreviewDrawer {
       navigator.clipboard.writeText(text).catch(() => {});
     }
     if (this._els.copyBtn) {
-      this._els.copyBtn.textContent = 'Kopyalandı';
+      this._els.copyBtn.textContent = tt('Kopyalandı');
       setTimeout(() => {
         if (this._els.copyBtn) this._els.copyBtn.textContent = 'Kopyala';
       }, 1500);

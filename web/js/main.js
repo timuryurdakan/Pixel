@@ -13,7 +13,7 @@ import { sound } from './audio.js';
 import { TaskBoard, categorizeTasks } from './board.js';
 import { BossScene, connectBossScene } from './boss_scene.js';
 import { toLocalAgent } from './browser_office.js';
-import { t, applyStatic, langSwitch } from './i18n.js';
+import { t as tt, applyStatic, langSwitch } from './i18n.js';
 
 export const STEP = 1 / 60;   // fixed timestep (s)
 export const MAX_STEPS = 5;   // per animation frame (excess is dropped)
@@ -176,7 +176,7 @@ const handlers = {
   onError: (code) => {
     if (code === 'not_found') {
       ui.setConnection('notfound');
-      ui.toast(t('Oda bulunamadı'), { error: true, ms: 8000 });
+      ui.toast(tt('Oda bulunamadı'), { error: true, ms: 8000 });
     }
   },
 };
@@ -251,7 +251,7 @@ async function onRename(agent, { name, future }) {
     return true;
   } catch (err) {
     for (const [id] of optimistic) overrides.delete(id);
-    ui.toast(t('Ad kaydedilemedi'), { error: true });
+    ui.toast(tt('Ad kaydedilemedi'), { error: true });
     if (cloudMode) transport.pollNow({ bust: true });
     else {
       // Revert to the last server truth (an SSE event may not come for unchanged agents).
@@ -387,7 +387,7 @@ function setupMiniButton() {
   if (viewMini || (!pipOk && !popupOk)) return;
   btn.hidden = false;
   document.getElementById('toolbar').hidden = false;
-  if (!pipOk) btn.title = t('Sağ altta küçük bir pencere açar. Bu tarayıcıda her zaman üstte kalmaz.');
+  if (!pipOk) btn.title = tt('Sağ altta küçük bir pencere açar. Bu tarayıcıda her zaman üstte kalmaz.');
   mini = new MiniWindow({
     frameEl: document.querySelector('#stage .frame'),
     stripEl: document.getElementById('mini-strip'),
@@ -397,7 +397,7 @@ function setupMiniButton() {
       pipResize = new w.ResizeObserver(() => fitCanvas());
       pipResize.observe(w.document.body);
       w.addEventListener('keydown', (e) => { if (e.key === 'Escape') select(null); });
-      btn.textContent = t('Mini pencereyi kapat');
+      btn.textContent = tt('Mini pencereyi kapat');
       document.body.classList.add('pip-open');
       fitCanvas();
       updateActive();
@@ -406,7 +406,7 @@ function setupMiniButton() {
       if (pipResize) { try { pipResize.disconnect(); } catch { /* window gone */ } pipResize = null; }
       setRafHost(window);
       if (transport) transport.setScheduler(window);
-      btn.textContent = t('Mini pencere');
+      btn.textContent = tt('Mini pencere');
       document.body.classList.remove('pip-open');
       renderer._fitKey = null;
       fitCanvas();
@@ -418,16 +418,16 @@ function setupMiniButton() {
     if (pipOk) {
       try {
         await mini.open();
-        ui.toast(t('Mini pencereyi ekranın sağ altına sürükleyin. Tarayıcı konumu genelde hatırlar.'), { ms: 6000 });
+        ui.toast(tt('Mini pencereyi ekranın sağ altına sürükleyin. Tarayıcı konumu genelde hatırlar.'), { ms: 6000 });
         return;
       } catch (err) {
         console.warn('[pixel-office] Document PiP failed, using a popup', err);
-        if (!popupOk) { ui.toast(t('Mini pencere açılamadı'), { error: true }); return; }
+        if (!popupOk) { ui.toast(tt('Mini pencere açılamadı'), { error: true }); return; }
       }
     }
     const w = MiniWindow.openPopup(`/?room=${encodeURIComponent(room.id)}&view=mini`);
-    if (!w) ui.toast(t('Açılır pencere engellendi. Tarayıcıda açılır pencerelere izin verin.'), { error: true, ms: 6000 });
-    else ui.toast(t('Mini pencere sağ altta açıldı. Bu tarayıcıda her zaman üstte kalmaz.'), { ms: 6000 });
+    if (!w) ui.toast(tt('Açılır pencere engellendi. Tarayıcıda açılır pencerelere izin verin.'), { error: true, ms: 6000 });
+    else ui.toast(tt('Mini pencere sağ altta açıldı. Bu tarayıcıda her zaman üstte kalmaz.'), { ms: 6000 });
   });
 }
 
@@ -528,7 +528,7 @@ function setupSoundButton() {
     btn.textContent = sound.muted ? '🔇' : '🔊';
     btn.dataset.muted = sound.muted ? 'true' : 'false';
     btn.setAttribute('aria-pressed', sound.muted ? 'false' : 'true');
-    btn.title = sound.muted ? t('Sesi aç') : t('Sesi kapat');
+    btn.title = sound.muted ? tt('Sesi aç') : tt('Sesi kapat');
   };
   btn.addEventListener('click', () => {
     sound.toggleMute();
@@ -552,7 +552,7 @@ async function bootLocal() {
     }
     if (h && Array.isArray(h.features) && h.features.includes('rename')) {
       ui.canRename = () => true;
-      ui.futureLabel = (a) => (!a.isSubagent && a.projectPath ? t('Bu projedeki yeni oturumlara da bu adı ver') : null);
+      ui.futureLabel = (a) => (!a.isSubagent && a.projectPath ? tt('Bu projedeki yeni oturumlara da bu adı ver') : null);
       ui.setSelected(selectedId);
     }
   } catch { /* v1 server: no rename */ }
@@ -579,7 +579,7 @@ function bootCloud(config) {
   }
   if (!cloud.ROOM_RE.test(roomParam)) {
     ui.setMode('cloud');
-    cloud.showLanding({ config, error: t('Bağlantıdaki oda kimliği geçersiz.') });
+    cloud.showLanding({ config, error: tt('Bağlantıdaki oda kimliği geçersiz.') });
     return;
   }
   // G4: `pixel-connector pair` QR → #pair=<code>; read before takeKeyFromHash strips the whole fragment.
@@ -599,9 +599,9 @@ function bootCloud(config) {
   room = { id: roomParam, key, ui: roomUi };
   if (key) {
     ui.canRename = () => true;
-    ui.futureLabel = (a) => (a.isSubagent ? null : t('{owner} adlı kişinin yeni oturumlarına da bu adı ver', { owner: a.owner || t('Bu kişi') }));
+    ui.futureLabel = (a) => (a.isSubagent ? null : tt('{owner} adlı kişinin yeni oturumlarına da bu adı ver', { owner: a.owner || tt('Bu kişi') }));
   }
-  ui.emptyHint = key ? t("'Ajan bağla' ile ekleyin.") : t('Ajanlar bağlandığında burada görünür.');
+  ui.emptyHint = key ? tt("'Ajan bağla' ile ekleyin.") : tt('Ajanlar bağlandığında burada görünür.');
   transport = new PollingTransport({ roomId: roomParam });
   transport.boost({ emptyMs: BOOST_MS });
   transport.start(handlers);
@@ -666,7 +666,7 @@ function setupBrowserDevice(hub, toast) {
       dlg.showModal();
     } catch (e) {
       console.warn('[pixel-office] browser device unavailable', e);
-      toast(t('Tarayıcı ajanı açılamadı.'), { error: true });
+      toast(tt('Tarayıcı ajanı açılamadı.'), { error: true });
     }
   });
   dlg.querySelector('[data-close]').addEventListener('click', () => dlg.close());
@@ -715,7 +715,7 @@ async function setupV3(roomId, key, pairParam = null) {
       const hit = [...agents.values()].find((x) => x.control && x.control.device === ctl.device && x.control.agent === ctl.agent);
       devices.close();
       setTab(phone() ? 'agents' : 'office');
-      if (hit) select(hit.id); else { v3.pendingSelect = ctl; toast(t('Ajan ofise girince açılacak')); }
+      if (hit) select(hit.id); else { v3.pendingSelect = ctl; toast(tt('Ajan ofise girince açılacak')); }
     },
     onToggle: (open) => {
       approvals.placeOnPage(open);
@@ -737,7 +737,7 @@ async function setupV3(roomId, key, pairParam = null) {
   // change replays the A9 desk walk.
   const workflows = new WorkflowStore({ hub,
     onRun: (dev, ch, run) => {
-      for (const s of ch.started) panel.trackTask(dev, s.agent, s.task, t('İş akışı: {name} · {role}', { name: run.name, role: s.role }));
+      for (const s of ch.started) panel.trackTask(dev, s.agent, s.task, tt('İş akışı: {name} · {role}', { name: run.name, role: s.role }));
       for (const s of ch.ended) panel.settleTask(dev, s.agent, s.task);
       if (ch.walk) animateHandoff(dev, ch.walk);
       else updateBoard();
@@ -764,7 +764,7 @@ async function setupV3(roomId, key, pairParam = null) {
     if (!a.control || !hub.isReady(a.control.device)) return null;
     const info = hub.agentInfo(a.control);
     const n = info && info.today && Number.isFinite(info.today.tokens) ? info.today.tokens : null;
-    return { tokens: n === null ? null : t('bugün {n} token', { n: fmtTok(n) }) };
+    return { tokens: n === null ? null : tt('bugün {n} token', { n: fmtTok(n) }) };
   };
   hub.on('change', () => refreshUI());
   hub.on('notice', (t) => toast(t, { error: true }));

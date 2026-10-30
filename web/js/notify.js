@@ -5,11 +5,11 @@
 // 3. All DOM rendering uses createElement + textContent only; never innerHTML.
 
 import { PreviewDrawer } from './preview.js';
-import { t } from './i18n.js';
+import { t as tt } from './i18n.js';
 
 export const NOTIFY_STORAGE_KEY = 'po-notify-enabled';
-export const GENERIC_APPROVAL_TEXT = t('Onay bekliyor');
-export const GENERIC_DONE_TEXT = t('Görev tamamlandı');
+export const GENERIC_APPROVAL_TEXT = tt('Onay bekliyor');
+export const GENERIC_DONE_TEXT = tt('Görev tamamlandı');
 const DEFAULT_BASE_TITLE = 'Pixel Office';
 
 function safeFileName(raw = 'cikti.md') {
@@ -96,7 +96,7 @@ export function makeExportActions(getText, filenamePrefix = 'cikti', {
   btnPreview.type = 'button';
   btnPreview.className = btnClass;
   btnPreview.dataset.action = 'preview';
-  btnPreview.textContent = t('Önizle');
+  btnPreview.textContent = tt('Önizle');
 
   const btnCopy = document.createElement('button');
   btnCopy.type = 'button';
@@ -108,7 +108,7 @@ export function makeExportActions(getText, filenamePrefix = 'cikti', {
   btnDl.type = 'button';
   btnDl.className = btnClass;
   btnDl.dataset.action = 'download-md';
-  btnDl.textContent = t('.md indir');
+  btnDl.textContent = tt('.md indir');
 
   btnPreview.addEventListener('click', () => {
     const doc = bar.ownerDocument || document;
@@ -124,7 +124,7 @@ export function makeExportActions(getText, filenamePrefix = 'cikti', {
       dlg._previewDrawer = new PreviewDrawer({ dialog: dlg, doc });
     }
     dlg._previewDrawer.open({
-      title: String(filenamePrefix || t('Eser Önizleme')),
+      title: String(filenamePrefix || tt('Eser Önizleme')),
       content: String(getText() ?? ''),
     });
   });
@@ -132,7 +132,7 @@ export function makeExportActions(getText, filenamePrefix = 'cikti', {
   let resetTimer = 0;
   btnCopy.addEventListener('click', async () => {
     const ok = await copyText(getText());
-    btnCopy.textContent = ok ? t('Kopyalandı ✓') : t('Kopyalanamadı');
+    btnCopy.textContent = ok ? tt('Kopyalandı ✓') : tt('Kopyalanamadı');
     if (resetTimer) clearTimeout(resetTimer);
     resetTimer = setTimeout(() => { btnCopy.textContent = 'Kopyala'; resetTimer = 0; }, 1500);
   });
@@ -249,13 +249,13 @@ export class Notifier {
     }
     b.hidden = false;
     if (this.permission === 'denied') {
-      b.textContent = t('Bildirim engelli');
+      b.textContent = tt('Bildirim engelli');
       b.disabled = true;
     } else if (this.enabled) {
-      b.textContent = t('Bildirim açık');
+      b.textContent = tt('Bildirim açık');
       b.disabled = false;
     } else {
-      b.textContent = t('Bildirim aç');
+      b.textContent = tt('Bildirim aç');
       b.disabled = false;
     }
   }

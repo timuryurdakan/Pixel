@@ -5,12 +5,12 @@
 // published SHA-256 in localStorage, so the next release shows the strip again.
 
 import { connectorOutdated, publishedConnectorSha, hasUpdateCommand, UPDATE_CMD } from './devices.js';
-import { t } from './i18n.js';
+import { t as tt } from './i18n.js';
 
 export const DISMISS_KEY = 'po-update-dismissed';
-export const BANNER_TITLE = t('Bilgisayarınızdaki bağlayıcı eski.');
-export const TEXT_CMD = t('Güncellemek için o bilgisayarda şunu çalıştırın:');
-export const TEXT_INSTALL = t('Bu sürümde güncelleme komutu yok: Cihazlar → Cihaz ekle\'deki kurulum komutunu o '
+export const BANNER_TITLE = tt('Bilgisayarınızdaki bağlayıcı eski.');
+export const TEXT_CMD = tt('Güncellemek için o bilgisayarda şunu çalıştırın:');
+export const TEXT_INSTALL = tt('Bu sürümde güncelleme komutu yok: Cihazlar → Cihaz ekle\'deki kurulum komutunu o '
   + 'bilgisayarda bir kez yeniden çalıştırın (ayarlar ve eşleşmeler korunur).');
 const NO_SHA = 'min';                  // dismissal key when SHA256SUMS is unavailable (a pre-3.1.0 connector)
 const MAX_NAMES = 3;
@@ -88,16 +88,16 @@ export class UpdateBanner {
     text.append(' ', el('span', null, model.useCommand ? TEXT_CMD : TEXT_INSTALL));
     const actions = el('div', 'ub-actions');
     if (model.useCommand) {
-      const copyBtn = el('button', 'btn small ub-copy', t('Kopyala'));
+      const copyBtn = el('button', 'btn small ub-copy', tt('Kopyala'));
       copyBtn.type = 'button';
-      copyBtn.setAttribute('aria-label', t('Komutu kopyala: {cmd}', { cmd: UPDATE_CMD }));
+      copyBtn.setAttribute('aria-label', tt('Komutu kopyala: {cmd}', { cmd: UPDATE_CMD }));
       copyBtn.addEventListener('click', async () => {
         const ok = await this.copy(UPDATE_CMD);
-        this.toast(ok ? t('Komut kopyalandı') : t('Kopyalanamadı, metni elle seçin'), { error: !ok });
+        this.toast(ok ? tt('Komut kopyalandı') : tt('Kopyalanamadı, metni elle seçin'), { error: !ok });
       });
       actions.append(el('code', 'ub-cmd', UPDATE_CMD), copyBtn);
     } else {
-      const go = el('button', 'btn small accent ub-install', t('Kurulum komutunu göster'));
+      const go = el('button', 'btn small accent ub-install', tt('Kurulum komutunu göster'));
       go.type = 'button';
       go.addEventListener('click', () => this.onInstall());
       actions.append(go);
@@ -105,7 +105,7 @@ export class UpdateBanner {
     const close = el('button', 'btn small ghost ub-close', '×');
     close.type = 'button';
     close.title = 'Kapat';
-    close.setAttribute('aria-label', t('Güncelleme uyarısını kapat'));
+    close.setAttribute('aria-label', tt('Güncelleme uyarısını kapat'));
     close.addEventListener('click', () => this.dismiss());
     actions.append(close);
     this.root.replaceChildren(text, actions);

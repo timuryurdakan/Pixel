@@ -5,20 +5,21 @@ import { ControlError, errorText, PAIR_ERROR_TEXT, relayErrorCode } from './cont
 import { formatCode } from './e2e.js';
 import { fmtCompact, gaugeEl, totalCostLabel, claudeLimitText, ENGINE_LABELS, WEIGHT_NOTE } from './usage.js';
 import { PROFILE_TEXT } from './prompt.js';
+import { t as tt } from './i18n.js';
 
 export const RUNTIME_POLL_MS = 10000;
 const OS_LABEL = { linux: 'Linux', darwin: 'macOS', windows: 'Windows' };
-const RT_STATE = { running: 'Çalışıyor', stopped: 'Durdu', starting: 'Başlatılıyor', unknown: 'Durum bilinmiyor' };
+const RT_STATE = { running: tt('Çalışıyor'), stopped: 'Durdu', starting: tt('Başlatılıyor'), unknown: tt('Durum bilinmiyor') };
 
 const RELAY_STATUS_TEXT = {
-  live: 'Röle: bağlı', connecting: 'Röle: bağlanıyor…', reconnecting: 'Röle: yeniden bağlanıyor…',
-  quota: 'Röle şu an meşgul ya da günlük kota doldu', idle: 'Röle: bağlı değil',
+  live: tt('Röle: bağlı'), connecting: tt('Röle: bağlanıyor…'), reconnecting: tt('Röle: yeniden bağlanıyor…'),
+  quota: tt('Röle şu an meşgul ya da günlük kota doldu'), idle: tt('Röle: bağlı değil'),
 };
 const RELAY_STOP_TEXT = {
-  relay_csp: 'Röle: güvenlik politikası (CSP) röle adresini engelliyor',
-  unauthorized: 'Röle: bu tarayıcıdaki oda anahtarı geçersiz. Katılım bağlantısını (#key=… içeren) yeniden açın.',
-  relay_not_configured: 'Röle: sunucuda röle ayarlı değil',
-  relay_ticket: 'Röle: sunucu bilet vermedi',
+  relay_csp: tt('Röle: güvenlik politikası (CSP) röle adresini engelliyor'),
+  unauthorized: tt('Röle: bu tarayıcıdaki oda anahtarı geçersiz. Katılım bağlantısını (#key=… içeren) yeniden açın.'),
+  relay_not_configured: tt('Röle: sunucuda röle ayarlı değil'),
+  relay_ticket: tt('Röle: sunucu bilet vermedi'),
 };
 
 /**
@@ -50,10 +51,10 @@ function btn(text, cls = 'btn small', onClick = null) {
 function ago(ms) {
   if (!ms) return '';
   const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
-  if (s < 90) return 'az önce';
-  if (s < 3600) return `${Math.round(s / 60)} dk önce`;
-  if (s < 86400) return `${Math.round(s / 3600)} sa önce`;
-  return `${Math.round(s / 86400)} gün önce`;
+  if (s < 90) return tt('az önce');
+  if (s < 3600) return tt('{n} dk önce', { n: Math.round(s / 60) });
+  if (s < 86400) return tt('{n} sa önce', { n: Math.round(s / 3600) });
+  return tt('{n} gün önce', { n: Math.round(s / 86400) });
 }
 
 /** "4 dk sonra boşalır" from Ollama's expires_at (ISO string or ms). */
@@ -61,15 +62,15 @@ export function expiresText(v) {
   const t = typeof v === 'number' ? v : Date.parse(v || '');
   if (!Number.isFinite(t)) return '';
   const min = Math.round((t - Date.now()) / 60000);
-  if (min <= 0) return 'birazdan boşalır';
-  if (min > 60 * 24 * 365) return 'sürekli yüklü';
-  if (min < 60) return `${min} dk sonra boşalır`;
-  return `${Math.round(min / 60)} sa sonra boşalır`;
+  if (min <= 0) return tt('birazdan boşalır');
+  if (min > 60 * 24 * 365) return tt('sürekli yüklü');
+  if (min < 60) return tt('{n} dk sonra boşalır', { n: min });
+  return tt('{n} sa sonra boşalır', { n: Math.round(min / 60) });
 }
 
 function gb(bytes) {
   return Number.isFinite(bytes) && bytes > 0
-    ? `${new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 1 }).format(bytes / 1e9)} GB VRAM` : '';
+    ? `${new Intl.NumberFormat(tt('tr-TR'), { maximumFractionDigits: 1 }).format(bytes / 1e9)} GB VRAM` : '';
 }
 
 const confirmBox = (text) => window.confirm(text);
@@ -78,20 +79,20 @@ const confirmBox = (text) => window.confirm(text);
 // comes from the browser or the device, and the allow-list can only be widened on the computer itself.
 export const NO_WORKSPACE_CMD = 'pixel-connector workspace add ~/projem';
 export const REMOTE_APPROVALS_CMD = 'pixel-connector remote-approvals on';
-export const NO_WORKSPACE_HINT = `Bu cihazda izinli klasör yok. Bilgisayarda şunu çalıştırın: ${NO_WORKSPACE_CMD} `
-  + '(ya da varsayılan ~/PixelOfficeIsler klasörünü kullanmak için bağlayıcıyı güncelleyin).';
+export const NO_WORKSPACE_HINT = `${tt('Bu cihazda izinli klasör yok. Bilgisayarda şunu çalıştırın:')} ${NO_WORKSPACE_CMD} `
+  + tt('(ya da varsayılan ~/PixelOfficeIsler klasörünü kullanmak için bağlayıcıyı güncelleyin).');
 
 // v2.md E1: the connector version on the device card and an update hint. The device reports the SHA-256 of the .pyz it
 // runs (`device.info.pyz`, connector ≥ 3.1.0); the server publishes the current one in /connector/SHA256SUMS. Older
 // connectors don't report it, so a version below 3.1.0 counts as outdated too. Text only, never HTML.
 export const MIN_CONNECTOR = '3.1.0';
-export const UPDATE_HINT = 'Güncelleme var: bu bilgisayarda kurulum komutunu yeniden çalıştırın '
-  + '(Cihazlar → Cihaz ekle → kurulum komutu). Ayarlar ve eşleşmeler korunur.';
+export const UPDATE_HINT = tt('Güncelleme var: bu bilgisayarda kurulum komutunu yeniden çalıştırın ')
+  + tt('(Cihazlar → Cihaz ekle → kurulum komutu). Ayarlar ve eşleşmeler korunur.');
 // Connector 3.5.0 has `pixel-connector update`; older ones only update by running the install command again.
 export const UPDATE_COMMAND_SINCE = '3.5.0';
 export const UPDATE_CMD = 'pixel-connector update';
-export const UPDATE_HINT_CMD = `Güncelleme var: bu bilgisayarda şunu çalıştırın: ${UPDATE_CMD} `
-  + '(ayarlar ve eşleşmeler korunur).';
+export const UPDATE_HINT_CMD = `${tt('Güncelleme var: bu bilgisayarda şunu çalıştırın:')} ${UPDATE_CMD} `
+  + tt('(ayarlar ve eşleşmeler korunur).');
 const SHA_RE = /^[0-9a-f]{64}$/;
 const VERSION_RE = /^(\d{1,4})\.(\d{1,4})\.(\d{1,4})/;
 
@@ -130,7 +131,7 @@ function versionLess(a, b) {
 /** "Bağlayıcı 3.1.0" or '' when the device didn't say. */
 export function connectorLabel(info) {
   const v = info && typeof info.connector === 'string' ? info.connector.slice(0, 16) : '';
-  return v ? `Bağlayıcı ${v}` : '';
+  return v ? tt('Bağlayıcı {v}', { v }) : '';
 }
 
 /** True when the device runs an older connector than the one the server publishes. */
@@ -159,9 +160,9 @@ export function noWorkspaces(list) { return Array.isArray(list) && list.length =
 export function workspaceHintEl(cls = 'muted small') {
   const p = el('p', cls);
   p.dataset.wsHint = '';
-  p.append(document.createTextNode('Bu cihazda izinli klasör yok. Bilgisayarda şunu çalıştırın: '),
+  p.append(document.createTextNode(tt('Bu cihazda izinli klasör yok. Bilgisayarda şunu çalıştırın: ')),
     el('code', null, NO_WORKSPACE_CMD),
-    document.createTextNode(' (ya da varsayılan ~/PixelOfficeIsler klasörünü kullanmak için bağlayıcıyı güncelleyin).'));
+    document.createTextNode(tt(' (ya da varsayılan ~/PixelOfficeIsler klasörünü kullanmak için bağlayıcıyı güncelleyin).')));
   return p;
 }
 
@@ -274,8 +275,8 @@ export class DevicesPage {
     if (!devs.length) {
       this.cards.clear();
       const empty = el('div', 'dev-empty');
-      empty.appendChild(el('p', null, 'Bu tarayıcı henüz hiçbir cihazla eşleşmedi.'));
-      empty.appendChild(el('p', 'muted', 'Bilgisayarınıza bağlayıcıyı kurun ve "Cihaz ekle" ile eşleştirin. Sonra o bilgisayardaki Claude Code ve Ollama ajanlarına buradan görev verebilirsiniz.'));
+      empty.appendChild(el('p', null, tt('Bu tarayıcı henüz hiçbir cihazla eşleşmedi.')));
+      empty.appendChild(el('p', 'muted', tt('Bilgisayarınıza bağlayıcıyı kurun ve "Cihaz ekle" ile eşleştirin. Sonra o bilgisayardaki Claude Code ve Ollama ajanlarına buradan görev verebilirsiniz.')));
       empty.appendChild(btn('+ Cihaz ekle', 'btn accent', () => this.wizard.open()));
       this.body.replaceChildren(empty);
       return;
@@ -309,7 +310,7 @@ export class DevicesPage {
     c.peers = el('div', 'dev-peers');
     c.budget = this._deviceBudget(id);
     const foot = el('div', 'dev-foot');
-    foot.appendChild(btn('Bu tarayıcının eşleşmesini kaldır', 'btn small ghost danger-btn', () => this._unpair(id)));
+    foot.appendChild(btn(tt('Bu tarayıcının eşleşmesini kaldır'), 'btn small ghost danger-btn', () => this._unpair(id)));
     c.el.append(c.head, c.usage, c.budget, c.agents, c.runtimes, c.peers, foot);
     return c;
   }
@@ -327,7 +328,7 @@ export class DevicesPage {
       const label = connectorLabel(d.info);
       if (label) meta.push(label);
     }
-    meta.push(d.ready ? 'çevrimiçi' : d.status === 'connecting' ? 'bağlanıyor…' : d.status === 'error' ? 'güvenli bağlantı kurulamadı' : 'çevrimdışı');
+    meta.push(d.ready ? tt('çevrimiçi') : d.status === 'connecting' ? tt('bağlanıyor…') : d.status === 'error' ? tt('güvenli bağlantı kurulamadı') : tt('çevrimdışı'));
     const m = el('span', 'dev-meta muted', meta.join(' · '));
     c.head.append(dot, name, m);
     const headToken = (c.headToken = (c.headToken || 0) + 1);
@@ -340,17 +341,17 @@ export class DevicesPage {
     }
     if (d.ready && d.info && d.info.approvals && typeof d.info.approvals.remote === 'boolean') {
       c.head.appendChild(el('p', 'dev-hint muted small dev-apv', d.info.approvals.remote
-        ? 'Uzaktan onay: açık — Claude Code izin istekleri ve soruları burada da görünür.'
-        : `Uzaktan onay kapalı. Açmak için bu bilgisayarda: ${REMOTE_APPROVALS_CMD}`));
+        ? tt('Uzaktan onay: açık — Claude Code izin istekleri ve soruları burada da görünür.')
+        : `${tt('Uzaktan onay kapalı. Açmak için bu bilgisayarda:')} ${REMOTE_APPROVALS_CMD}`));
     }
     if (d.status === 'error' || (!d.ready && d.online)) {
-      c.head.appendChild(btn('Yeniden dene', 'btn small', () => this.hub.connect(id).catch((e) => this.toast(e instanceof ControlError ? e.text : 'Bağlanılamadı', { error: true }))));
+      c.head.appendChild(btn(tt('Yeniden dene'), 'btn small', () => this.hub.connect(id).catch((e) => this.toast(e instanceof ControlError ? e.text : tt('Bağlanılamadı'), { error: true }))));
     }
     if (!d.ready) {
       const hint = el('p', 'dev-hint muted small');
       hint.textContent = d.status === 'error'
-        ? 'Cihaz bu tarayıcıyı tanımıyor olabilir (eşleşme kaldırılmış). Yeniden eşleştirmeyi deneyin.'
-        : 'Bağlayıcı çalışıyor mu? Cihazda: systemctl --user status pixel-connector';
+        ? tt('Cihaz bu tarayıcıyı tanımıyor olabilir (eşleşme kaldırılmış). Yeniden eşleştirmeyi deneyin.')
+        : tt('Bağlayıcı çalışıyor mu? Cihazda: systemctl --user status pixel-connector');
       c.head.appendChild(hint);
     }
   }
@@ -364,13 +365,13 @@ export class DevicesPage {
     if (!d.ready || !u) return;
     const t = u.totals || {};
     const line = el('div', 'usage-line');
-    const tok = el('span', null, `Bugün ${fmtCompact(t.tokens)} token`);
+    const tok = el('span', null, tt('Bugün {n} token', { n: fmtCompact(t.tokens) }));
     tok.title = WEIGHT_NOTE;
     const hasClaude = !!(d.info && d.info.engines && d.info.engines.claude && d.info.engines.claude.available);
     const cl = totalCostLabel(t.costUsd, hasClaude ? 'claude' : 'ollama', d.info && d.info.engines && d.info.engines.claude ? d.info.engines.claude.auth : null);
     const cost = el('span', 'muted', ` · ${cl.text}`);
     cost.title = cl.title;
-    line.append(tok, cost, el('span', 'muted', ` · ${t.tasks || 0} görev`));
+    line.append(tok, cost, el('span', 'muted', ` · ${tt('{n} görev', { n: t.tasks || 0 })}`));
     c.usage.appendChild(line);
     for (const b of u.budgets || []) c.usage.appendChild(gaugeEl(b, { showScope: true }));
     if (hasClaude) c.usage.appendChild(el('div', 'usage-note muted small', claudeLimitText(u.claudeLimit)));
@@ -380,7 +381,7 @@ export class DevicesPage {
 
   _deviceBudget(id) {
     const det = el('details', 'budget-edit');
-    det.appendChild(el('summary', null, 'Cihaz bütçesi'));
+    det.appendChild(el('summary', null, tt('Cihaz bütçesi')));
     const f = el('form', 'budget-form');
     f.setAttribute('autocomplete', 'off');
     const sel = (name, opts, label) => {
@@ -390,39 +391,39 @@ export class DevicesPage {
       for (const [v, t] of opts) { const o = el('option', null, t); o.value = v; s.appendChild(o); }
       return s;
     };
-    const period = sel('period', [['day', 'Günlük'], ['week', 'Haftalık'], ['month', 'Aylık']], 'Dönem');
+    const period = sel('period', [['day', tt('Günlük')], ['week', tt('Haftalık')], ['month', tt('Aylık')]], tt('Dönem'));
     const lim = document.createElement('input');
     lim.type = 'number';
     lim.name = 'limit';
     lim.min = '0';
     lim.step = 'any';
     lim.inputMode = 'decimal';
-    lim.placeholder = 'Sınır';
-    lim.setAttribute('aria-label', 'Bütçe sınırı');
+    lim.placeholder = tt('Sınır');
+    lim.setAttribute('aria-label', tt('Bütçe sınırı'));
     const unit = sel('unit', [['usd', '$ (tahmini)'], ['tokens', 'token']], 'Birim');
-    const action = sel('action', [['warn', 'uyar'], ['block', 'durdur']], 'Aşılınca');
+    const action = sel('action', [['warn', 'uyar'], ['block', 'durdur']], tt('Aşılınca'));
     const save = el('button', 'btn small accent', 'Kaydet');
     save.type = 'submit';
-    const del = btn('Kaldır', 'btn small ghost', async () => {
+    const del = btn(tt('Kaldır'), 'btn small ghost', async () => {
       try {
         const u = await this.hub.request(id, { type: 'budget.set', scope: 'device', period: period.value, delete: true });
         this._d(id).usage = u;
         this._renderUsage(id);
-        this.toast('Cihaz bütçesi kaldırıldı');
-      } catch (e) { this.toast(e instanceof ControlError ? e.text : 'Kaldırılamadı', { error: true }); }
+        this.toast(tt('Cihaz bütçesi kaldırıldı'));
+      } catch (e) { this.toast(e instanceof ControlError ? e.text : tt('Kaldırılamadı'), { error: true }); }
     });
     f.append(period, lim, unit, action, save, del);
-    f.appendChild(el('p', 'muted small', 'Cihazdaki tüm ajanlar için ortak sınır. "durdur": sınır dolunca yeni görev kabul edilmez.'));
+    f.appendChild(el('p', 'muted small', tt('Cihazdaki tüm ajanlar için ortak sınır. "durdur": sınır dolunca yeni görev kabul edilmez.')));
     f.addEventListener('submit', async (e) => {
       e.preventDefault();
       const n = Number(String(lim.value).replace(',', '.'));
-      if (!(n > 0)) { this.toast('Sınır sıfırdan büyük olmalı', { error: true }); return; }
+      if (!(n > 0)) { this.toast(tt('Sınır sıfırdan büyük olmalı'), { error: true }); return; }
       try {
         const u = await this.hub.request(id, { type: 'budget.set', scope: 'device', period: period.value, unit: unit.value, limit: n, action: action.value });
         this._d(id).usage = u;
         this._renderUsage(id);
         det.open = false;
-        this.toast('Cihaz bütçesi kaydedildi');
+        this.toast(tt('Cihaz bütçesi kaydedildi'));
       } catch (err) { this.toast(err instanceof ControlError ? err.text : 'Kaydedilemedi', { error: true }); }
     });
     det.appendChild(f);
@@ -444,7 +445,7 @@ export class DevicesPage {
     const claudeOk = !!(d.info && d.info.engines && d.info.engines.claude && d.info.engines.claude.available);
     if (d.ready && claudeOk && noWorkspaces(this._d(id).workspaces)) c.agents.appendChild(workspaceHintEl('dev-hint muted small'));
     if (!d.agents.size) {
-      c.agents.appendChild(el('p', 'muted small', d.ready ? 'Bu cihazda henüz ajan yok.' : 'Cihaz çevrimiçi olunca ajanlar görünür.'));
+      c.agents.appendChild(el('p', 'muted small', d.ready ? tt('Bu cihazda henüz ajan yok.') : tt('Cihaz çevrimiçi olunca ajanlar görünür.')));
       return;
     }
     const ul = el('ul', 'dev-agent-list');
@@ -452,16 +453,16 @@ export class DevicesPage {
       const li = el('li');
       const b = el('button', 'link-btn', a.name);
       b.type = 'button';
-      b.title = 'Ofiste göster';
+      b.title = tt('Ofiste göster');
       b.addEventListener('click', () => this.onSelectAgent({ device: id, agent: a.key }));
       const where = [ENGINE_LABELS[a.engine] || a.engine];
       if (a.model) where.push(a.model);
       if (a.workspace && a.workspace.name) where.push(a.workspace.name + (a.workspace.sub ? '/' + a.workspace.sub : ''));
       const meta = el('span', 'muted small', ` ${where.join(' · ')}`);
-      const today = a.today && Number.isFinite(a.today.tokens) ? el('span', 'muted small', ` · bugün ${fmtCompact(a.today.tokens)} token`) : null;
+      const today = a.today && Number.isFinite(a.today.tokens) ? el('span', 'muted small', ` · ${tt('bugün {n} token', { n: fmtCompact(a.today.tokens) })}`) : null;
       const del = btn('Sil', 'btn small ghost', () => this._deleteAgent(id, a));
       del.disabled = !d.ready || !!a.task;
-      if (a.task) del.title = 'Görev çalışırken silinemez; önce durdurun.';
+      if (a.task) del.title = tt('Görev çalışırken silinemez; önce durdurun.');
       if (d.info && d.info.remote && d.info.remote.agentDelete === false) del.hidden = true;
       li.append(b, meta);
       if (today) li.appendChild(today);
@@ -472,10 +473,10 @@ export class DevicesPage {
   }
 
   async _deleteAgent(id, a) {
-    if (!confirmBox(`"${a.name}" ajanı silinsin mi? Karakter ofisten çıkar, sohbet geçmişi silinir.`)) return;
+    if (!confirmBox(tt('"{name}" ajanı silinsin mi? Karakter ofisten çıkar, sohbet geçmişi silinir.', { name: a.name }))) return;
     try {
       await this.hub.deleteAgent(id, a.key);
-      this.toast('Ajan silindi');
+      this.toast(tt('Ajan silindi'));
       this.render();
     } catch (e) { this.toast(e instanceof ControlError ? e.text : 'Silinemedi', { error: true }); }
   }
@@ -486,11 +487,11 @@ export class DevicesPage {
     if (!c || !d) return;
     const st = this._d(id);
     c.runtimes.replaceChildren();
-    c.runtimes.appendChild(el('h3', null, 'Çalışma ortamları'));
+    c.runtimes.appendChild(el('h3', null, tt('Çalışma ortamları')));
     if (!d.ready) return;
-    if (!st.runtimes) { c.runtimes.appendChild(el('p', 'muted small', 'Yükleniyor…')); return; }
+    if (!st.runtimes) { c.runtimes.appendChild(el('p', 'muted small', tt('Yükleniyor…'))); return; }
     if (!st.runtimes.length) {
-      c.runtimes.appendChild(el('p', 'muted small', 'Cihazda tanımlı çalışma ortamı yok (connector.json → runtimes).'));
+      c.runtimes.appendChild(el('p', 'muted small', tt('Cihazda tanımlı çalışma ortamı yok (connector.json → runtimes).')));
       return;
     }
     const ul = el('ul', 'rt-list');
@@ -508,7 +509,7 @@ export class DevicesPage {
       if (busy) {
         act.appendChild(el('span', 'muted small', busy));
       } else {
-        if (r.canStart && state !== 'running') act.appendChild(btn('Başlat', 'btn rt-btn accent', () => this._rt(id, r, 'runtime.start')));
+        if (r.canStart && state !== 'running') act.appendChild(btn(tt('Başlat'), 'btn rt-btn accent', () => this._rt(id, r, 'runtime.start')));
         if (r.canStop && state !== 'stopped') act.appendChild(btn('Durdur', 'btn rt-btn', () => this._rt(id, r, 'runtime.stop')));
       }
       row.appendChild(act);
@@ -523,15 +524,15 @@ export class DevicesPage {
           const mi = el('li');
           mi.appendChild(el('span', 'rt-model', m.name));
           const info = m.loaded
-            ? ['Yüklü', gb(m.vramBytes), expiresText(m.expiresAt)].filter(Boolean).join(' · ')
-            : (m.installed === false ? 'Kurulu değil' : 'Yüklü değil');
+            ? [tt('Yüklü'), gb(m.vramBytes), expiresText(m.expiresAt)].filter(Boolean).join(' · ')
+            : (m.installed === false ? tt('Kurulu değil') : tt('Yüklü değil'));
           mi.appendChild(el('span', 'muted small', info));
           const k = `${r.id}:${m.name}`;
           if (st.rtBusy[k]) mi.appendChild(el('span', 'muted small', st.rtBusy[k]));
           else if (state === 'running' && m.installed !== false) {
             mi.appendChild(m.loaded
-              ? btn('Boşalt', 'btn small', () => this._model(id, r, m.name, 'model.unload'))
-              : btn('Yükle', 'btn small', () => this._model(id, r, m.name, 'model.load')));
+              ? btn(tt('Boşalt'), 'btn small', () => this._model(id, r, m.name, 'model.unload'))
+              : btn(tt('Yükle'), 'btn small', () => this._model(id, r, m.name, 'model.load')));
           }
           ml.appendChild(mi);
         }
@@ -545,19 +546,19 @@ export class DevicesPage {
   async _rt(id, r, type) {
     const st = this._d(id);
     const start = type === 'runtime.start';
-    st.rtBusy[r.id] = start ? 'Başlatılıyor…' : 'Durduruluyor…';
+    st.rtBusy[r.id] = start ? tt('Başlatılıyor…') : 'Durduruluyor…';
     delete st.rtMsg[r.id];
     this._renderRuntimes(id);
     try {
       const res = await this.hub.request(id, { type, runtime: r.id }, { timeout: 45000 });
       if (!res.ok) {
-        const code = res.exitCode === null || res.exitCode === undefined ? '' : ` (çıkış kodu ${res.exitCode})`;
-        st.rtMsg[r.id] = { text: `${start ? 'Başlatılamadı' : 'Durdurulamadı'}${code}${res.message ? ': ' + String(res.message).slice(0, 300) : ''}`, error: true };
+        const code = res.exitCode === null || res.exitCode === undefined ? '' : ` (${tt('çıkış kodu {n}', { n: res.exitCode })})`;
+        st.rtMsg[r.id] = { text: `${start ? tt('Başlatılamadı') : tt('Durdurulamadı')}${code}${res.message ? ': ' + String(res.message).slice(0, 300) : ''}`, error: true };
       } else {
-        st.rtMsg[r.id] = { text: start ? 'Başlatıldı' : 'Durduruldu' };
+        st.rtMsg[r.id] = { text: start ? tt('Başlatıldı') : 'Durduruldu' };
       }
     } catch (e) {
-      st.rtMsg[r.id] = { text: e instanceof ControlError ? e.text : 'İşlem başarısız oldu.', error: true };
+      st.rtMsg[r.id] = { text: e instanceof ControlError ? e.text : tt('İşlem başarısız oldu.'), error: true };
     }
     delete st.rtBusy[r.id];
     try { const l = await this.hub.request(id, { type: 'runtime.list' }); st.runtimes = l.runtimes || []; } catch { /* keep */ }
@@ -568,14 +569,14 @@ export class DevicesPage {
   async _model(id, r, model, type) {
     const st = this._d(id);
     const k = `${r.id}:${model}`;
-    st.rtBusy[k] = type === 'model.load' ? 'Yükleniyor…' : 'Boşaltılıyor…';
+    st.rtBusy[k] = type === 'model.load' ? tt('Yükleniyor…') : tt('Boşaltılıyor…');
     this._renderRuntimes(id);
     try {
       const res = await this.hub.request(id, { type, runtime: r.id, model }, { timeout: 310000 });
-      st.rtMsg[r.id] = res.ok ? { text: `${model}: ${type === 'model.load' ? 'yüklendi' : 'boşaltıldı'}` }
-        : { text: `${model}: işlem başarısız${res.message ? ': ' + String(res.message).slice(0, 200) : ''}`, error: true };
+      st.rtMsg[r.id] = res.ok ? { text: `${model}: ${type === 'model.load' ? tt('yüklendi') : tt('boşaltıldı')}` }
+        : { text: `${model}: ${tt('işlem başarısız')}${res.message ? ': ' + String(res.message).slice(0, 200) : ''}`, error: true };
     } catch (e) {
-      st.rtMsg[r.id] = { text: e instanceof ControlError ? e.text : 'İşlem başarısız oldu.', error: true };
+      st.rtMsg[r.id] = { text: e instanceof ControlError ? e.text : tt('İşlem başarısız oldu.'), error: true };
     }
     delete st.rtBusy[k];
     try { const l = await this.hub.request(id, { type: 'runtime.list' }); st.runtimes = l.runtimes || []; } catch { /* keep */ }
@@ -590,40 +591,40 @@ export class DevicesPage {
     c.peers.replaceChildren();
     if (!d.ready || !st.peers) return;
     const head = el('div', 'dev-sec-head');
-    const names = st.peers.map((p) => (p.self ? 'Bu tarayıcı' : (p.label || 'Tarayıcı') + (p.lastSeen ? ` (${ago(p.lastSeen)})` : '')));
-    head.appendChild(el('span', 'small', `Eşleşen tarayıcılar: ${names.join(' · ')}`));
-    head.appendChild(btn(st.peersOpen ? 'Kapat' : 'Yönet', 'btn small ghost', () => { st.peersOpen = !st.peersOpen; this._renderPeers(id); }));
+    const names = st.peers.map((p) => (p.self ? tt('Bu tarayıcı') : (p.label || tt('Tarayıcı')) + (p.lastSeen ? ` (${ago(p.lastSeen)})` : '')));
+    head.appendChild(el('span', 'small', tt('Eşleşen tarayıcılar: {names}', { names: names.join(' · ') })));
+    head.appendChild(btn(st.peersOpen ? 'Kapat' : tt('Yönet'), 'btn small ghost', () => { st.peersOpen = !st.peersOpen; this._renderPeers(id); }));
     c.peers.appendChild(head);
     if (!st.peersOpen) return;
     const ul = el('ul', 'peer-list');
     for (const p of st.peers) {
       const li = el('li');
-      li.appendChild(el('span', null, p.self ? `${p.label || 'Tarayıcı'} (bu tarayıcı)` : (p.label || 'Tarayıcı')));
-      li.appendChild(el('span', 'muted small', ` eşleşme ${ago(p.pairedAt)}${p.lastSeen ? ' · son görülme ' + ago(p.lastSeen) : ''}`));
-      if (!p.self) li.appendChild(btn('Kaldır', 'btn small ghost', () => this._revoke(id, p)));
+      li.appendChild(el('span', null, p.self ? `${p.label || tt('Tarayıcı')} (${tt('bu tarayıcı')})` : (p.label || tt('Tarayıcı'))));
+      li.appendChild(el('span', 'muted small', ` ${tt('eşleşme')} ${ago(p.pairedAt)}${p.lastSeen ? tt(' · son görülme ') + ago(p.lastSeen) : ''}`));
+      if (!p.self) li.appendChild(btn(tt('Kaldır'), 'btn small ghost', () => this._revoke(id, p)));
       ul.appendChild(li);
     }
     c.peers.appendChild(ul);
   }
 
   async _revoke(id, p) {
-    if (!confirmBox('Bu tarayıcı artık bu cihaza görev veremez. Emin misiniz?')) return;
+    if (!confirmBox(tt('Bu tarayıcı artık bu cihaza görev veremez. Emin misiniz?'))) return;
     try {
       await this.hub.request(id, { type: 'peer.revoke', bid: p.bid });
       const st = this._d(id);
       st.peers = (st.peers || []).filter((x) => x.bid !== p.bid);
       this._renderPeers(id);
-      this.toast('Eşleşme kaldırıldı');
-    } catch (e) { this.toast(e instanceof ControlError ? e.text : 'Kaldırılamadı', { error: true }); }
+      this.toast(tt('Eşleşme kaldırıldı'));
+    } catch (e) { this.toast(e instanceof ControlError ? e.text : tt('Kaldırılamadı'), { error: true }); }
   }
 
   async _unpair(id) {
     const d = this.hub.device(id);
     if (!d) return;
-    if (!confirmBox(`Bu tarayıcının "${d.label}" ile eşleşmesi kaldırılsın mı? Görev vermek için yeniden eşleştirmeniz gerekir.`)) return;
+    if (!confirmBox(tt('Bu tarayıcının "{label}" ile eşleşmesi kaldırılsın mı? Görev vermek için yeniden eşleştirmeniz gerekir.', { label: d.label }))) return;
     const { remote } = await this.hub.unpair(id);
     this.data.delete(id);
-    this.toast(remote ? 'Eşleşme kaldırıldı' : 'Eşleşme bu tarayıcıdan silindi. Cihazda da kaldırmak için: pixel-connector peers', { ms: 6000 });
+    this.toast(remote ? tt('Eşleşme kaldırıldı') : tt('Eşleşme bu tarayıcıdan silindi. Cihazda da kaldırmak için: pixel-connector peers'), { ms: 6000 });
     this.render();
   }
 }
@@ -636,7 +637,7 @@ export class DevicesPage {
 // it is only filled in: the user still presses "Eşleştir" (a link from someone else must not pair this browser in
 // one tap) and still confirms the SAS on the computer.
 export const PAIR_LINK_RE = /^[0-9A-HJKMNP-TV-Z]{12}$/;
-export const PAIR_LINK_TEXT = 'Kod QR\'dan yazıldı. Bilgisayarınızın terminalinde aynı kod görünüyorsa Eşleştir\'e basın.';
+export const PAIR_LINK_TEXT = tt('Kod QR\'dan yazıldı. Bilgisayarınızın terminalinde aynı kod görünüyorsa Eşleştir\'e basın.');
 
 /** `#pair=` value → the formatted code, or null when it is not exactly a pairing code. */
 export function pairCodeFromLink(raw) {
@@ -704,7 +705,7 @@ export class PairWizard {
       pre.appendChild(code);
       const b = btn('Kopyala', 'btn small copy-btn', async () => {
         const ok = await this.copy(cmds[box.dataset.pcmd] || '');
-        this.toast(ok ? 'Komut kopyalandı' : 'Kopyalanamadı, metni elle seçin', { error: !ok });
+        this.toast(ok ? tt('Komut kopyalandı') : tt('Kopyalanamadı, metni elle seçin'), { error: !ok });
       });
       box.append(pre, b);
     }
@@ -737,7 +738,7 @@ export class PairWizard {
   go(n) {
     for (const s of this.steps) s.hidden = Number(s.dataset.step) !== n;
     const lab = this.dialog.querySelector('#pair-steplabel');
-    if (lab) lab.textContent = `Adım ${n} / 3`;
+    if (lab) lab.textContent = tt('Adım {n} / 3', { n });
     if (n === 3) setTimeout(() => this.input.focus(), 0);
   }
 
@@ -753,24 +754,24 @@ export class PairWizard {
     this.submit.disabled = true;
     this.input.disabled = true;
     this.sas.hidden = true;
-    this._status('Doğrulanıyor…');
+    this._status(tt('Doğrulanıyor…'));
     try {
       const dev = await this.hub.pair(code, {
-        onStage: (s) => this._status(s === 'relay' ? 'Röleye bağlanılıyor…' : 'Doğrulanıyor…'),
+        onStage: (s) => this._status(s === 'relay' ? tt('Röleye bağlanılıyor…') : tt('Doğrulanıyor…')),
         onSas: (sas) => {
           this.sas.hidden = false;
           this.sas.replaceChildren();
           this.sas.appendChild(document.createTextNode('Terminalde '));
           this.sas.appendChild(el('b', 'sas-code', sas));
-          this.sas.appendChild(document.createTextNode(' görünüyorsa orada '));
+          this.sas.appendChild(document.createTextNode(tt(' görünüyorsa orada ')));
           this.sas.appendChild(el('b', null, 'e'));
-          this.sas.appendChild(document.createTextNode(' yazıp onaylayın.'));
-          this._status('Cihazda onay bekleniyor…');
+          this.sas.appendChild(document.createTextNode(tt(' yazıp onaylayın.')));
+          this._status(tt('Cihazda onay bekleniyor…'));
         },
       });
       this.sas.hidden = true;
-      this._status(`Eşleşti: ${dev.label} ✓`, 'ok');
-      this.toast(`Eşleşti: ${dev.label}`);
+      this._status(tt('Eşleşti: {label} ✓', { label: dev.label }), 'ok');
+      this.toast(tt('Eşleşti: {label}', { label: dev.label }));
       if (this.onPaired) this.onPaired(dev);
       this.input.value = '';
       this.submit.disabled = false;
@@ -791,7 +792,7 @@ export class PairWizard {
 // =====================================================================================================
 // New agent dialog (§11.4)
 // =====================================================================================================
-export const CLAUDE_MODELS = [['', 'Varsayılan'], ['sonnet', 'sonnet'], ['opus', 'opus'], ['haiku', 'haiku']];
+export const CLAUDE_MODELS = [['', tt('Varsayılan')], ['sonnet', 'sonnet'], ['opus', 'opus'], ['haiku', 'haiku']];
 
 export class NewAgentDialog {
   constructor({ dialog, hub, toast, onCreated }) {
@@ -823,11 +824,11 @@ export class NewAgentDialog {
 
   open(deviceId = null) {
     const ready = [...this.hub.devices.values()].filter((d) => d.ready);
-    if (!ready.length) { this.toast('Çevrimiçi eşleşmiş cihaz yok. Önce Cihazlar → Cihaz ekle.', { error: true, ms: 5000 }); return; }
+    if (!ready.length) { this.toast(tt('Çevrimiçi eşleşmiş cihaz yok. Önce Cihazlar → Cihaz ekle.'), { error: true, ms: 5000 }); return; }
     const sel = this.f.device;
     sel.replaceChildren();
     for (const d of this.hub.devices.values()) {
-      const o = el('option', null, `${d.label} (${d.ready ? 'çevrimiçi' : 'çevrimdışı'})`);
+      const o = el('option', null, `${d.label} (${d.ready ? tt('çevrimiçi') : tt('çevrimdışı')})`);
       o.value = d.id;
       o.disabled = !d.ready;
       sel.appendChild(o);
@@ -857,10 +858,10 @@ export class NewAgentDialog {
     this.engineBox.replaceChildren();
     const opts = [];
     const c = eng.claude || {};
-    opts.push({ value: 'claude', label: 'Claude Code', ok: !!c.available, why: 'cihazda bulunamadı' });
+    opts.push({ value: 'claude', label: 'Claude Code', ok: !!c.available, why: tt('cihazda bulunamadı') });
     const o = eng.ollama || {};
-    opts.push({ value: 'ollama', label: 'Ollama', ok: !!o.available, why: 'çalışmıyor ya da kapalı' });
-    for (const s of Array.isArray(eng.openai) ? eng.openai : []) opts.push({ value: `openai:${s.id}`, label: s.name || s.id, ok: !!s.available, why: 'sunucu çalışmıyor' });
+    opts.push({ value: 'ollama', label: 'Ollama', ok: !!o.available, why: tt('çalışmıyor ya da kapalı') });
+    for (const s of Array.isArray(eng.openai) ? eng.openai : []) opts.push({ value: `openai:${s.id}`, label: s.name || s.id, ok: !!s.available, why: tt('sunucu çalışmıyor') });
     let first = null;
     for (const op of opts) {
       const lab = el('label', `radio${op.ok ? '' : ' disabled'}`);
@@ -884,7 +885,7 @@ export class NewAgentDialog {
     for (const p of profiles) {
       const t = PROFILE_TEXT[p.id];
       if (!t) continue;
-      const op = el('option', null, p.enabled ? t.label : `${t.label} (yalnız cihazda açıksa)`);
+      const op = el('option', null, p.enabled ? t.label : `${t.label} (${tt('yalnız cihazda açıksa')})`);
       op.value = p.id;
       op.disabled = !p.enabled;
       op.title = t.tip;
@@ -894,7 +895,7 @@ export class NewAgentDialog {
     this.autoNote.hidden = true;
     // workspaces
     const wsSel = this.f.workspace;
-    wsSel.replaceChildren(el('option', null, 'Yükleniyor…'));
+    wsSel.replaceChildren(el('option', null, tt('Yükleniyor…')));
     let list = this.wsCache.get(d.id);
     if (!list || !list.length) {         // an empty list is re-asked: the user may have just run `workspace add`
       try {
@@ -902,7 +903,7 @@ export class NewAgentDialog {
         this.wsCache.set(d.id, list);
       } catch (e) {
         list = null;                     // unknown, not empty: no "no workspaces" hint
-        this._error(e instanceof ControlError ? e.text : 'Klasörler alınamadı');
+        this._error(e instanceof ControlError ? e.text : tt('Klasörler alınamadı'));
       }
     }
     if (this._device() !== d) return;
@@ -931,22 +932,22 @@ export class NewAgentDialog {
       models = (s && s.models || []).map((m) => [m, m]);
     }
     for (const [v, t] of models) { const o = el('option', null, t); o.value = v; ms.appendChild(o); }
-    if (!models.length) { const o = el('option', null, 'Model yok'); o.value = ''; ms.appendChild(o); }
+    if (!models.length) { const o = el('option', null, tt('Model yok')); o.value = ''; ms.appendChild(o); }
     // workspace: required for Claude, optional for chat models
     const wsSel = this.f.workspace;
     const keep = wsSel.value;
     wsSel.replaceChildren();
-    if (!isClaude) { const o = el('option', null, '(yok, yalnızca sohbet)'); o.value = ''; wsSel.appendChild(o); }
+    if (!isClaude) { const o = el('option', null, tt('(yok, yalnızca sohbet)')); o.value = ''; wsSel.appendChild(o); }
     for (const w of this.workspaces || []) { const o = el('option', null, w.name); o.value = w.id; wsSel.appendChild(o); }
     const none = isClaude && noWorkspaces(this.workspaces);
-    if (none) { const o = el('option', null, 'İzinli klasör yok'); o.value = ''; wsSel.appendChild(o); }
+    if (none) { const o = el('option', null, tt('İzinli klasör yok')); o.value = ''; wsSel.appendChild(o); }
     this.wsHint.hidden = !none;
     if ([...wsSel.options].some((o) => o.value === keep)) wsSel.value = keep;
     this.f.profile.disabled = !isClaude;
     this.dialog.querySelector('#agent-profile-row').hidden = !isClaude;
     this.dialog.querySelector('#agent-local-note').hidden = isClaude || !ev;
     if (!this.f.name.value || this.f.name.dataset.auto === '1') {
-      this.f.name.value = isClaude ? 'Kâtip' : 'Yerel';
+      this.f.name.value = isClaude ? tt('Kâtip') : 'Yerel';
       this.f.name.dataset.auto = '1';
     }
     this.f.name.oninput = () => { this.f.name.dataset.auto = '0'; };
@@ -969,22 +970,22 @@ export class NewAgentDialog {
   async create() {
     const d = this._device();
     const ev = this._engineValue();
-    if (!d || !ev) { this._error('Bir motor seçin.'); return; }
+    if (!d || !ev) { this._error(tt('Bir motor seçin.')); return; }
     const name = this.f.name.value.trim();
-    if (!name || [...name].length > 24) { this._error('Ad 1–24 karakter olmalı.'); return; }
+    if (!name || [...name].length > 24) { this._error(tt('Ad 1–24 karakter olmalı.')); return; }
     const engine = ev.startsWith('openai:') ? 'openai' : ev;
     const model = this.f.model.value || null;
-    if (engine !== 'claude' && !model) { this._error('Bir model seçin.'); return; }
+    if (engine !== 'claude' && !model) { this._error(tt('Bir model seçin.')); return; }
     const wsId = this.f.workspace.value;
     if (engine === 'claude' && !wsId) {
-      this._error(noWorkspaces(this.workspaces) ? NO_WORKSPACE_HINT : 'Claude Code ajanı için bir çalışma klasörü seçin.');
+      this._error(noWorkspaces(this.workspaces) ? NO_WORKSPACE_HINT : tt('Claude Code ajanı için bir çalışma klasörü seçin.'));
       return;
     }
     const sub = this.f.sub.value.trim() || null;
     let budget = null;
     if (this.f.useBudget.checked) {
       const n = Number(String(this.f.budgetLimit.value).replace(',', '.'));
-      if (!(n > 0)) { this._error('Bütçe sınırı sıfırdan büyük olmalı.'); return; }
+      if (!(n > 0)) { this._error(tt('Bütçe sınırı sıfırdan büyük olmalı.')); return; }
       budget = { period: 'day', unit: this.f.budgetUnit.value, limit: n, action: this.f.budgetAction.value };
     }
     const msg = { type: 'agent.create', name, engine, model, workspace: wsId ? { id: wsId, sub: this.subRow.hidden ? null : sub } : null,
@@ -996,12 +997,12 @@ export class NewAgentDialog {
       const r = await this.hub.request(d.id, msg, { timeout: 130000 });
       this.hub.putAgent(d.id, r.agent);
       this.dialog.close();
-      this.toast(`Ajan oluşturuldu: ${r.agent.name}. Birazdan ofise girer.`, { ms: 5000 });
+      this.toast(tt('Ajan oluşturuldu: {name}. Birazdan ofise girer.', { name: r.agent.name }), { ms: 5000 });
       if (this.onCreated) this.onCreated({ device: d.id, agent: r.agent.key });
     } catch (e) {
-      const t = { workspace_denied: 'Bu klasör cihazın izin listesinde değil.', not_allowed: 'Bu cihaz uzaktan ajan oluşturmaya izin vermiyor.',
-        engine_unavailable: 'Bu motor cihazda bulunamadı.' }[e && e.code];
-      this._error(t || (e instanceof ControlError ? e.text : 'Ajan oluşturulamadı.'));
+      const t = { workspace_denied: tt('Bu klasör cihazın izin listesinde değil.'), not_allowed: tt('Bu cihaz uzaktan ajan oluşturmaya izin vermiyor.'),
+        engine_unavailable: tt('Bu motor cihazda bulunamadı.') }[e && e.code];
+      this._error(t || (e instanceof ControlError ? e.text : tt('Ajan oluşturulamadı.')));
     } finally {
       this.f.create.disabled = false;
     }

@@ -9,6 +9,7 @@ import {
   weightedTokens, WEIGHT_NOTE, PERIOD_NOUN,
 } from './usage.js';
 import { makeExportActions, defaultNotifier } from './notify.js';
+import { t as tt } from './i18n.js';
 
 const MAX_TASK_BLOCKS = 12;      // older task blocks are dropped from the output log
 const MAX_OUT_NODES = 3000;      // per task block (very long outputs keep their tail)
@@ -16,10 +17,10 @@ const MAX_OUT_NODES = 3000;      // per task block (very long outputs keep their
 export const HANDOFF_NOTE_MAX = 4096;
 
 export const PROFILE_TEXT = {
-  readonly: { label: 'Sadece okuma', tip: 'Klasördeki dosyaları okuyabilir; düzenleyemez, komut çalıştıramaz.' },
-  edit: { label: 'Düzenleyebilir', tip: 'Dosya okuyup düzenleyebilir, komut çalıştıramaz.' },
-  dev: { label: 'Geliştirici', tip: 'Dosya düzenleyebilir ve yalnızca cihazda izin verilen komutları çalıştırabilir.' },
-  auto: { label: 'Otomatik', tip: 'Claude her adımı sizin yerinize, bir güvenlik sınıflandırıcısıyla onaylar.' },
+  readonly: { label: tt('Sadece okuma'), tip: tt('Klasördeki dosyaları okuyabilir; düzenleyemez, komut çalıştıramaz.') },
+  edit: { label: tt('Düzenleyebilir'), tip: tt('Dosya okuyup düzenleyebilir, komut çalıştıramaz.') },
+  dev: { label: tt('Geliştirici'), tip: tt('Dosya düzenleyebilir ve yalnızca cihazda izin verilen komutları çalıştırabilir.') },
+  auto: { label: 'Otomatik', tip: tt('Claude her adımı sizin yerinize, bir güvenlik sınıflandırıcısıyla onaylar.') },
 };
 
 function el(tag, cls, text) {
@@ -143,29 +144,29 @@ export class MdStream {
       if (!c || c === this.block || c === (this.code && this.code.parentNode)) break;
       c.remove();
     }
-    if (!this.root.querySelector(':scope > .out-cut')) this.root.prepend(el('div', 'out-cut muted', '… önceki çıktı kısaltıldı'));
+    if (!this.root.querySelector(':scope > .out-cut')) this.root.prepend(el('div', 'out-cut muted', tt('… önceki çıktı kısaltıldı')));
   }
 }
 
 const END_TEXT = {
   cancelled: 'Durduruldu',
-  denied: 'Cihazda reddedildi',
-  budget: 'Bütçe sınırına ulaşıldı',
+  denied: tt('Cihazda reddedildi'),
+  budget: tt('Bütçe sınırına ulaşıldı'),
 };
 
 /** task.end → status line text (§11.2). */
 export function endText(m) {
   const st = m.status;
   if (st === 'success') {
-    const bits = ['Tamamlandı'];
+    const bits = [tt('Tamamlandı')];
     if (Number.isFinite(m.turns) && m.turns > 0) bits.push(`${m.turns} tur`);
     if (Number.isFinite(m.durationMs)) bits.push(fmtDuration(m.durationMs));
     return bits.join(' · ');
   }
-  if (st === 'timeout') return `Süre aşımı (${Math.max(1, Math.round((m.durationMs || 0) / 60000))} dk)`;
+  if (st === 'timeout') return tt('Süre aşımı ({n} dk)', { n: Math.max(1, Math.round((m.durationMs || 0) / 60000)) });
   if (st === 'error') return `Hata: ${errorText(m.error && m.error.code)}`;
-  if (st === 'denied' && m.error && m.error.code === 'confirm_timeout') return 'Cihazda onay süresi doldu';
-  if (st === 'cancelled' && m.error && m.error.code === 'revoked') return 'Durduruldu: başlatan tarayıcının eşleşmesi kaldırıldı';
+  if (st === 'denied' && m.error && m.error.code === 'confirm_timeout') return tt('Cihazda onay süresi doldu');
+  if (st === 'cancelled' && m.error && m.error.code === 'revoked') return tt('Durduruldu: başlatan tarayıcının eşleşmesi kaldırıldı');
   return END_TEXT[st] || 'Bitti';
 }
 
@@ -195,12 +196,12 @@ function denyTarget(name, summary) {
 export function denialText(count, targets, scope) {
   const uniq = [...new Set(targets)];
   const shown = uniq.slice(0, MAX_DENY_TARGETS).join(' · ') + (uniq.length > MAX_DENY_TARGETS ? ' · …' : '');
-  const head = count > 1 ? `⚠ İzin dışı işlem engellendi (${count} deneme)` : '⚠ İzin dışı işlem engellendi';
-  let why = 'Bu ajanın izinleri bu işlemi kapsamıyor.';
+  const head = count > 1 ? tt('⚠ İzin dışı işlem engellendi ({n} deneme)', { n: count }) : tt('⚠ İzin dışı işlem engellendi');
+  let why = tt('Bu ajanın izinleri bu işlemi kapsamıyor.');
   if (scope && scope.profile === 'readonly') {
-    why = scope.folder ? `Bu ajan yalnızca «${scope.folder}» klasöründe ve yalnızca okuma yapabilir.` : 'Bu ajan yalnızca okuma yapabilir.';
+    why = scope.folder ? tt('Bu ajan yalnızca «{folder}» klasöründe ve yalnızca okuma yapabilir.', { folder: scope.folder }) : tt('Bu ajan yalnızca okuma yapabilir.');
   } else if (scope && scope.folder) {
-    why = `Bu ajan yalnızca «${scope.folder}» klasöründe çalışabilir.`;
+    why = tt('Bu ajan yalnızca «{folder}» klasöründe çalışabilir.', { folder: scope.folder });
   }
   return `${head}${shown ? ': ' + shown : ''} · ${why}`;
 }
@@ -213,7 +214,7 @@ export class TaskBlock {
     this.el.dataset.task = task || '';
     if (prompt) {
       const q = el('div', 'out-prompt');
-      q.appendChild(el('span', 'out-you', 'Siz › '));
+      q.appendChild(el('span', 'out-you', tt('Siz › ')));
       q.appendChild(document.createTextNode(prompt.length > 2000 ? prompt.slice(0, 2000) + '…' : prompt));
       this.el.appendChild(q);
     }
@@ -268,7 +269,7 @@ export class TaskBlock {
       case 'tool': {
         this._break();
         const row = el('div', 'part-tool');
-        row.appendChild(el('span', 'tool-k', 'Araç: '));
+        row.appendChild(el('span', 'tool-k', tt('Araç: ')));
         row.appendChild(el('b', null, String(p.name || '?').slice(0, 60)));
         if (v) row.appendChild(document.createTextNode(` — ${v}`));
         const st = el('span', 'tool-st', ' …');
@@ -319,7 +320,7 @@ export class TaskBlock {
       t.row.remove();
     } else {
       const row = el('div', 'part-tool');
-      row.appendChild(el('span', 'tool-k', 'Araç: '));
+      row.appendChild(el('span', 'tool-k', tt('Araç: ')));
       row.appendChild(el('b', null, String(p.name || '?').slice(0, 60)));
       const st = el('span', 'tool-st');
       row.appendChild(st);
@@ -328,7 +329,7 @@ export class TaskBlock {
     }
     t.done = true;
     t.denied = true;
-    t.st.textContent = ' ✗ İzin reddedildi';
+    t.st.textContent = tt(' ✗ İzin reddedildi');
     t.row.classList.add('bad');
     if (v) t.row.title = v;
     let g = this.denyGroup;
@@ -359,7 +360,7 @@ export class TaskBlock {
       this.sawText = true;
     }
     this._break();
-    if (truncated) this.body.appendChild(el('div', 'part-note muted', 'Çıktı kısaltıldı; tam metin cihazda duruyor.'));
+    if (truncated) this.body.appendChild(el('div', 'part-note muted', tt('Çıktı kısaltıldı; tam metin cihazda duruyor.')));
   }
 
   end(m, line, costTxt) {
@@ -541,8 +542,8 @@ export class PromptPanel {
     const c = this.agent.control;
     if (this.mode === 'unpaired') {
       const box = el('div', 'ctl ctl-unpaired');
-      box.appendChild(el('p', 'muted', 'Bu ajan bir bağlayıcı cihazında çalışıyor. Cihaz sizinse, görev vermek için bu tarayıcıyı eşleştirin.'));
-      const b = el('button', 'btn small', 'Cihazı eşleştir');
+      box.appendChild(el('p', 'muted', tt('Bu ajan bir bağlayıcı cihazında çalışıyor. Cihaz sizinse, görev vermek için bu tarayıcıyı eşleştirin.')));
+      const b = el('button', 'btn small', tt('Cihazı eşleştir'));
       b.type = 'button';
       b.addEventListener('click', () => this.onPair());
       box.appendChild(b);
@@ -551,7 +552,7 @@ export class PromptPanel {
     }
     const v = this.view;
     const root = el('section', 'ctl');
-    root.setAttribute('aria-label', 'Görev ver');
+    root.setAttribute('aria-label', tt('Görev ver'));
 
     // usage line + gauges + budget editor
     const usage = el('div', 'ctl-usage');
@@ -565,11 +566,11 @@ export class PromptPanel {
     // compose
     const form = el('form', 'ctl-compose');
     form.setAttribute('autocomplete', 'off');
-    const h = el('h3', 'ctl-title', 'Görev ver');
+    const h = el('h3', 'ctl-title', tt('Görev ver'));
     const ta = el('textarea', 'ctl-ta');
     ta.rows = 3;
-    ta.placeholder = 'Bu ajana bir görev yazın…';
-    ta.setAttribute('aria-label', 'Görev metni');
+    ta.placeholder = tt('Bu ajana bir görev yazın…');
+    ta.setAttribute('aria-label', tt('Görev metni'));
     ta.setAttribute('enterkeyhint', 'send');
     ta.spellcheck = false;
     ta.value = v.draft || '';
@@ -584,12 +585,12 @@ export class PromptPanel {
     cb.type = 'checkbox';
     cb.checked = v.fresh;
     cb.addEventListener('change', () => { v.fresh = cb.checked; });
-    fresh.append(cb, document.createTextNode(' Yeni sohbet başlat'));
-    fresh.title = 'Önceki konuşmayı unutup sıfırdan başlar.';
+    fresh.append(cb, document.createTextNode(tt(' Yeni sohbet başlat')));
+    fresh.title = tt('Önceki konuşmayı unutup sıfırdan başlar.');
     this.els.profile = el('span', 'ctl-profile small');
     const send = el('button', 'btn accent ctl-send');
     send.type = 'submit';
-    send.appendChild(document.createTextNode('Gönder'));
+    send.appendChild(document.createTextNode(tt('Gönder')));
     send.appendChild(el('kbd', 'kbd-hint', 'Ctrl+Enter'));
     row.append(fresh, this.els.profile, send);
     this.els.hint = el('div', 'ctl-hint muted small');
@@ -602,7 +603,7 @@ export class PromptPanel {
     // output
     const outWrap = el('div', 'ctl-outwrap');
     const head = el('div', 'ctl-out-head');
-    head.appendChild(el('span', 'ctl-out-title', 'Çıktı'));
+    head.appendChild(el('span', 'ctl-out-title', tt('Çıktı')));
     this.els.run = el('span', 'ctl-run');
     head.appendChild(this.els.run);
     const jump = el('button', 'ctl-jump btn small', '↓ Sona git');
@@ -622,7 +623,7 @@ export class PromptPanel {
 
     // recent tasks
     const recent = el('details', 'ctl-recent');
-    recent.appendChild(el('summary', null, 'Son görevler'));
+    recent.appendChild(el('summary', null, tt('Son görevler')));
     this.els.recentList = el('ul', 'recent-tasks');
     recent.appendChild(this.els.recentList);
     recent.addEventListener('toggle', () => { if (recent.open) this._loadRecent(); });
@@ -638,14 +639,14 @@ export class PromptPanel {
   _handoffBox() {
     const v = this.view;
     const box = el('details', 'ctl-handoff');
-    const sum = el('summary', 'ctl-handoff-sum small', 'Bitince devret');
-    sum.title = 'Görev başarıyla biterse son yanıtı, seçtiğiniz ajana veri olarak verilir ve o ajan çalışmaya başlar.';
+    const sum = el('summary', 'ctl-handoff-sum small', tt('Bitince devret'));
+    sum.title = tt('Görev başarıyla biterse son yanıtı, seçtiğiniz ajana veri olarak verilir ve o ajan çalışmaya başlar.');
     const to = el('select', 'ctl-handoff-to');
-    to.setAttribute('aria-label', 'Bitince şu ajana devret');
+    to.setAttribute('aria-label', tt('Bitince şu ajana devret'));
     const note = el('textarea', 'ctl-handoff-note');
     note.rows = 2;
-    note.placeholder = 'Ek talimat (isteğe bağlı), ör. "Bu planı uygula"';
-    note.setAttribute('aria-label', 'Devir için ek talimat');
+    note.placeholder = tt('Ek talimat (isteğe bağlı), ör. "Bu planı uygula"');
+    note.setAttribute('aria-label', tt('Devir için ek talimat'));
     note.spellcheck = false;
     note.value = v.handoffNote || '';
     to.addEventListener('change', () => { v.handoffTo = to.value; this._update(); });
@@ -677,28 +678,28 @@ export class PromptPanel {
     if (!target) v.handoffTo = '';
     handoffTo.value = v.handoffTo;
     handoffNote.hidden = !v.handoffTo;
-    handoffSum.textContent = target ? `Bitince devret: «${target.name}»` : 'Bitince devret';
+    handoffSum.textContent = target ? `Bitince devret: «${target.name}»` : tt('Bitince devret');
   }
 
   /** E11: "Ajanı sil" with an inline confirmation (no window.confirm: it can be blocked in installed apps). */
   _deleteBox() {
     const box = el('div', 'ctl-delete');
-    const del = el('button', 'btn small ghost ctl-del', 'Ajanı sil');
+    const del = el('button', 'btn small ghost ctl-del', tt('Ajanı sil'));
     del.type = 'button';
     const why = el('span', 'ctl-del-why muted small');
     const ask = el('div', 'ctl-del-ask');
     ask.hidden = true;
     ask.setAttribute('role', 'group');
     const q = el('span', 'ctl-del-q small');
-    const yes = el('button', 'btn small danger-btn ctl-del-yes', 'Evet, sil');
+    const yes = el('button', 'btn small danger-btn ctl-del-yes', tt('Evet, sil'));
     yes.type = 'button';
-    const no = el('button', 'btn small ctl-del-no', 'Vazgeç');
+    const no = el('button', 'btn small ctl-del-no', tt('Vazgeç'));
     no.type = 'button';
     ask.append(q, yes, no);
     box.append(del, why, ask);
     del.addEventListener('click', () => {
       const da = this._devAgent();
-      q.textContent = `«${da ? da.name : 'Bu ajan'}» silinsin mi? Karakter ofisten çıkar, sohbet geçmişi silinir.`;
+      q.textContent = tt('«{name}» silinsin mi? Karakter ofisten çıkar, sohbet geçmişi silinir.', { name: da ? da.name : tt('Bu ajan') });
       del.hidden = true;
       ask.hidden = false;
       no.focus();
@@ -718,8 +719,8 @@ export class PromptPanel {
     try {
       await this.hub.deleteAgent(v.deviceId, v.key);
       v.deleted = true;
-      v.message = { text: 'Ajan silindi. Karakter birazdan ofisten çıkar.' };
-      this.toast('Ajan silindi');
+      v.message = { text: tt('Ajan silindi. Karakter birazdan ofisten çıkar.') };
+      this.toast(tt('Ajan silindi'));
     } catch (e) {
       this.toast(e instanceof ControlError ? e.text : 'Silinemedi', { error: true });
     } finally {
@@ -739,7 +740,7 @@ export class PromptPanel {
     const busy = v.running || !!(da && da.task);
     del.disabled = busy || !!v.deleting;
     delYes.disabled = busy || !!v.deleting;
-    delWhy.textContent = busy ? 'Görev çalışırken silinemez; önce durdurun.' : '';
+    delWhy.textContent = busy ? tt('Görev çalışırken silinemez; önce durdurun.') : '';
   }
 
   _grow() {
@@ -773,7 +774,7 @@ export class PromptPanel {
     this.els.profile.replaceChildren();
     if (engine === 'claude') {
       const p = PROFILE_TEXT[da.profile] || PROFILE_TEXT.edit;
-      this.els.profile.appendChild(document.createTextNode(`İzin: ${p.label} `));
+      this.els.profile.appendChild(document.createTextNode(`${tt('İzin: {label}', { label: p.label })} `));
       const i = el('span', 'info', 'ⓘ');
       i.title = p.tip;
       i.tabIndex = 0;
@@ -781,25 +782,25 @@ export class PromptPanel {
       this.els.profile.appendChild(i);
     }
     let hint = '';
-    if (this.mode === 'offline') hint = 'Cihaz çevrimdışı. Bağlayıcı çalışıyor mu? (Cihazlar → Durum)';
-    else if (this.mode === 'connecting') hint = 'Cihaza güvenli bağlantı kuruluyor…';
-    else if (this.mode === 'error') hint = 'Cihazla güvenli bağlantı kurulamadı. Yeniden eşleştirmeyi deneyin (Cihazlar).';
-    else if (d && d.isBrowserLocal) hint = 'Tarayıcı ajanı: bu tarayıcıdaki sanal klasörde dosya okur ve yazar, komut çalıştırmaz.';
-    else if (engine === 'ollama' || engine === 'openai') hint = 'Model: sohbet eder. Bağlayıcıda araçlar açıksa klasörde dosya okuyup yazar, komut çalıştırmaz.';
+    if (this.mode === 'offline') hint = tt('Cihaz çevrimdışı. Bağlayıcı çalışıyor mu? (Cihazlar → Durum)');
+    else if (this.mode === 'connecting') hint = tt('Cihaza güvenli bağlantı kuruluyor…');
+    else if (this.mode === 'error') hint = tt('Cihazla güvenli bağlantı kurulamadı. Yeniden eşleştirmeyi deneyin (Cihazlar).');
+    else if (d && d.isBrowserLocal) hint = tt('Tarayıcı ajanı: bu tarayıcıdaki sanal klasörde dosya okur ve yazar, komut çalıştırmaz.');
+    else if (engine === 'ollama' || engine === 'openai') hint = tt('Model: sohbet eder. Bağlayıcıda araçlar açıksa klasörde dosya okuyup yazar, komut çalıştırmaz.');
     else if (engine === 'claude' && da) {
       // H39: where files go and what the agent may do, so out-of-folder requests don't surprise anyone.
       const sc = agentScope(da);
       const p = PROFILE_TEXT[da.profile] || PROFILE_TEXT.edit;
-      hint = sc.folder ? `Klasör: ${sc.folder} · İzin: ${p.label} · Yalnızca bu klasörde çalışır` : `İzin: ${p.label}`;
+      hint = sc.folder ? tt('Klasör: {folder} · İzin: {label} · Yalnızca bu klasörde çalışır', { folder: sc.folder, label: p.label }) : tt('İzin: {label}', { label: p.label });
     }
     this.els.hint.textContent = hint;
     this.els.hint.classList.toggle('warn', this.mode !== 'ready');
     // status message
     let msg = v.message;
     if (!msg) {
-      if (v.state === 'sending') msg = { text: 'Gönderiliyor…' };
-      else if (v.state === 'confirm') msg = { text: 'Cihazda onay bekleniyor… Bilgisayardaki bildirimden onaylayın.' };
-      else if (v.state === 'queued') msg = { text: 'Ajan meşgul, görev sıraya alındı.' };
+      if (v.state === 'sending') msg = { text: tt('Gönderiliyor…') };
+      else if (v.state === 'confirm') msg = { text: tt('Cihazda onay bekleniyor… Bilgisayardaki bildirimden onaylayın.') };
+      else if (v.state === 'queued') msg = { text: tt('Ajan meşgul, görev sıraya alındı.') };
     }
     this.els.msg.textContent = msg ? msg.text : '';
     this.els.msg.classList.toggle('error', !!(msg && msg.error));
@@ -807,7 +808,7 @@ export class PromptPanel {
     this._tickClock();
     const lt = liveTokensText(v.live);
     const pending = v.running && (!v.live || weightedTokens(v.live) === 0);
-    this.els.live.textContent = pending ? (engine === 'claude' ? '' : 'Token sayısı görev bitince gelir')
+    this.els.live.textContent = pending ? (engine === 'claude' ? '' : tt('Token sayısı görev bitince gelir'))
       : v.live ? lt.text : '';
     this.els.live.title = lt.title;
     this.els.outWrap.classList.toggle('empty', !v.blocks.size);
@@ -823,11 +824,11 @@ export class PromptPanel {
     let t = '';
     let cls = '';
     if (v.state === 'running' || v.state === 'stopping') {
-      t = `● Çalışıyor ${fmtClock(Date.now() - (v.startedAt || Date.now()))}`;
+      t = `● ${tt('Çalışıyor')} ${fmtClock(Date.now() - (v.startedAt || Date.now()))}`;
       cls = 'run';
     } else if (v.state === 'confirm') { t = '● Onay bekliyor'; cls = 'wait'; }
-    else if (v.state === 'queued') { t = '● Sırada'; cls = 'wait'; }
-    else if (v.state === 'sending') { t = '● Gönderiliyor'; cls = 'wait'; }
+    else if (v.state === 'queued') { t = tt('● Sırada'); cls = 'wait'; }
+    else if (v.state === 'sending') { t = tt('● Gönderiliyor'); cls = 'wait'; }
     else if (v.endLine) { t = v.endLine.text; cls = v.endLine.cls; }
     this.els.run.textContent = t;
     this.els.run.className = `ctl-run ${cls}`;
@@ -887,7 +888,7 @@ export class PromptPanel {
 
   _budgetEditor() {
     const det = el('details', 'budget-edit');
-    det.appendChild(el('summary', null, 'Ajan bütçesi'));
+    det.appendChild(el('summary', null, tt('Ajan bütçesi')));
     const f = el('form', 'budget-form');
     f.setAttribute('autocomplete', 'off');
     const sel = (name, opts) => {
@@ -902,23 +903,23 @@ export class PromptPanel {
     lim.min = '0';
     lim.step = 'any';
     lim.inputMode = 'decimal';
-    lim.placeholder = 'Sınır';
-    lim.setAttribute('aria-label', 'Bütçe sınırı');
+    lim.placeholder = tt('Sınır');
+    lim.setAttribute('aria-label', tt('Bütçe sınırı'));
     const unit = sel('unit', [['usd', '$ (tahmini)'], ['tokens', 'token']]);
-    const period = sel('period', [['day', 'Günlük'], ['week', 'Haftalık'], ['month', 'Aylık']]);
+    const period = sel('period', [['day', tt('Günlük')], ['week', tt('Haftalık')], ['month', tt('Aylık')]]);
     const action = sel('action', [['warn', 'uyar'], ['block', 'durdur']]);
-    for (const [s, l] of [[unit, 'Birim'], [period, 'Dönem'], [action, 'Aşılınca']]) s.setAttribute('aria-label', l);
+    for (const [s, l] of [[unit, 'Birim'], [period, tt('Dönem')], [action, tt('Aşılınca')]]) s.setAttribute('aria-label', l);
     const save = el('button', 'btn small accent', 'Kaydet');
     save.type = 'submit';
-    const del = el('button', 'btn small ghost', 'Kaldır');
+    const del = el('button', 'btn small ghost', tt('Kaldır'));
     del.type = 'button';
     del.name = 'del';
     f.append(period, lim, unit, action, save, del);
-    f.appendChild(el('p', 'muted small', '"durdur": sınır dolunca yeni görev kabul edilmez. "uyar": yalnızca gösterge kırmızıya döner.'));
+    f.appendChild(el('p', 'muted small', tt('"durdur": sınır dolunca yeni görev kabul edilmez. "uyar": yalnızca gösterge kırmızıya döner.')));
     f.addEventListener('submit', (e) => {
       e.preventDefault();
       const n = Number(String(lim.value).replace(',', '.'));
-      if (!(n > 0)) { this.toast('Sınır sıfırdan büyük olmalı', { error: true }); return; }
+      if (!(n > 0)) { this.toast(tt('Sınır sıfırdan büyük olmalı'), { error: true }); return; }
       this._setBudget({ period: period.value, unit: unit.value, limit: n, action: action.value });
     });
     del.addEventListener('click', () => this._setBudget(null));
@@ -932,11 +933,11 @@ export class PromptPanel {
     try {
       const r = await this.hub.request(v.deviceId, { type: 'agent.update', agent: v.key, budget });
       this.hub.putAgent(v.deviceId, r.agent);
-      this.toast(budget ? 'Bütçe kaydedildi' : 'Bütçe kaldırıldı');
+      this.toast(budget ? tt('Bütçe kaydedildi') : tt('Bütçe kaldırıldı'));
       if (this.els && this.els.budget) this.els.budget.open = false;
       await this._loadUsage();
     } catch (e) {
-      this.toast(e instanceof ControlError ? e.text : 'Bütçe kaydedilemedi', { error: true });
+      this.toast(e instanceof ControlError ? e.text : tt('Bütçe kaydedilemedi'), { error: true });
     }
   }
 
@@ -954,16 +955,16 @@ export class PromptPanel {
     const v = this.view;
     const list = this.els && this.els.recentList;
     if (!v || !list || !this.hub.isReady(v.deviceId)) return;
-    list.replaceChildren(el('li', 'muted', 'Yükleniyor…'));
+    list.replaceChildren(el('li', 'muted', tt('Yükleniyor…')));
     try {
       const r = await this.hub.request(v.deviceId, { type: 'task.list', agent: v.key, limit: 10 });
       if (this.view !== v || !this.els) return;
       list.replaceChildren();
       const tasks = Array.isArray(r.tasks) ? r.tasks : [];
-      if (!tasks.length) list.appendChild(el('li', 'muted', 'Henüz görev yok.'));
+      if (!tasks.length) list.appendChild(el('li', 'muted', tt('Henüz görev yok.')));
       for (const t of tasks) list.appendChild(this._recentRow(v, t));
     } catch (e) {
-      list.replaceChildren(el('li', 'error', e instanceof ControlError ? e.text : 'Yüklenemedi'));
+      list.replaceChildren(el('li', 'error', e instanceof ControlError ? e.text : tt('Yüklenemedi')));
     }
   }
 
@@ -973,7 +974,7 @@ export class PromptPanel {
     b.type = 'button';
     const st = { success: '✓', error: '✗', cancelled: '■', denied: '⊘', budget: '$', timeout: '⏱', running: '●', queued: '…', confirm: '?' }[t.status] || '·';
     b.appendChild(el('span', `rt-st st-${t.status}`, st));
-    b.appendChild(el('span', 'rt-prev', t.preview || '(boş)'));
+    b.appendChild(el('span', 'rt-prev', t.preview || tt('(boş)')));
     const meta = [];
     if (t.startedAt && t.endedAt) meta.push(fmtDuration(t.endedAt - t.startedAt));
     if (Number.isFinite(t.tokens)) meta.push(`${fmtCompact(t.tokens)} token`);
@@ -986,7 +987,7 @@ export class PromptPanel {
   async _openTask(v, task) {
     try {
       const r = await this.hub.request(v.deviceId, { type: 'task.get', task });
-      const b = new TaskBlock(`old-${task}`, r.prompt, 'Önceki görev');
+      const b = new TaskBlock(`old-${task}`, r.prompt, tt('Önceki görev'));
       b.result(r.result || '', r.truncated);
       const cost = costLabel(r.costUsd, r.costBasis, this._costAuth());
       b.end({ status: r.status }, `${endText({ status: r.status, durationMs: r.endedAt && r.startedAt ? r.endedAt - r.startedAt : null })} · ${fmtCompact(weightedTokens(r.usage))} token`, cost);
@@ -994,7 +995,7 @@ export class PromptPanel {
       v.out.scrollTop = v.out.scrollHeight;
       if (this.els) this.els.outWrap.classList.remove('empty');
     } catch (e) {
-      this.toast(e instanceof ControlError ? e.text : 'Görev açılamadı', { error: true });
+      this.toast(e instanceof ControlError ? e.text : tt('Görev açılamadı'), { error: true });
     }
   }
 
@@ -1016,7 +1017,7 @@ export class PromptPanel {
     if (target) {
       const note = (v.handoffNote || '').trim();
       if (new TextEncoder().encode(note).length > HANDOFF_NOTE_MAX) {
-        v.message = { text: 'Devir talimatı çok uzun (en fazla 4 KB).', error: true };
+        v.message = { text: tt('Devir talimatı çok uzun (en fazla 4 KB).'), error: true };
         this._update();
         return;
       }
@@ -1031,7 +1032,7 @@ export class PromptPanel {
       ack = await this.hub.request(v.deviceId, req);
     } catch (e) {
       v.state = prev === 'sending' ? 'idle' : prev;
-      v.message = { text: e instanceof ControlError ? e.text : 'Gönderilemedi.', error: true };
+      v.message = { text: e instanceof ControlError ? e.text : tt('Gönderilemedi.'), error: true };
       if (this.view === v) this._update();
       return;
     }
@@ -1046,7 +1047,7 @@ export class PromptPanel {
       this.els.handoff.open = false;
       this._grow();
     }
-    const handNote = target && ack.handoff === target.key ? `Bitince «${target.name}» ajanına devredilecek` : null;
+    const handNote = target && ack.handoff === target.key ? tt('Bitince «{name}» ajanına devredilecek', { name: target.name }) : null;
     const b = v.block(ack.task, text, handNote);
     if (!b.ended) {
       v.task = ack.task;
@@ -1073,7 +1074,7 @@ export class PromptPanel {
       await this.hub.request(v.deviceId, { type: 'task.cancel', task: v.task }, { quiet: true, timeout: 5000 });
     } catch (e) {
       if (v.state === 'stopping') v.state = 'running';
-      this.toast(e instanceof ControlError ? e.text : 'Durdurulamadı', { error: true });
+      this.toast(e instanceof ControlError ? e.text : tt('Durdurulamadı'), { error: true });
       if (this.view === v) this._update();
     }
   }
@@ -1101,7 +1102,7 @@ export class PromptPanel {
     const shown = this.view === v;
     const stick = shown && this._atBottom(v.out);
     if (m.type === 'task.chunk') {
-      const b = v.block(m.task, null, v.blocks.has(m.task) ? null : 'Başka bir tarayıcıdan ya da cihazdan başlatılan görev');
+      const b = v.block(m.task, null, v.blocks.has(m.task) ? null : tt('Başka bir tarayıcıdan ya da cihazdan başlatılan görev'));
       b.scope = agentScope(this.hub.agentInfo({ device: dev, agent: m.agent }));
       if (v.task !== m.task || !v.running) {
         v.task = m.task;
@@ -1116,7 +1117,7 @@ export class PromptPanel {
         if (Number.isFinite(m.live.elapsedMs)) v.startedAt = Date.now() - m.live.elapsedMs;
       }
     } else if (m.type === 'task.end') {
-      const b = v.block(m.task, null, v.blocks.has(m.task) ? null : 'Başka bir tarayıcıdan ya da cihazdan başlatılan görev');
+      const b = v.block(m.task, null, v.blocks.has(m.task) ? null : tt('Başka bir tarayıcıdan ya da cihazdan başlatılan görev'));
       b.result(m.result, m.truncated);
       const line = endText(m);
       const cost = costLabel(m.costUsd, m.costBasis, this._costAuthFor(dev));
@@ -1165,19 +1166,19 @@ export class PromptPanel {
     if (!ok) return;
     const nameOf = (key) => {
       const a = this.hub.agentInfo({ device: dev, agent: key });
-      return a && a.name ? String(a.name) : 'diğer ajan';
+      return a && a.name ? String(a.name) : tt('diğer ajan');
     };
     const started = m.status === 'started';
-    const failText = `Devir yapılamadı: ${errorText(m.code)}`;
+    const failText = tt('Devir yapılamadı: {why}', { why: errorText(m.code) });
     const va = this._viewFor(dev, m.from, false);
     if (va && va.blocks.has(m.task)) {
       va.blocks.get(m.task).note(started
-        ? `→ «${nameOf(m.to)}» ajanına devredildi${m.truncated ? ' (çıktı kısaltılarak)' : ''}` : failText);
+        ? `→ ${tt('«{name}» ajanına devredildi', { name: nameOf(m.to) })}${m.truncated ? tt(' (çıktı kısaltılarak)') : ''}` : failText);
     }
     if (!started) {
       this.toast(failText, { error: true });
     } else {
-      this.trackTask(dev, m.to, m.next, `«${nameOf(m.from)}» ajanından devredilen görev`,
+      this.trackTask(dev, m.to, m.next, tt('«{name}» ajanından devredilen görev', { name: nameOf(m.from) }),
         m.confirm === 'pending' ? 'confirm' : m.queued ? 'queued' : 'running');
       if (this.onHandoff) this.onHandoff(dev, m);
     }
@@ -1243,6 +1244,6 @@ export class PromptPanel {
       } catch { /* next reconnect */ }
     }
     if (this.view && this.view.deviceId === dev) this._loadUsage();
-    if (shownAny || (this.view && this.view.deviceId === dev)) this.toast('Bağlantı yenilendi');
+    if (shownAny || (this.view && this.view.deviceId === dev)) this.toast(tt('Bağlantı yenilendi'));
   }
 }

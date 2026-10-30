@@ -2,7 +2,7 @@
 // Plain ES module: data model, canvas mini-board renderer, DOM modal dialog and accessibility.
 
 import { BOARD_TILE, TILE } from './office.js';
-import { t } from './i18n.js';
+import { t as tt } from './i18n.js';
 
 export const BOARD_W = BOARD_TILE.w;
 export const BOARD_H = BOARD_TILE.h;
@@ -10,17 +10,17 @@ export const BOARD_X = BOARD_TILE.x * TILE;                  // world px of the 
 export const BOARD_Y = BOARD_TILE.y * TILE + TILE - BOARD_H; // bottom-aligned on its row: 8 = 1 * 16 + 16 - 24
 
 export const COLUMNS = [
-  { id: 'queued', label: t('Sırada'), color: '#4a8fd6', lightColor: '#cfe2f7' },
-  { id: 'working', label: t('Çalışıyor'), color: '#5fae4f', lightColor: '#d6f0cf' },
-  { id: 'waiting', label: t('Onay bekliyor'), color: '#e58b3a', lightColor: '#fbe8d5' },
+  { id: 'queued', label: tt('Sırada'), color: '#4a8fd6', lightColor: '#cfe2f7' },
+  { id: 'working', label: tt('Çalışıyor'), color: '#5fae4f', lightColor: '#d6f0cf' },
+  { id: 'waiting', label: tt('Onay bekliyor'), color: '#e58b3a', lightColor: '#fbe8d5' },
   { id: 'done', label: 'Bitti', color: '#8e5cc4', lightColor: '#eddff7' },
 ];
 
 /** v4-C workflow step state → board column and card title. */
 const WORKFLOW_COLUMN = { waiting: 'queued', running: 'working', approval: 'waiting' };
 const WORKFLOW_TITLE = {
-  waiting: t('İş akışı: sırada'), running: t('İş akışı: çalışıyor'), approval: t('Onayınız bekleniyor'),
-  done: t('İş akışı: bitti'), error: t('İş akışı: hata'), cancelled: t('İş akışı: iptal'),
+  waiting: tt('İş akışı: sırada'), running: tt('İş akışı: çalışıyor'), approval: tt('Onayınız bekleniyor'),
+  done: tt('İş akışı: bitti'), error: tt('İş akışı: hata'), cancelled: tt('İş akışı: iptal'),
 };
 
 const money = (v) => `$${(Number.isFinite(v) ? v : 0).toFixed(2)}`;
@@ -56,11 +56,11 @@ export function stateToColumn(state) {
 /** Turkish label for an agent state in board cards. */
 export function stateLabel(state, tool = '') {
   switch (state) {
-    case 'spawning': return t('Katılıyor');
-    case 'working': return tool ? t('Çalışıyor ({tool})', { tool }) : t('Çalışıyor');
-    case 'thinking': return t('Düşünüyor');
-    case 'waiting_for_user': return t('Onay bekliyor');
-    case 'idle': return t('Kahve molasında');
+    case 'spawning': return tt('Katılıyor');
+    case 'working': return tool ? tt('Çalışıyor ({tool})', { tool }) : tt('Çalışıyor');
+    case 'thinking': return tt('Düşünüyor');
+    case 'waiting_for_user': return tt('Onay bekliyor');
+    case 'idle': return tt('Kahve molasında');
     case 'sleeping': return 'Uyuyor';
     default: return 'Ofiste';
   }
@@ -97,7 +97,7 @@ export function categorizeTasks({ agents = [], views = null, approvals = null, i
         id: `apv-${a.id}`,
         agentId: null,
         agentName: a.agent || 'Claude Code',
-        title: a.ask === 'question' ? t('Seçmeli soru') : (a.tool ? t('İzin: {tool}', { tool: a.tool }) : t('İzin bekliyor')),
+        title: a.ask === 'question' ? tt('Seçmeli soru') : (a.tool ? tt('İzin: {tool}', { tool: a.tool }) : tt('İzin bekliyor')),
         detail: a.summary || a.project || '',
         isApproval: true,
         expiresAt: a.expiresAt || 0,
@@ -120,7 +120,7 @@ export function categorizeTasks({ agents = [], views = null, approvals = null, i
         id: `task-${v.task || agentKey}`,
         agentId,
         agentName,
-        title: v.state === 'confirm' ? t('Onay bekliyor') : (v.state === 'queued' ? t('Kuyrukta') : t('Görev çalışıyor')),
+        title: v.state === 'confirm' ? tt('Onay bekliyor') : (v.state === 'queued' ? tt('Kuyrukta') : tt('Görev çalışıyor')),
         detail: v.recent || '',
         isApproval: false,
       };
@@ -151,9 +151,9 @@ export function categorizeTasks({ agents = [], views = null, approvals = null, i
         result[col].push({
           id: `wf-${run.id}-${s.id}`,
           agentId: ag ? ag.id : null,
-          agentName: s.type === 'approval' ? t('Siz') : (ag ? ag.name : s.role || 'Ajan'),
-          title: WORKFLOW_TITLE[s.state] || t('İş akışı'),
-          detail: `${run.name || t('İş akışı')} · ${i + 1}/${run.steps.length}: ${s.role || s.id}`,
+          agentName: s.type === 'approval' ? tt('Siz') : (ag ? ag.name : s.role || 'Ajan'),
+          title: WORKFLOW_TITLE[s.state] || tt('İş akışı'),
+          detail: `${run.name || tt('İş akışı')} · ${i + 1}/${run.steps.length}: ${s.role || s.id}`,
           isApproval: s.state === 'approval',
         });
       });
@@ -169,9 +169,9 @@ export function categorizeTasks({ agents = [], views = null, approvals = null, i
       result.waiting.push({
         id: `boss-${job.job}`,
         agentId: null,
-        agentName: t('Siz'),
-        title: t('Plan onayı'),
-        detail: `${plan.round ? t('Patron düzeltme planı') : t('Patron planı')} · ${t('{n} iş emri · tahmini {est} / tavan {cap}', { n, est: money(plan.estimateUsd), cap: money(plan.maxCostUsd) })}`,
+        agentName: tt('Siz'),
+        title: tt('Plan onayı'),
+        detail: `${plan.round ? tt('Patron düzeltme planı') : tt('Patron planı')} · ${tt('{n} iş emri · tahmini {est} / tavan {cap}', { n, est: money(plan.estimateUsd), cap: money(plan.maxCostUsd) })}`,
         isApproval: true,
         target: 'boss',
       });
@@ -186,7 +186,7 @@ export function categorizeTasks({ agents = [], views = null, approvals = null, i
     const item = {
       id: `ag-${ag.id}`,
       agentId: ag.id,
-      agentName: ag.name || t('İsimsiz Ajan'),
+      agentName: ag.name || tt('İsimsiz Ajan'),
       title: stateLabel(ag.state, ag.tool),
       detail: isPaired && ag.project ? ag.project : '',
       isApproval: false,
@@ -333,7 +333,7 @@ export class TaskBoard {
       return;
     }
     this.lastCounts = { ...counts };
-    const text = t('Görev tahtası: {q} sırada, {w} çalışıyor, {a} onay bekliyor, {d} bitti.', { q: counts.queued, w: counts.working, a: counts.waiting, d: counts.done });
+    const text = tt('Görev tahtası: {q} sırada, {w} çalışıyor, {a} onay bekliyor, {d} bitti.', { q: counts.queued, w: counts.working, a: counts.waiting, d: counts.done });
     this.liveEl.textContent = text;
   }
 
@@ -364,7 +364,7 @@ export class TaskBoard {
       const items = data[colDef.id] || [];
 
       if (items.length === 0) {
-        cardList.appendChild(el('div', 'card-empty', t('Kart yok')));
+        cardList.appendChild(el('div', 'card-empty', tt('Kart yok')));
       } else {
         for (const it of items) {
           const card = el('div', `board-card ${it.isApproval ? 'is-approval' : ''}`);
