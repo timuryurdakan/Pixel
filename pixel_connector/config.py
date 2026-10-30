@@ -55,6 +55,16 @@ DEFAULT_CLAUDE = {"path": None, "enabled": True, "bare": False, "showThinking": 
 # `pixel-connector remote-approvals on` (local CLI only). The wait stays below the hook's 300 s command timeout.
 DEFAULT_REMOTE_APPROVALS = {"enabled": False, "timeoutS": 240}
 REMOTE_APPROVAL_TIMEOUT_BOUNDS = (5, 280)
+# E3 (docs/FAZ3_TASARIM.md D4): OpenAI-compatible providers by name; https only, the key stays in an environment
+# variable on this computer (`apiKeyEnv`), never in connector.json.
+PROVIDER_PRESETS = {
+    "gemini": {"name": "Google Gemini", "url": "https://generativelanguage.googleapis.com/v1beta/openai"},
+    "groq": {"name": "Groq", "url": "https://api.groq.com/openai/v1"},
+    "openrouter": {"name": "OpenRouter", "url": "https://openrouter.ai/api/v1"},
+    "openai": {"name": "OpenAI", "url": "https://api.openai.com/v1"},
+    "deepseek": {"name": "DeepSeek", "url": "https://api.deepseek.com/v1"},
+    "mistral": {"name": "Mistral", "url": "https://api.mistral.ai/v1"},
+}
 DEFAULT_OLLAMA = {"url": "http://127.0.0.1:11434", "enabled": True, "keepAlive": "10m", "numCtx": None,
                   "historyMessages": 40, "allowRemote": False, "showThinking": False}
 
@@ -351,6 +361,7 @@ def validate(raw: Any, home: Optional[str] = None, which=shutil.which) -> Tuple[
     o["allowRemote"] = _bool(o_raw.get("allowRemote"), False)
     o["enabled"] = _bool(o_raw.get("enabled"), True)
     o["showThinking"] = _bool(o_raw.get("showThinking"), False)
+    o["tools"] = _bool(o_raw.get("tools"), False)         # E3: file tools, opt-in
     if "url" in o_raw:
         o["url"] = _http_url(o_raw.get("url"), "engines.ollama.url", errors, o["allowRemote"]) or o["url"]
     ka = o_raw.get("keepAlive", "10m")
@@ -366,16 +377,25 @@ def validate(raw: Any, home: Optional[str] = None, which=shutil.which) -> Tuple[
         if not isinstance(e, dict) or not isinstance(e.get("id"), str) or not ID_RE.match(e["id"]):
             errors.append("%s: id must match [a-z0-9_-]{1,24}" % where)
             continue
-        allow_remote = _bool(e.get("allowRemote"), False)
-        url = _http_url(e.get("url"), where + ".url", errors, allow_remote)
+        preset = e.get("preset")
+        if preset is not None and preset not in PROVIDER_PRESETS:
+            errors.append("%s.preset: one of %s" % (where, ", ".join(PROVIDER_PRESETS)))
+            continue
+        allow_remote = True if preset else _bool(e.get("allowRemote"), False)
+        url = PROVIDER_PRESETS[preset]["url"] if preset else _http_url(e.get("url"), where + ".url", errors, allow_remote)
         if not url:
             continue
         env_name = e.get("apiKeyEnv")
         if env_name is not None and (not isinstance(env_name, str) or not re.match(r"^[A-Z_][A-Z0-9_]{0,63}\Z", env_name)):
             errors.append("%s.apiKeyEnv: must be an environment variable name" % where)
             env_name = None
-        oa.append({"id": e["id"], "name": str(e.get("name") or e["id"])[:40], "url": url, "allowRemote": allow_remote,
-                   "apiKeyEnv": env_name})
+        if preset and not env_name:
+            errors.append("%s.apiKeyEnv: a preset needs the name of the environment variable holding the key" % where)
+            continue
+        default_name = PROVIDER_PRESETS[preset]["name"] if preset else e["id"]
+        oa.append({"id": e["id"], "name": str(e.get("name") or default_name)[:40], "url": url,
+                   "allowRemote": allow_remote, "apiKeyEnv": env_name, "preset": preset,
+                   "tools": _bool(e.get("tools"), False)})
     d["engines"]["openai"] = oa
 
     # profiles

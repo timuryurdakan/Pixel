@@ -13,7 +13,7 @@ import os
 import http.client
 from typing import Optional
 
-from .base import Cached, TaskContext, empty_usage
+from .base import Cached, TaskContext, empty_usage, estimate_tokens
 from .ollama import ChatRun, get_json
 
 
@@ -62,6 +62,44 @@ class OpenAIRun(ChatRun):
         body = {"model": self.ctx.model, "messages": self._messages(), "stream": True,
                 "stream_options": {"include_usage": True}}
         return self.stream.request("POST", "/chat/completions", body, self.engine.headers())
+
+    # -- E3: tool turns (OpenAI chat/completions, stream false) ------------------------------------------------------
+    def _tool_request(self, messages, specs, max_tokens):
+        body = {"model": self.ctx.model, "messages": messages, "stream": False, "tools": specs,
+                "max_tokens": max_tokens}
+        return self.stream.request("POST", "/chat/completions", body, self.engine.headers())
+
+    @staticmethod
+    def _tool_reply(reply):
+        if not isinstance(reply, dict):
+            raise RuntimeError("unreadable reply")
+        if reply.get("error"):
+            e = reply["error"]
+            raise RuntimeError(str(e.get("message") if isinstance(e, dict) else e))
+        choices = reply.get("choices") if isinstance(reply.get("choices"), list) else []
+        msg = choices[0].get("message") if choices and isinstance(choices[0], dict) else None
+        msg = msg if isinstance(msg, dict) else {}
+        calls = []
+        for i, c in enumerate(msg.get("tool_calls") or []):
+            if not isinstance(c, dict):
+                continue
+            fn = c.get("function") if isinstance(c.get("function"), dict) else {}
+            calls.append((str(c.get("id") or "call_%d" % i), str(fn.get("name") or ""), fn.get("arguments")))
+        u = reply.get("usage") if isinstance(reply.get("usage"), dict) else {}
+        content = msg.get("content") if isinstance(msg.get("content"), str) else ""
+        pt, ct = u.get("prompt_tokens"), u.get("completion_tokens")
+        return (content, calls, (pt if isinstance(pt, int) else estimate_tokens(json.dumps(msg)),
+                                 ct if isinstance(ct, int) else estimate_tokens(content)))
+
+    @staticmethod
+    def _assistant_msg(content, calls):
+        return {"role": "assistant", "content": content or "", "tool_calls": [
+            {"id": cid, "type": "function", "function": {"name": n, "arguments": a if isinstance(a, str)
+                                                          else json.dumps(a or {})}} for cid, n, a in calls]}
+
+    @staticmethod
+    def _tool_msg(call_id, name, text):
+        return {"role": "tool", "tool_call_id": call_id, "content": text}
 
     def _parse(self, resp) -> Optional[str]:
         while True:
