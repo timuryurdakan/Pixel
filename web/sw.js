@@ -12,7 +12,7 @@
 // "Yeni sürüm hazır — Yenile" (cloud.js APP_VERSION, kept equal to VERSION by tests/test_release.py).
 // Bump VERSION (and cloud.js APP_VERSION) on every release (Phase 10 checklist).
 
-const VERSION = 'po-v4.0.12';
+const VERSION = 'po-v4.0.13';
 const SHELL = [
   '/', '/index.html', '/css/style.css',
   '/js/main.js', '/js/office.js', '/js/pathfinding.js', '/js/agents.js', '/js/renderer.js', '/js/ui.js',

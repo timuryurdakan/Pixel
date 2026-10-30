@@ -8,6 +8,7 @@ import { ControlError, errorText } from './control.js';
 import { CLAUDE_MODELS } from './devices.js';
 import { PROFILE_TEXT } from './prompt.js';
 import { TemplateBuilder } from './template_builder.js';
+import { PreviewDrawer } from './preview.js';
 
 export const WORKFLOWS_FEATURE = 'workflows';
 export const BRIEF_MAX = 4096;               // = pixel_connector/workflows.py BRIEF_MAX (UTF-8 bytes)
@@ -182,7 +183,7 @@ export class WorkflowDialog {
    * @param {WorkflowStore} o.store
    * @param {(text:string, opts?:object)=>void} o.toast
    */
-  constructor({ dialog, hub, store, toast = () => {}, storage = null }) {
+  constructor({ dialog, hub, store, toast = () => {}, previewDialog = null, storage = null }) {
     Object.assign(this, { dialog, hub, store, toast });
     const f = this.form = dialog.querySelector('#wf-form');
     this.f = f.elements;
@@ -196,6 +197,7 @@ export class WorkflowDialog {
     this.wsCache = new Map();
     this.busy = new Set();              // run ids with a request in flight
     this._initBuilder(storage);
+    this._initPreview(previewDialog);
     this.f.device.addEventListener('change', () => this._loadDevice());
     this.f.template.addEventListener('change', () => this._template());
     this.f.workspace.addEventListener('change', () => this._ws());
@@ -237,6 +239,29 @@ export class WorkflowDialog {
         if (!this.builderBox.hidden) this.builder.render();
       });
     }
+  }
+
+  _initPreview(previewDialog) {
+    this.previewDialog = previewDialog || null;
+    this.preview = previewDialog
+      ? new PreviewDrawer({ dialog: previewDialog, doc: this.dialog.ownerDocument || document })
+      : null;
+  }
+
+  _getPreviewDrawer() {
+    if (this.preview) return this.preview;
+    const doc = this.dialog.ownerDocument || document;
+    let dlg = this.previewDialog || doc.getElementById('dlg-preview');
+    if (!dlg && doc.body) {
+      dlg = doc.createElement('dialog');
+      dlg.id = 'dlg-preview';
+      dlg.className = 'dlg wide preview-dlg';
+      doc.body.appendChild(dlg);
+    }
+    if (!dlg) return null;
+    if (!dlg._previewDrawer) dlg._previewDrawer = new PreviewDrawer({ dialog: dlg, doc });
+    this.preview = dlg._previewDrawer;
+    return this.preview;
   }
 
   get isOpen() { return this.dialog.open; }
@@ -462,6 +487,13 @@ export class WorkflowDialog {
       if (s.type === 'agent' && s.model) extra += ` · ${s.model}`;
       if (s.code && s.state !== 'done') extra += ` · ${codeText(s.code)}`;
       li.appendChild(el('span', 'wf-step-meta muted small', extra));
+      if (s.type === 'agent' && s.state === 'done' && typeof s.task === 'string' && s.task) {
+        const prevBtn = el('button', 'btn small ghost wf-preview-btn', 'Önizle');
+        prevBtn.type = 'button';
+        prevBtn.dataset.action = 'preview-step';
+        prevBtn.addEventListener('click', () => this._previewStep(dev, run, s));
+        li.appendChild(prevBtn);
+      }
       ol.appendChild(li);
     }
     card.appendChild(ol);
@@ -488,5 +520,22 @@ export class WorkflowDialog {
     }
     if (actions.childElementCount) card.appendChild(actions);
     return card;
+  }
+
+  async _previewStep(dev, run, step) {
+    if (!step || typeof step.task !== 'string' || !step.task) return;
+    try {
+      const r = await this.hub.request(dev, { type: 'task.get', task: step.task });
+      const text = r && typeof r.result === 'string' ? r.result : '';
+      const drawer = this._getPreviewDrawer();
+      if (drawer) {
+        drawer.open({
+          title: `${run.name || run.template || 'İş akışı'} · ${step.role || step.id}`,
+          content: text,
+        });
+      }
+    } catch (e) {
+      this.toast(e instanceof ControlError ? e.text : 'Adım çıktısı alınamadı.', { error: true });
+    }
   }
 }
