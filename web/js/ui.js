@@ -47,7 +47,7 @@ export function summaryText(agents) {
 }
 
 const SOURCE_LABELS = {
-  'claude-code': 'Claude Code', custom: tt('Özel (kütüphane)'), 'pixel-run': 'pixel-run', 'pixel-proxy': 'pixel-proxy', antigravity: 'Antigravity', api: tt('Genel API'),
+  'claude-code': 'Claude Code', custom: tt('Özel (kütüphane)'), 'pixel-run': 'pixel-run', 'pixel-proxy': 'pixel-proxy', antigravity: 'Antigravity', codex: 'Codex', cursor: 'Cursor', api: tt('Genel API'),
 };
 const sourceLabel = (s) => (Object.hasOwn(SOURCE_LABELS, s) ? SOURCE_LABELS[s] : String(s));
 const RENAMED_SOURCES = new Set(['custom', 'project', 'owner']);

@@ -238,6 +238,28 @@ Bilinen sınırlar:
 
 ---
 
+## 5b. OpenAI Codex CLI ve Cursor (F4-1)
+
+Aynı kanca istemcisi (`~/.pixel-office/pixel_hook.py`) iki ajanı daha bağlar. Claude Code kancasını kurduysanız
+yapılandırma hazırdır; yoksa `--server/--room/--key/--name` Claude kurulumundaki gibi verilir.
+```sh
+python3 ~/.pixel-office/pixel_hook.py install --target codex  --server <sunucu> --room <oda> --key <anahtar> --name 'Timur'
+python3 ~/.pixel-office/pixel_hook.py install --target cursor --server <sunucu> --room <oda> --key <anahtar> --name 'Timur'
+python3 ~/.pixel-office/pixel_hook.py uninstall --target codex     # ya da --target cursor
+```
+- **Codex** ([belge](https://learn.chatgpt.com/docs/hooks)): `~/.codex/hooks.json`, Claude Code ile aynı biçim ve olay
+  adları. Girdiler `async` (Codex beklemez), SessionEnd / Interrupt Codex'in 3 sn sınırında. `PermissionRequest` kesin
+  "onay bekliyor" gösterir; `Interrupt` → kahve + "Durduruldu". Kanca stdout'a hiçbir şey yazmaz (Codex için "devam";
+  uzaktan onay `--decide` Codex'te yok). Codex yeni kancaları çalıştırmadan önce `/hooks` ile bir kez onay ister.
+- **Cursor** ([belge](https://cursor.com/docs/hooks)): `~/.cursor/hooks.json` (`{"version": 1, "hooks": {…}}`). **Yalnızca
+  izin istemeyen olaylar** kaydedilir (`sessionStart`, `beforeSubmitPrompt`, `postToolUse`, `afterShellExecution`,
+  `afterFileEdit`, `stop`, `sessionEnd`): Cursor izin kancalarında (`preToolUse`, `beforeShellExecution` …) boş ya da
+  geçersiz çıktıda işlemi engeller ve bir `allow` kullanıcının göreceği bir soruyu atlatabilir. Cursor'da async kanca
+  yok: kanca yanıtını yazıp hemen çıkar, yalnızca durum alanlarını (olay, konuşma kimliği, klasör, araç adı) ayrık bir
+  sürece verir. Cursor'da "onay bekliyor" gösterilemez.
+- Gizlilik Claude Code ile aynıdır: istem, komut, dosya yolu, çıktı ve e-posta adresi gönderilmez (kanarya testleri
+  `tests/test_f41_codex_hooks.py`). Ofiste kaynak "Codex" / "Cursor" görünür.
+
 ## 6. Antigravity IDE (`pixel-antigravity`)
 
 Antigravity'nin kanca (hook) sistemi yok. Ama her konuşmanın adımlarını bilgisayara bir kayıt dosyasına yazıyor:

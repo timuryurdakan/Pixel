@@ -387,7 +387,7 @@ function renderCmd(box, text, ui) {
 
 // --- PWA (§10) ---------------------------------------------------------------------------------------
 /** Release of the files this page was loaded from; equal to sw.js VERSION (tests/test_release.py checks it). */
-export const APP_VERSION = 'po-v4.0.15';
+export const APP_VERSION = 'po-v4.0.16';
 const SW_VERSION_RE = /^po-v[0-9.]{1,20}$/;
 
 /** v2.md H16: a newer service worker took over while this (older) page was open → offer a reload. */

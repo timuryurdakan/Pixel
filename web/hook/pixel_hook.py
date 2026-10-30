@@ -100,6 +100,27 @@ WAIT_NOTIFICATIONS = {"permission_prompt": L_PERMISSION, "elicitation_dialog": L
 KNOWN_EVENTS = ("SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse",
                 "PostToolUseFailure", "Notification", "PreCompact", "Stop", "StopFailure", "SubagentStart",
                 "SubagentStop", "SessionEnd")
+# F4-1: OpenAI Codex CLI hooks (~/.codex/hooks.json) use the same JSON shape and event names; `hook --codex` marks
+# the updates as source "codex". Codex also has Interrupt (the user stopped the turn) and no Notification.
+CODEX_FLAG = "--codex"
+CODEX_SOURCE = "codex"
+CODEX_EVENTS = ("SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse", "PreCompact",
+                "Stop", "Interrupt", "SubagentStart", "SubagentStop", "SessionEnd")
+CODEX_END_TIMEOUT = 3       # s; Codex caps SessionEnd / Interrupt hooks at 3 s
+# F4-1: Cursor hooks (~/.cursor/hooks.json, https://cursor.com/docs/hooks). Only events that ask nothing of the hook
+# are used: Cursor *blocks* a permission hook (preToolUse, beforeShellExecution, beforeMCPExecution, beforeReadFile,
+# subagentStart) on empty or invalid output, and an "allow" could skip a prompt the user would see. Cursor has no async
+# hooks, so `hook --cursor` prints its reply, hands a state-only event to a detached process and exits at once.
+CURSOR_FLAG = "--cursor"
+CURSOR_SOURCE = "cursor"
+CURSOR_POST = "_cursor-post"
+CURSOR_EVENTS = {"sessionStart": "SessionStart", "beforeSubmitPrompt": "UserPromptSubmit", "postToolUse": "PreToolUse",
+                 "afterShellExecution": "PreToolUse", "afterFileEdit": "PreToolUse", "stop": "Stop",
+                 "sessionEnd": "SessionEnd"}
+CURSOR_TOOL = {"afterShellExecution": "Bash", "afterFileEdit": "Edit"}
+CURSOR_REPLY = {"beforeSubmitPrompt": {"continue": True}}
+CURSOR_TIMEOUT = 5          # s
+CURSOR_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 # Events registered by the installer, and which take a tool matcher (§7.5.1).
 MATCHER_EVENTS = ("PreToolUse", "PermissionRequest", "PostToolUse", "PostToolUseFailure")
 
@@ -219,7 +240,7 @@ def map_event(event: dict, cfg: dict, last_state: object = None) -> list:
     if cfg.get("enabled") is False:
         return []
     name = event.get("hook_event_name")
-    if name not in KNOWN_EVENTS:
+    if name not in KNOWN_EVENTS and not (SOURCE == CODEX_SOURCE and name == "Interrupt"):
         return []
     session, sub = record_ids(event, cfg)
     if name == "SessionEnd":
@@ -297,6 +318,8 @@ def map_event(event: dict, cfg: dict, last_state: object = None) -> list:
         return upd("sleeping")
     if name == "SessionEnd":
         return upd("offline")
+    if name == "Interrupt":
+        return upd("idle", None, L_INTERRUPTED)
     return []
 
 
@@ -640,7 +663,7 @@ class HookRunner:
         if not isinstance(event, dict) or self.cfg.get("enabled") is False:
             return "none"
         name = event.get("hook_event_name")
-        if name not in KNOWN_EVENTS:
+        if name not in KNOWN_EVENTS and not (SOURCE == CODEX_SOURCE and name == "Interrupt"):
             return "none"
         if ignored_cwd(event.get("cwd")):
             return "none"
@@ -740,7 +763,7 @@ def run_hook(stdin=None, home: object = None, decide: bool = False, out=None) ->
         if not isinstance(event, dict):
             return 0
         name = event.get("hook_event_name")
-        if decide and name == "PermissionRequest":
+        if decide and name == "PermissionRequest" and SOURCE != CODEX_SOURCE:
             _watchdog(DECIDE_WATCHDOG)
             res = decide_permission(event, cfg, home)
             if res is not None:
@@ -752,6 +775,73 @@ def run_hook(stdin=None, home: object = None, decide: bool = False, out=None) ->
         if name in WITHDRAW_EVENTS:
             withdraw_remote(event, cfg, home)
         HookRunner(cfg, home).handle(event)
+    except BaseException:
+        pass
+    return 0
+
+
+def cursor_event(raw: object) -> object:
+    """A Cursor hook payload (untrusted) → a Claude-shaped event with only state fields (no prompt, command, path or
+    output survives), or None. The conversation id is the session; the cwd is the tool's, else the first workspace."""
+    if not isinstance(raw, dict) or raw.get("hook_event_name") not in CURSOR_EVENTS:
+        return None
+    name = raw["hook_event_name"]
+    cid = raw.get("conversation_id") or raw.get("session_id")
+    if not isinstance(cid, str) or not CURSOR_ID_RE.match(cid):
+        return None
+    roots = raw.get("workspace_roots")
+    cwd = raw.get("cwd") if isinstance(raw.get("cwd"), str) else (
+        roots[0] if isinstance(roots, list) and roots and isinstance(roots[0], str) else None)
+    ev = {"hook_event_name": CURSOR_EVENTS[name], "session_id": cid}
+    if cwd:
+        ev["cwd"] = cwd
+    if CURSOR_EVENTS[name] == "PreToolUse":
+        tool = CURSOR_TOOL.get(name) or raw.get("tool_name")
+        ev["tool_name"] = tool if isinstance(tool, str) else "tool"
+    return ev
+
+
+def run_cursor_hook(stdin=None, out=None, spawn=None) -> int:
+    """`hook --cursor`: the reply first (valid JSON for every event we register), then the state-only event goes to
+    a detached `_cursor-post` and this process exits, so Cursor never waits for the office. Always 0."""
+    raw = None
+    try:
+        raw = _read_stdin(stdin)
+        data = json.loads(raw.decode("utf-8", "replace")) if raw else None
+    except Exception:
+        data = None
+    name = data.get("hook_event_name") if isinstance(data, dict) else None
+    try:
+        dst = out or sys.stdout
+        dst.write(json.dumps(CURSOR_REPLY.get(name, {})))
+        dst.flush()
+    except Exception:
+        pass
+    try:
+        if os.environ.get("PIXEL_OFFICE_DISABLE") == "1":
+            return 0
+        ev = cursor_event(data)
+        if ev is not None:
+            (spawn or _spawn_detached)([sys.executable, os.path.abspath(__file__), CURSOR_POST,
+                                        json.dumps(ev, separators=(",", ":"))])
+    except Exception:
+        pass
+    return 0
+
+
+def cmd_cursor_post(arg: str, home: object = None) -> int:
+    """The detached half of `hook --cursor`: the office update, with the usual debounce and dedupe."""
+    global SOURCE
+    SOURCE = CURSOR_SOURCE
+    try:
+        ev = json.loads(arg)
+        if not isinstance(ev, dict) or ev.get("hook_event_name") not in KNOWN_EVENTS:
+            return 0
+        home = home or office_home()
+        cfg = load_config(home)
+        if not cfg or cfg.get("enabled") is False:
+            return 0
+        HookRunner(cfg, home).handle(ev)
     except BaseException:
         pass
     return 0
@@ -1067,6 +1157,61 @@ def build_entries(command: str, args: object, decide: bool = True) -> dict:
     return {ev: [one(ev)] for ev in KNOWN_EVENTS}
 
 
+def build_cursor_entries(command: str) -> dict:
+    return {ev: [{"command": "%s %s" % (command, CURSOR_FLAG), "timeout": CURSOR_TIMEOUT}] for ev in CURSOR_EVENTS}
+
+
+def merge_cursor(data: dict, entries: object) -> int:
+    """Cursor's flat hooks.json ({"version": 1, "hooks": {event: [{command, …}]}}): drop our old entries, then add
+    `entries` (None = only drop). Foreign entries are kept as they are. Returns how many of ours were removed."""
+    hooks = data.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        raise SettingsError('"hooks" in hooks.json is not an object')
+    data.setdefault("version", 1)
+    removed = 0
+    for ev in list(hooks):
+        lst = hooks[ev]
+        if not isinstance(lst, list):
+            raise SettingsError('"hooks.%s" in hooks.json is not an array' % ev)
+        keep = [h for h in lst if not _is_ours(h)]
+        removed += len(lst) - len(keep)
+        if keep:
+            hooks[ev] = keep
+        else:
+            del hooks[ev]
+    for ev, lst in (entries or {}).items():
+        hooks.setdefault(ev, []).extend(lst)
+    return removed
+
+
+def cursor_hooks_path(override: object = None) -> str:
+    if override:
+        return os.path.abspath(os.path.expanduser(str(override)))
+    return os.path.join(os.path.expanduser("~"), ".cursor", "hooks.json")
+
+
+def build_codex_entries(command: str) -> dict:
+    """~/.codex/hooks.json matcher groups: one shell-string command per event (Codex has no exec/args form), all
+    async so Codex never waits for the office; SessionEnd / Interrupt get Codex's short synchronous cap instead."""
+    def one(event: str) -> dict:
+        h = {"type": "command", "command": "%s %s" % (command, CODEX_FLAG)}
+        if event in ("SessionEnd", "Interrupt"):
+            h["timeout"] = CODEX_END_TIMEOUT
+        else:
+            h["async"] = True
+            h["timeout"] = 10
+        g = {"matcher": "*"} if event in MATCHER_EVENTS else {}
+        g["hooks"] = [h]
+        return g
+    return {ev: [one(ev)] for ev in CODEX_EVENTS}
+
+
+def codex_hooks_path(override: object = None) -> str:
+    if override:
+        return os.path.abspath(os.path.expanduser(str(override)))
+    return os.path.join(os.path.expanduser("~"), ".codex", "hooks.json")
+
+
 def remove_ours(settings: dict) -> int:
     """Remove our hook entries in place. Foreign entries are kept untouched. Returns how many were removed."""
     hooks = settings.get("hooks")
@@ -1226,6 +1371,8 @@ def _validate_install_args(a) -> object:
         return "--key is required with --room"
     if not a.name or not a.name.strip() or len(a.name.strip()) > 24:
         return "--name must be 1-24 characters"
+    if getattr(a, "target", "claude") in ("codex", "cursor") and a.force_powershell:
+        return "--target %s needs the Python client (no --force-powershell)" % a.target
     if a.color is not None and not 0 <= a.color <= 15:
         return "--color must be 0-15"
     return None
@@ -1274,6 +1421,10 @@ def cmd_install(a) -> int:
         cfg["client"] = "python"
         command, args = hook_command(dst, a.command_style)
     write_json_atomic(os.path.join(home, "config.json"), cfg, mode=0o600, indent=2)
+    if a.target == "codex":
+        return _install_codex(a, home, dst)
+    if a.target == "cursor":
+        return _install_cursor(a, home, dst)
     settings_path = claude_settings_path(a.settings_path)
     try:
         # The PowerShell client has no remote-approval path (V3.md §6.9): its PermissionRequest entry stays async.
@@ -1290,7 +1441,71 @@ def cmd_install(a) -> int:
     return 0
 
 
+def _install_codex(a, home: str, script: str) -> int:
+    path = _real(codex_hooks_path(a.settings_path))
+    try:
+        data = read_settings(path)
+        backup = backup_settings(path)
+        merge_settings(data, build_codex_entries(hook_command(script, "shell")[0]))
+        write_settings(path, data)
+    except (SettingsError, OSError) as e:
+        print("Hata: %s" % e, file=sys.stderr)
+        return 1
+    print("Pixel Office kancası Codex için kuruldu.")
+    print("  Yapılandırma: %s" % os.path.join(home, "config.json"))
+    print("  Codex kancaları: %s%s" % (path, " (yedek: %s)" % backup if backup else ""))
+    if not a.no_test:
+        cmd_test(a)
+    print("Codex'i yeniden başlatın ve /hooks ile Pixel Office kancalarını bir kez onaylayın (Codex yeni kancaları "
+          "çalıştırmadan önce sorar).")
+    return 0
+
+
+def _install_cursor(a, home: str, script: str) -> int:
+    path = _real(cursor_hooks_path(a.settings_path))
+    try:
+        data = read_settings(path)
+        backup = backup_settings(path)
+        merge_cursor(data, build_cursor_entries(hook_command(script, "shell")[0]))
+        write_settings(path, data)
+    except (SettingsError, OSError) as e:
+        print("Hata: %s" % e, file=sys.stderr)
+        return 1
+    print("Pixel Office kancası Cursor için kuruldu.")
+    print("  Yapılandırma: %s" % os.path.join(home, "config.json"))
+    print("  Cursor kancaları: %s%s" % (path, " (yedek: %s)" % backup if backup else ""))
+    if not a.no_test:
+        cmd_test(a)
+    print("Cursor'ı yeniden başlatın.")
+    return 0
+
+
 def cmd_uninstall(a) -> int:
+    if a.target == "cursor":
+        path = cursor_hooks_path(a.settings_path)
+        try:
+            if not os.path.exists(path):
+                n = 0
+            else:
+                data = read_settings(_real(path))
+                backup_settings(_real(path))
+                n = merge_cursor(data, None)
+                if n:
+                    write_settings(_real(path), data)
+        except (SettingsError, OSError) as e:
+            print("Hata: %s" % e, file=sys.stderr)
+            return 1
+        print("%d Pixel Office kancası kaldırıldı (%s). Diğer kancalara dokunulmadı." % (n, path))
+        return 0
+    if a.target == "codex":
+        path = codex_hooks_path(a.settings_path)
+        try:
+            n = uninstall_hooks(path)
+        except (SettingsError, OSError) as e:
+            print("Hata: %s" % e, file=sys.stderr)
+            return 1
+        print("%d Pixel Office kancası kaldırıldı (%s). Diğer kancalara dokunulmadı." % (n, path))
+        return 0
     path = claude_settings_path(a.settings_path)
     try:
         n = uninstall_hooks(path)
@@ -1440,12 +1655,16 @@ def build_parser() -> argparse.ArgumentParser:
     i.add_argument("--name", required=True)
     i.add_argument("--color", type=int)
     i.add_argument("--force-powershell", action="store_true")
-    i.add_argument("--settings-path", help="settings.json to edit (default ~/.claude/settings.json)")
+    i.add_argument("--settings-path", help="settings.json to edit (default ~/.claude/settings.json; with --target "
+                                           "codex: ~/.codex/hooks.json)")
+    i.add_argument("--target", choices=("claude", "codex", "cursor"), default="claude",
+                   help="which agent's hooks to install (F4-1: codex = OpenAI Codex CLI, cursor = Cursor)")
     i.add_argument("--command-style", choices=("exec", "shell"), default="exec",
                    help="exec = command + args (default), shell = one quoted command string")
     i.add_argument("--no-test", action="store_true")
     u = sp.add_parser("uninstall", help="remove our hooks from settings.json")
     u.add_argument("--settings-path")
+    u.add_argument("--target", choices=("claude", "codex", "cursor"), default="claude")
     sp.add_parser("test", help="send a test character")
     o = sp.add_parser("_offline-later")
     o.add_argument("seconds")
@@ -1469,7 +1688,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: object = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == CURSOR_POST:
+        _watchdog(WATCHDOG)                     # the detached process never outlives this (as a hook process)
+        return cmd_cursor_post(argv[1] if len(argv) > 1 else "")
+    if argv and argv[0] == "hook" and CURSOR_FLAG in argv[1:]:
+        return run_cursor_hook()
     if not argv or argv[0] == "hook":
+        if CODEX_FLAG in argv[1:]:
+            global SOURCE
+            SOURCE = CODEX_SOURCE
         return run_hook(decide=DECIDE_FLAG in argv[1:])
     a = build_parser().parse_args(argv)
     handlers = {"install": cmd_install, "uninstall": cmd_uninstall, "test": cmd_test, "status": cmd_status,
