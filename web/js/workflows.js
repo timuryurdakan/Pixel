@@ -7,6 +7,7 @@
 import { ControlError, errorText } from './control.js';
 import { CLAUDE_MODELS } from './devices.js';
 import { PROFILE_TEXT } from './prompt.js';
+import { TemplateBuilder } from './template_builder.js';
 
 export const WORKFLOWS_FEATURE = 'workflows';
 export const BRIEF_MAX = 4096;               // = pixel_connector/workflows.py BRIEF_MAX (UTF-8 bytes)
@@ -181,7 +182,7 @@ export class WorkflowDialog {
    * @param {WorkflowStore} o.store
    * @param {(text:string, opts?:object)=>void} o.toast
    */
-  constructor({ dialog, hub, store, toast }) {
+  constructor({ dialog, hub, store, toast = () => {}, storage = null }) {
     Object.assign(this, { dialog, hub, store, toast });
     const f = this.form = dialog.querySelector('#wf-form');
     this.f = f.elements;
@@ -194,6 +195,7 @@ export class WorkflowDialog {
     this.subRow = dialog.querySelector('#wf-sub-row');
     this.wsCache = new Map();
     this.busy = new Set();              // run ids with a request in flight
+    this._initBuilder(storage);
     this.f.device.addEventListener('change', () => this._loadDevice());
     this.f.template.addEventListener('change', () => this._template());
     this.f.workspace.addEventListener('change', () => this._ws());
@@ -201,6 +203,40 @@ export class WorkflowDialog {
     dialog.querySelector('[data-wf-close]').addEventListener('click', () => dialog.close());
     dialog.addEventListener('click', (e) => { if (e.target === dialog) dialog.close(); });
     store.onChange(() => { if (this.dialog.open) { this.renderRuns(); this._updateStart(); } });
+  }
+
+  _initBuilder(storage) {
+    const doc = this.dialog.ownerDocument || document;
+    let bar = this.dialog.querySelector('.wf-builder-bar');
+    if (!bar) {
+      bar = el('div', 'wf-builder-bar');
+      const toggleBtn = el('button', 'btn small', 'Kodsuz Şablon Oluşturucu');
+      toggleBtn.type = 'button';
+      toggleBtn.dataset.action = 'toggle-builder';
+      bar.appendChild(toggleBtn);
+      this.dialog.insertBefore(bar, this.form);
+    }
+    let box = this.dialog.querySelector('#wf-builder');
+    if (!box) {
+      box = el('section', 'wf-builder');
+      box.id = 'wf-builder';
+      box.hidden = true;
+      this.dialog.insertBefore(box, this.form);
+    }
+    this.builderBox = box;
+    this.builder = new TemplateBuilder({
+      container: box,
+      storage,
+      onReload: () => this._loadDevice(),
+    });
+    const toggleBtn = bar.querySelector('[data-action="toggle-builder"]');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        this.builderBox.hidden = !this.builderBox.hidden;
+        toggleBtn.classList.toggle('primary', !this.builderBox.hidden);
+        if (!this.builderBox.hidden) this.builder.render();
+      });
+    }
   }
 
   get isOpen() { return this.dialog.open; }
