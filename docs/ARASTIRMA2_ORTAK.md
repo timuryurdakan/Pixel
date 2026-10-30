@@ -200,3 +200,13 @@ Uygulamaya geçmeden önce:
 - **F4-6** K2'ye, **F4-9 MCP** K3'e ve ayrı bir tasarım belgesine bağlı.
 - **F4-1'in ilk adımı:** Antigravity kancalarıyla "onay bekliyor" gösterimi. Bu, kenara konan "?" balonu fikrinin
   yerini alır.
+
+## 8. Kullanıcı Kararları (2026-10-30)
+
+Kullanıcı K1–K5 için Claude'un önerilerini onayladı:
+- **K1:** İlk ziyaret şimdilik rehberde kalır; F4-3 ve F4-4 bitince yeniden bakılır.
+- **K2:** Claude dışı motorlarla Patron önce yalnızca tarayıcıda (F4-3) denenir.
+- **K3:** Web ve bilgi araçları kapalı kalır.
+- **K4:** Önce ücretsiz dağıtım kanalları (Open VSX, Antigravity eklentisi).
+- **K5:** Ayrı önizleme alan adı sonraya.
+
