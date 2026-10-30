@@ -75,7 +75,7 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | E1b | Faz 2 (§2.3): departman metinleri, şablon içerikleri ve arayüzde seçim. Dosyalar: `web/js/boss.js`, `web/js/workflows.js`, `web/index.html` (yalnızca ekleme), `tests/js/*`. E1a birleştikten sonra | Antigravity | ⬜ |
 | E2 | Faz 2 (§2.2/§2.4): kodsuz şablon oluşturucu (tarayıcıda, mevcut `workflow.*` mesajlarıyla sınırlı) ve eser önizleme çekmecesi. Dosyalar: yeni `web/js/preview.js`, yeni `web/js/template_builder.js`, `web/js/workflows.js`, `web/css/style.css` (sona ekleme), `tests/js/*`. Bağlayıcıya dokunmaz | Antigravity | ⬜ |
 | S2 | Faz 2 kapanış güvenlik taraması (E1a, E1b, E2) | Claude | ⬜ |
-| T0 | Faz 3 tasarım + güvenlik belgesi (`docs/FAZ3_TASARIM.md`): anahtar saklama, CSP `connect-src`, maliyet sınırı, araç erişimi. Kullanıcı onayı olmadan Faz 3 kodu yazılmaz | Claude | ⬜ |
+| T0 | Faz 3 tasarım + güvenlik belgesi (`docs/FAZ3_TASARIM.md`): anahtar saklama, CSP `connect-src`, maliyet sınırı, araç erişimi. Kullanıcı onayı olmadan Faz 3 kodu yazılmaz | Claude | 🔄 taslak hazır, kullanıcı onayı bekliyor |
 | E3 | Faz 3 (§2.2): OpenAI uyumlu ve Ollama motorlarına güvenli araç kullanma + Patron desteği. Dosyalar: `pixel_connector/engines/*`, `pixel_connector/boss.py`, `pixel_connector/config.py` | Claude | ⬜ |
 | E4a | Faz 3 (§2.1): tarayıcı-içi sanal cihaz modülü ve arayüzü, T0'a birebir uyarak. Dosyalar: yeni `web/js/browser_device.js`, `tests/js/*`. `vercel.json`, anahtar saklama ve `e2e.js`'e dokunmaz | Antigravity | ⬜ |
 | E4b | Faz 3: anahtar saklama, `vercel.json` CSP, E4a'nın güvenlik incelemesi ve birleştirme | Claude | ⬜ |
