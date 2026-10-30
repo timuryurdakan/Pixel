@@ -1,7 +1,7 @@
 # Faz 3 — Tasarım ve Güvenlik Belgesi (T0)
 
-Durum: **taslak, kullanıcı onayı bekliyor** (2026-10-30, Claude). Onay gelmeden E3 / E4a / E4b kodu yazılmaz
-(`docs/GOREV_PANOSU.md`). Kaynak öneri: `docs/EVRENSEL_PLATFORM_ARASTIRMA_RAPORU.md` §2.1–§2.2.
+Durum: **onaylandı** (2026-10-30). D1–D7 kullanıcı tarafından önerildiği gibi onaylandı. E3 / E4a / E4b bu
+belgeye uyar; bir karar değişecekse önce bu belge güncellenir ve kullanıcıya sorulur. Kaynak öneri: `docs/EVRENSEL_PLATFORM_ARASTIRMA_RAPORU.md` §2.1–§2.2.
 
 Faz 3 iki iş getiriyor:
 
