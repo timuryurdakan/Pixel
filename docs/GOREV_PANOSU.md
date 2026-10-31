@@ -86,7 +86,7 @@ Durum: ⬜ Bekliyor · 🔄 Üzerinde çalışılıyor · ✅ Teslim edildi · �
 | F4-3 | Tarayıcıda Patron ve şablonlar (`browser_boss.js`, `browser_workflows.js`), bağlayıcıyla aynı test vektörleri; bağlayıcıda `workflow.save`/`delete` (Claude) | Claude (Antigravity yokken) | ✅ F4-3a, `workflow.save/delete`, F4-3b (2026-11-01) |
 | F4-4 | Anahtarsız deneme (Chrome `LanguageModel`, özellik algılama) + sanal klasör ZIP indirme + sürükle-bırak; klasör seçici sonra (Brave'de yok) | Antigravity + Claude (inceleme) | ⬜ |
 | F4-5 | Önizleme 2.0: slayt görünümü, kendi SVG grafik/diyagram üreticimiz (Mermaid yok, mini uygulama yok) + karakter özelleştirme + masa ↔ klasör | Antigravity | ⬜ |
-| F4-6 | Bağlayıcıda çok motorlu Patron (K2: F4-3 sonrası) ve ACP istemcisi; önce tasarım belgesi ve onay | Claude | ⬜ |
+| F4-6 | Bağlayıcıda çok motorlu Patron (K2: F4-3 sonrası) ve ACP istemcisi; önce tasarım belgesi ve onay | Claude | 🔄 F4-6a ACP istemcisi: tasarım taslağı `docs/F46A_TASARIM.md`, onay bekliyor; F4-6b çok motorlu Patron: kullanıcının tarayıcı Patron denemesinden sonra (K2) |
 | F4-7 | Open VSX eklentisi + Antigravity eklentisi/yan panel + "Ofis kartımı paylaş" | Antigravity + Claude | ⬜ |
 | F4-8 | Ofis düzenleyici + Kenney CC0 temalar + Pomodoro | Antigravity + Claude | ⬜ |
 | F4-9 | Durable Objects ile anlık oda + MCP (K3: ayrı tasarım belgesi) | Claude | ⬜ |
