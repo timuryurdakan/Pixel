@@ -474,11 +474,14 @@ function defaultDraft() {
 }
 
 export class TemplateBuilder {
-  constructor({ container, storage = null, onReload = null, onChange = null } = {}) {
+  constructor({ container, storage = null, onReload = null, onChange = null, onSaveToDevice = null,
+    canSaveToDevice = () => false } = {}) {
     this.container = container;
     this.doc = container?.ownerDocument || document;
     this.storage = storage || (typeof localStorage !== 'undefined' ? localStorage : null);
     this.onReload = onReload;
+    this.onSaveToDevice = onSaveToDevice;      // F4-3: workflow.save (the computer confirms it)
+    this.canSaveToDevice = canSaveToDevice;
     this.onChange = onChange;
 
     this._templates = this._loadStored();
@@ -901,12 +904,20 @@ export class TemplateBuilder {
         editB.dataset.tbAction = 'edit-saved';
         editB.addEventListener('click', () => this.loadIntoDraft(tpl.id));
 
-        const delB = el(doc, 'button', 'btn small danger-btn', 'Sil');
+        const delB = el(doc, 'button', 'btn small danger-btn', tt('Sil'));
         delB.type = 'button';
         delB.dataset.tbAction = 'delete-saved';
         delB.addEventListener('click', () => this.deleteTemplate(tpl.id));
 
         btns.append(editB, delB);
+        if (this.onSaveToDevice && this.canSaveToDevice()) {
+          const devB = el(doc, 'button', 'btn small accent', tt('Cihaza kaydet'));
+          devB.type = 'button';
+          devB.dataset.tbAction = 'save-device';
+          devB.title = tt('Bilgisayardaki workflows.json dosyasına ekler; bilgisayarda onay istenir.');
+          devB.addEventListener('click', () => this.onSaveToDevice(tpl));
+          btns.appendChild(devB);
+        }
         row.appendChild(btns);
         savedSec.appendChild(row);
       }

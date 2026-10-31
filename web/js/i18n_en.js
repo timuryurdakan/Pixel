@@ -864,4 +864,11 @@ export const EN = {
   'Bir sağlayıcı ve model seçin.': 'Choose a provider and a model.',
   '{used} / {max} çıkış jetonu': '{used} / {max} output tokens',
   'En fazla {n} iş emri · en fazla {tok} çıkış jetonu (kendi API anahtarınızdan)': 'At most {n} work orders · at most {tok} output tokens (from your own API key)',
+  'Sil': 'Delete',
+  'Cihaza kaydet': 'Save to device',
+  'Bilgisayardaki workflows.json dosyasına ekler; bilgisayarda onay istenir.': "Adds it to the computer's workflows.json; the computer asks for confirmation.",
+  'Bu cihaz şablon kaydetmeyi desteklemiyor (bağlayıcıyı güncelleyin).': 'This device cannot save templates (update the connector).',
+  'Bilgisayarda onay bekleniyor…': 'Waiting for confirmation on the computer…',
+  'Şablon cihaza kaydedildi': 'Template saved to the device',
+  'Şablon kaydedilemedi.': 'The template could not be saved.',
 };

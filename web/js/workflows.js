@@ -58,6 +58,14 @@ function el(tag, cls, text) {
 }
 
 /** A device whose connector understands workflow.* (v4-C) and is connected. */
+export const WORKFLOW_SAVE_FEATURE = 'workflowSave';
+export const SAVE_TIMEOUT_MS = 5 * 60 * 1000;   // the computer's confirmation may take a while
+
+/** F4-3: the connector accepts workflow.save / workflow.delete (always confirmed on the computer). */
+export function supportsWorkflowSave(dev) {
+  return supportsWorkflows(dev) && dev.info.features.includes(WORKFLOW_SAVE_FEATURE);
+}
+
 export function supportsWorkflows(dev) {
   return !!(dev && dev.ready && dev.info && Array.isArray(dev.info.features) && dev.info.features.includes(WORKFLOWS_FEATURE));
 }
@@ -231,6 +239,8 @@ export class WorkflowDialog {
       container: box,
       storage,
       onReload: () => this._loadDevice(),
+      onSaveToDevice: (tpl) => this._saveToDevice(tpl),
+      canSaveToDevice: () => supportsWorkflowSave(this.hub.devices.get(this.f.device.value)),
     });
     const toggleBtn = bar.querySelector('[data-action="toggle-builder"]');
     if (toggleBtn) {
@@ -537,6 +547,20 @@ export class WorkflowDialog {
       }
     } catch (e) {
       this.toast(e instanceof ControlError ? e.text : tt('Adım çıktısı alınamadı.'), { error: true });
+    }
+  }
+
+  /** F4-3: send a builder template to the selected computer; it is written only after the computer's confirmation. */
+  async _saveToDevice(tpl) {
+    const d = this.hub.devices.get(this.f.device.value);
+    if (!supportsWorkflowSave(d)) { this.toast(tt('Bu cihaz şablon kaydetmeyi desteklemiyor (bağlayıcıyı güncelleyin).'), { error: true }); return; }
+    this.toast(tt('Bilgisayarda onay bekleniyor…'), { ms: 5000 });
+    try {
+      await this.hub.request(d.id, { type: 'workflow.save', template: tpl }, { timeout: SAVE_TIMEOUT_MS });
+      this.toast(tt('Şablon cihaza kaydedildi'), { ms: 3000 });
+      this._loadDevice();
+    } catch (e) {
+      this.toast(e instanceof ControlError ? e.text : tt('Şablon kaydedilemedi.'), { error: true });
     }
   }
 }

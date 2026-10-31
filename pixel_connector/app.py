@@ -39,9 +39,11 @@ from .session import Peer, Router
 from .tasks import (CANCEL_REVOKED, Scheduler, TaskError, TaskRun, fit_result, handoff_prompt, parse_handoff,
                     prompt_sha)
 from .usage import Budgets, Ledger, tz_name
-from .workflows import WorkflowEngine, WorkflowError
+from .workflows import (BUILTIN_TEMPLATES, WorkflowEngine, WorkflowError, check_template_to_save, delete_template,
+                        load_templates, save_template, template_preview)
 from .workspaces import WorkspaceDenied, Workspaces
 
+BUILTIN_IDS = frozenset(t["id"] for t in BUILTIN_TEMPLATES)
 REQ_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}\Z")
 TASK_RE = re.compile(r"^t_[A-Za-z0-9_-]{10}\Z")
 PROFILE_LABELS = {"readonly": "Sadece okuma", "edit": "Düzenleyebilir", "dev": "Geliştirici", "auto": "Otomatik"}
@@ -51,7 +53,7 @@ APPROVAL_AUDIT = {"ok": "approval.approve", "denied": "approval.deny", "timeout"
                   "withdrawn": "approval.withdraw"}
 APPROVAL_POLL_S = 0.5       # how often a waiting /ctl/approvals/tool call checks that its hook is still there
 # device.info.features: optional protocol parts (v4-B handoff, v4-C workflows, Patron Odası boss.*)
-FEATURES = ["handoff", "workflows", "boss", "bossRetry", "bossDepartments"]
+FEATURES = ["handoff", "workflows", "boss", "bossRetry", "bossDepartments", "workflowSave"]
 SLOW_TYPES = {"peer.hello", "runtime.list", "runtime.start", "runtime.stop", "model.load", "model.unload",
               "workspace.list", "agent.create", "peer.revoke", "workflow.list", "workflow.start", "boss.ask",
               "boss.retry_step"}
@@ -832,6 +834,56 @@ class Connector:
                                lambda: self.workflows.launch(plan), (WorkflowError, AgentError, TaskError))
             return None
         return self.workflows.launch(plan)
+
+    # F4-3: a browser may save or delete the user's templates (workflows.json). The file is trusted as "this
+    # computer's own" by workflow.start, so every change is confirmed on the computer, whatever confirm.agentCreate
+    # says, after the same checks as at load time; nothing is written before the confirmation.
+    def h_workflow_save(self, peer, msg) -> None:
+        if not isinstance(msg, dict) or not set(msg) <= {"type", "id", "template"}:
+            raise Reply("bad_request", "unknown field")
+        if not self.cfg["remote"]["agentCreate"]:
+            raise Reply("not_allowed", "remote agent creation disabled")       # templates create agents when run
+        auto = self.cfg["profiles"]["auto"]["enabled"]
+        v = check_template_to_save(msg.get("template"), auto)
+        raw = msg["template"]
+
+        def done(res: str) -> None:
+            self.audit.write("workflow.save", bid=peer.bid, template=v["id"], steps=len(v["steps"]), result=res)
+            if res != "ok":
+                self.reply(peer, msg, {"type": "error", "code": "confirm_denied" if res == "denied"
+                                       else "confirm_timeout", "message": "not confirmed"})
+                return
+            try:
+                save_template(self.home, raw, auto)
+                self.reply(peer, msg, {"type": "workflow.saved", "template": v["id"]})
+            except (WorkflowError, OSError) as e:
+                self.reply(peer, msg, {"type": "error", "code": getattr(e, "code", "internal"), "message": str(e)[:200]})
+        self.approvals.request("agentCreate", "Şablon kaydet: %s" % v["name"][:40], template_preview(v), None, done)
+        return None
+
+    def h_workflow_delete(self, peer, msg) -> None:
+        if not isinstance(msg, dict) or not set(msg) <= {"type", "id", "template"}:
+            raise Reply("bad_request", "unknown field")
+        if not self.cfg["remote"]["agentCreate"]:
+            raise Reply("not_allowed", "remote agent creation disabled")
+        tid = msg.get("template")
+        auto = self.cfg["profiles"]["auto"]["enabled"]
+        if not any(t["id"] == tid for t in load_templates(self.home, auto)[0]) or tid in BUILTIN_IDS:
+            raise Reply("unknown_template", "no such template")
+
+        def done(res: str) -> None:
+            self.audit.write("workflow.delete", bid=peer.bid, template=tid, result=res)
+            if res != "ok":
+                self.reply(peer, msg, {"type": "error", "code": "confirm_denied" if res == "denied"
+                                       else "confirm_timeout", "message": "not confirmed"})
+                return
+            try:
+                delete_template(self.home, tid)
+                self.reply(peer, msg, {"type": "workflow.deleted", "template": tid})
+            except (WorkflowError, OSError) as e:
+                self.reply(peer, msg, {"type": "error", "code": getattr(e, "code", "internal"), "message": str(e)[:200]})
+        self.approvals.request("agentCreate", "Şablon sil: %s" % tid, None, None, done)
+        return None
 
     def h_workflow_cancel(self, peer, msg) -> dict:
         return self.workflows.cancel(msg.get("run"), by=peer.bid)

@@ -21,6 +21,8 @@ directory, both checked against an allow-list at load time. Nothing here is ever
 
 from __future__ import annotations
 
+import copy
+import json
 import math
 import os
 import re
@@ -31,7 +33,7 @@ import unicodedata
 from typing import Callable, Dict, List, Optional, Tuple
 
 from .agents import AgentError
-from .config import MODEL_RE, PROFILES, read_json
+from .config import MODEL_RE, PROFILES, read_json, write_json
 from .tasks import TaskError, handoff_prompt
 from .workspaces import WorkspaceDenied, validate_sub
 
@@ -269,6 +271,63 @@ def validate_template(raw, auto_enabled: bool) -> dict:
     return {"id": tid, "name": _text(raw.get("name"), "name", NAME_MAX),
             "description": _text(desc, "description", DESCRIPTION_MAX) if desc is not None else None,
             "folder": folder, "guardrails": _guardrails(raw.get("guardrails")), "steps": steps}
+
+
+# -- F4-3: saving and deleting the user's templates from a paired browser (always confirmed on this computer) --------
+
+def _user_templates(home: str) -> List:
+    """The raw `templates` list of workflows.json ([] when there is no file). A file that is not
+    {"v": 1, "templates": [...]} is never overwritten: WorkflowError("bad_template", "workflows.json")."""
+    try:
+        raw = read_json(os.path.join(home, TEMPLATES_FILE))
+    except (OSError, ValueError, UnicodeDecodeError):
+        raise WorkflowError("bad_template", "workflows.json") from None
+    if raw is None:
+        return []
+    if not isinstance(raw, dict) or not isinstance(raw.get("templates"), list):
+        raise WorkflowError("bad_template", "workflows.json")
+    return raw["templates"]
+
+
+def check_template_to_save(raw, auto_enabled: bool) -> dict:
+    """A template from a browser → its normalized copy, or WorkflowError. Same checks as at load time, and a built-in
+    template's id is refused (it would be dropped at load as a duplicate anyway)."""
+    v = validate_template(raw, auto_enabled)
+    if v["id"] in {t["id"] for t in BUILTIN_TEMPLATES}:
+        raise WorkflowError("bad_template", "id")
+    return v
+
+
+def save_template(home: str, raw, auto_enabled: bool) -> dict:
+    """Add the template to workflows.json, or replace the one with the same id. → its normalized copy."""
+    v = check_template_to_save(raw, auto_enabled)
+    templates = [t for t in _user_templates(home) if not (isinstance(t, dict) and t.get("id") == v["id"])]
+    if len(templates) >= MAX_TEMPLATES:
+        raise WorkflowError("bad_template", "too many templates")
+    templates.append(json.loads(json.dumps(copy.deepcopy(raw), ensure_ascii=False)))
+    write_json(os.path.join(home, TEMPLATES_FILE), {"v": 1, "templates": templates})
+    return v
+
+
+def delete_template(home: str, tid) -> None:
+    if not isinstance(tid, str) or not SLUG_RE.match(tid) or tid in {t["id"] for t in BUILTIN_TEMPLATES}:
+        raise WorkflowError("bad_template", "id")
+    templates = _user_templates(home)
+    keep = [t for t in templates if not (isinstance(t, dict) and t.get("id") == tid)]
+    if len(keep) == len(templates):
+        raise WorkflowError("unknown_template", "no such template")
+    write_json(os.path.join(home, TEMPLATES_FILE), {"v": 1, "templates": keep})
+
+
+def template_preview(v: dict) -> str:
+    """What the computer's confirmation shows: name and, per step, the role, engine and profile (no prompt text)."""
+    lines = ["%s (%s)" % (v["name"], v["id"])]
+    for s in v["steps"]:
+        if s.get("type") == "approval":
+            lines.append("- %s: onay adımı" % s["id"])
+        else:
+            lines.append("- %s: %s · %s · %s" % (s["id"], s.get("role") or "-", s.get("engine"), s.get("profile")))
+    return "\n".join(lines)
 
 
 def load_templates(home: str, auto_enabled: bool, log: Callable[[str], None] = lambda s: None) -> Tuple[List[dict], int]:
