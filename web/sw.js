@@ -12,14 +12,14 @@
 // "Yeni sürüm hazır — Yenile" (cloud.js APP_VERSION, kept equal to VERSION by tests/test_release.py).
 // Bump VERSION (and cloud.js APP_VERSION) on every release (Phase 10 checklist).
 
-const VERSION = 'po-v4.0.18';
+const VERSION = 'po-v4.0.19';
 const SHELL = [
   '/', '/index.html', '/css/style.css',
   '/js/main.js', '/js/office.js', '/js/pathfinding.js', '/js/agents.js', '/js/renderer.js', '/js/ui.js',
   '/js/sprites.js', '/js/fx.js', '/js/audio.js', '/js/transport.js', '/js/cloud.js', '/js/pip.js',
   '/js/relay.js', '/js/e2e.js', '/js/idb.js', '/js/control.js', '/js/prompt.js', '/js/devices.js', '/js/usage.js',
   '/js/approvals.js', '/js/board.js', '/js/workflows.js', '/js/template_builder.js', '/js/preview.js', '/js/update_banner.js', '/js/boss_scene.js', '/js/boss.js',
-  '/js/scene_controls.js', '/js/notify.js', '/js/demo.js', '/js/keystore.js', '/js/browser_device.js', '/js/browser_office.js', '/js/boss_rules.js', '/js/browser_boss.js', '/js/i18n.js', '/js/i18n_en.js',
+  '/js/scene_controls.js', '/js/notify.js', '/js/demo.js', '/js/keystore.js', '/js/browser_device.js', '/js/browser_office.js', '/js/boss_rules.js', '/js/browser_boss.js', '/js/workflow_rules.js', '/js/browser_workflows.js', '/js/i18n.js', '/js/i18n_en.js',
   '/rehber.html', '/css/guide.css', '/js/guide.js',
   '/manifest.webmanifest',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png', '/icons/apple-touch-icon.png',

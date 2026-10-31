@@ -1,6 +1,6 @@
 # F4-3b — İş akışı şablonları tarayıcıda: Tasarım (taslak)
 
-Durum: **onay bekliyor**. Kaynak: `docs/F43_TASARIM.md` B8 ("şablonlar ayrı iş olarak, Patron'dan sonra").
+Durum: **onaylandı** (2026-11-01): C1–C8 önerildiği gibi; Qwen'le iş bölümü kullanıcının isteğiyle ertelendi, hepsini Claude yaptı. Kaynak: `docs/F43_TASARIM.md` B8 ("şablonlar ayrı iş olarak, Patron'dan sonra").
 
 ## 1. Amaç
 
@@ -23,7 +23,7 @@ yalnızca bağlayıcıda çalışıyor.
 
 | Kural | Nasıl aynı tutulur |
 |---|---|
-| Şablon doğrulama (`validate_template`) | Tarayıcıda zaten var (`template_builder.js` `validateTemplate`). Yeni vektör dosyası `tests/workflow_vectors.json`, hem Python hem JS testinden geçer. Üreticisi `_boss_shared.py`'deki gibi. |
+| Şablon doğrulama (`validate_template`) | `browser_workflows.js`'te birebir kopya (Şablon Oluşturucu'nun doğrulayıcısı varsayılanlarda farklıydı, güvenlik sınırı olarak kullanılmadı). Vektör dosyası `tests/workflow_vectors.json`, hem Python hem JS testinden geçer. Üreticisi `tests/_workflow_shared.py`. |
 | `workflow.start` alanları (`parse_start`): izin listesi, istek en fazla 4 KB, `steps` yalnız şablondaki adımlar | Aynı vektör dosyası. Tarayıcıya özgü fark: `maxCostUsd` yerine `model` (C2, C4). |
 | Adım istemi: talimat, `useBrief` ile "Kullanıcının isteği:" eki, `usePrevious` ile önceki adımın çıktısının rastgele çitle **veri olarak** eklenmesi, boyut sınırı | İstem metinleri ve çit biçimi `boss_rules.js` gibi üretilen `workflow_rules.js`'te. Aynı girdiye aynı istemi üreten parite testi var (nonce sabitlenerek). |
 | Durum makinesi (adım ve çalışma geçişleri), `run.wire()` biçimi | Geçiş tabloları ortak dosyada. Pencerenin `validRun` kontrolü iki tarafın çıktısında da test edilir. |
@@ -60,8 +60,8 @@ yalnızca bağlayıcıda çalışıyor.
 | Ortak kurallar, vektörler, parite testleri | `tests/_workflow_shared.py`, `tests/workflow_vectors.json`, üretilen `web/js/workflow_rules.js` | M | Claude |
 | Yürütücü: istem, durum makinesi, onay, tavanlar | yeni `web/js/browser_workflows.js` | M | Claude |
 | Cihaza bağlama (`workflow.*` yönlendirme, `features`, C6 kilidi) | `browser_device.js` | S | Claude |
-| Pencerede tek sağlayıcı/model seçici, C3 yazısı | `workflows.js` | S | Qwen taslağı, Claude inceler |
-| İngilizce metinler, JS test iskeletleri | `i18n_en.js`, `tests/js/` | S | Qwen taslağı, Claude inceler |
+| Pencerede tek sağlayıcı/model seçici, C3 yazısı | `workflows.js` | S | Claude |
+| İngilizce metinler, JS testleri | `i18n_en.js`, `tests/js/` | S | Claude |
 
-Toplam yaklaşık M–L. Güvenlik içeren parçaları (doğrulama, istem çiti, durum makinesi) ben yazarım. Mekanik
-parçaların ilk taslağını Qwen yazar, ben okuyup düzeltirim. Antigravity döndüğünde bağımsız inceleme yapar.
+Toplam yaklaşık M–L, hepsini Claude yaptı (Qwen'le iş bölümü kullanıcının isteğiyle ertelendi). Antigravity
+döndüğünde bağımsız inceleme yapar.

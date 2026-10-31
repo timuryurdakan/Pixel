@@ -871,4 +871,12 @@ export const EN = {
   'Bilgisayarda onay bekleniyor…': 'Waiting for confirmation on the computer…',
   'Şablon cihaza kaydedildi': 'Template saved to the device',
   'Şablon kaydedilemedi.': 'The template could not be saved.',
+  // F4-3b: workflow templates in the browser device
+  '(tarayıcıda çalışmaz)': '(cannot run in the browser)',
+  'Bu tarayıcıda çalışır: kendi API anahtarınız kullanılır, akış başına en fazla {tok} çıkış jetonu. Adımlar bu tarayıcıdaki sanal klasörde okur ve yazar, komut çalıştırmaz.': 'Runs in this browser with your own API key, at most {tok} output tokens per run. The steps read and write in this browser\'s virtual folder and run no commands.',
+  'Bu şablon komut çalıştıran bir adım içeriyor (Geliştirici izni); tarayıcıda çalışamaz. Bilgisayarınızdaki bağlayıcıyla çalıştırın.': 'This template has a step that runs commands (Developer permission); it cannot run in the browser. Run it with the connector on your computer.',
+  'Bu şablon tarayıcıda çalışamaz.': 'This template cannot run in the browser.',
+  'Jeton tavanı doldu': 'Token cap reached',
+  'Sayfa kapandığı için durdu': 'Stopped because the page was closed',
+  '{used} / {max} jeton': '{used} / {max} tokens',
 };

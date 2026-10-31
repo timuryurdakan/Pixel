@@ -9,6 +9,8 @@ import { KeyStore, keyHint } from './keystore.js';
 import { t as tt } from './i18n.js';
 import { BrowserBoss, BossError, BOSS_AGENT, JOB_MAX_OUT_TOKENS } from './browser_boss.js';
 import { BOSS_RULES } from './boss_rules.js';
+import { BrowserWorkflows, WorkflowError } from './browser_workflows.js';
+import { CUSTOM_TEMPLATES_KEY } from './template_builder.js';
 
 export const BROWSER_DEVICE_ID = 'browser';
 
@@ -519,6 +521,17 @@ export class VirtualWorkspace {
  * Scrub any API key or Bearer token from error texts so an upstream server echoing
  * a key in an HTTP 401/403/500 body can NEVER leak into DeviceHub messages or DOM.
  */
+/** F4-3b C1: this browser's template-builder library (untrusted: BrowserWorkflows validates every entry). */
+function readTemplateLibrary() {
+  try {
+    const raw = globalThis.localStorage ? globalThis.localStorage.getItem(CUSTOM_TEMPLATES_KEY) : null;
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed?.templates) ? parsed.templates : (Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return [];      // blocked or unreadable storage: only the built-in templates are offered
+  }
+}
+
 function sanitizeErrorText(rawMessage, secretKey) {
   let msg = String(rawMessage ?? '');
   if (secretKey && typeof secretKey === 'string') {
@@ -549,6 +562,7 @@ export class BrowserDevice {
     clock = () => Date.now(),
     onUpsert = null,
     onRemove = null,
+    templateLibrary = null,
   } = {}) {
     if (!store) throw new Error('BrowserDevice requires a store');
     this.id = id;
@@ -576,6 +590,27 @@ export class BrowserDevice {
       resetHistory: (key) => this.histories.delete(key),
       workspaceId: this.workspace.workspaceId,
       providers: ALLOWED_PROVIDERS,
+      otherBusy: () => this.workflows.busy(),
+    });
+    // F4-3b: workflow templates in this browser, answering workflow.* like the connector (docs/F43B_TASARIM.md).
+    this.workflows = new BrowserWorkflows({
+      emit: (m) => this._emitHubEvent(m),
+      runTask: (t) => this._runBossTask(t),
+      cancelTask: () => this._cancelBossTask(),
+      library: templateLibrary || readTemplateLibrary,
+      otherBusy: () => !!this.boss._active(),
+      office: (key, state) => {
+        const a = this.agents.get(key);
+        if (a && !a.busy) this._emitOffice(a, state, null);
+      },
+      persist: {
+        load: () => this.store.get('e2e', `browserWorkflows:${this.id}`),
+        // A failed write only loses the after-reload record of these runs (C8); the page still shows them.
+        save: (runs) => { this.store.put('e2e', `browserWorkflows:${this.id}`, runs).catch(() => {}); },
+      },
+      workspaceId: this.workspace.workspaceId,
+      workspaceName: tt('Tarayıcı Klasörü (IndexedDB)'),
+      providers: ALLOWED_PROVIDERS,
     });
   }
 
@@ -585,6 +620,7 @@ export class BrowserDevice {
   async attach(hub) {
     this.hub = hub;
     await this._loadAgents();
+    await this.workflows.restore();
 
     const localChannel = {
       closed: false,
@@ -717,7 +753,7 @@ export class BrowserDevice {
       profiles: ['readonly', 'edit', 'dev'],
       confirm: { task: 'never', agentCreate: false, runtime: false, peerRevoke: false, timeoutS: 120 },
       remote: { agentCreate: true, agentDelete: true, budgetEdit: false },
-      features: ['browserDevice', 'boss', 'bossDepartments'],
+      features: ['browserDevice', 'boss', 'bossDepartments', 'workflows'],
       bossDepartments: BOSS_RULES.departments.map((d) => ({ ...d, roles: [...d.roles] })),
       boss: { browser: true, maxOutTok: JOB_MAX_OUT_TOKENS },
     };
@@ -824,6 +860,16 @@ export class BrowserDevice {
           return this.boss.handle(msg);
         } catch (e) {
           if (e instanceof BossError) throw new ControlError(e.code, e.detail);
+          throw e;
+        }
+      case 'workflow.list':
+      case 'workflow.start':
+      case 'workflow.answer':
+      case 'workflow.cancel':
+        try {
+          return this.workflows.handle(msg);
+        } catch (e) {
+          if (e instanceof WorkflowError) throw new ControlError(e.code, e.detail);
           throw e;
         }
       case 'agent.list':
@@ -1114,6 +1160,7 @@ export class BrowserDevice {
 
     try {
       for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
+        usage.turns = turn + 1;                 // F4-3b: a workflow's maxTurns counts these
         if (record.cancelled) {
           this._finishTask(agent, record, 'cancelled', textParts.join('') || null, usage, null);
           return;
@@ -1366,8 +1413,9 @@ export class BrowserDevice {
     };
   }
 
-  /** F4-3a: one Boss or specialist task; resolves with its outcome (agents are transient, the Boss is hidden). */
-  _runBossTask({ agentKey, name, role, profile, prompt, fresh, provider, model }) {
+  /** F4-3a: one Boss or specialist task, F4-3b: one workflow step; resolves with its outcome (agents are transient,
+   * the Boss is hidden). `onStart(taskId)` lets a workflow step show its task on the board while it runs. */
+  _runBossTask({ agentKey, name, role, profile, prompt, fresh, provider, model, onStart = null }) {
     let agent = this.agents.get(agentKey);
     if (!agent) {
       agent = { key: agentKey, name, engine: 'openai', engineId: provider, model, workspace: { id: this.workspace.workspaceId,
@@ -1375,7 +1423,7 @@ export class BrowserDevice {
         busy: false, taskId: null, transient: true, hidden: agentKey === BOSS_AGENT };
       this.agents.set(agentKey, agent);
     }
-    Object.assign(agent, { engineId: provider, model, profile });
+    Object.assign(agent, { name, role, engineId: provider, model, profile });
     if (agent.busy) return Promise.resolve({ status: 'error', result: null, usage: emptyUsage(false), error: { code: 'busy' } });
     try {
       this._checkHourlyTaskRate();
@@ -1391,6 +1439,7 @@ export class BrowserDevice {
       agent.taskId = record.task;
       this.tasks.set(record.task, record);
       this.bossRecord = record;
+      if (onStart) onStart(record.task);
       this._runTaskLoop(agent, record).catch(() => {
         if (record.status === 'running') this._finishTask(agent, record, 'error', null, emptyUsage(false), { code: 'engine_error' });
       });

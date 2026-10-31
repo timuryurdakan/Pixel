@@ -168,7 +168,12 @@
     <label id="wf-brief-row">Ne istiyorsunuz? <textarea name="brief" class="wf-brief" rows="3" spellcheck="false" placeholder="ör. Mahalle kafesi için tek sayfalık tanıtım sitesi: menü, adres, çalışma saatleri"></textarea></label>
     <label>Çalışma klasörü <select name="workspace"></select></label>
     <label id="wf-sub-row">Alt klasör (yoksa oluşturulur) <input name="sub" maxlength="200" placeholder="ör. statik-site"></label>
-    <label>Maliyet tavanı ($, tahmini) <input name="cost" type="number" min="0.01" max="20" step="0.01" inputmode="decimal"></label>
+    <label id="wf-cost-row">Maliyet tavanı ($, tahmini) <input name="cost" type="number" min="0.01" max="20" step="0.01" inputmode="decimal"></label>
+    <!-- F4-3b: templates in this browser (no connector): one provider and model for every step -->
+    <div id="wf-model-row" class="boss-model-row" hidden>
+      <label>Sağlayıcı <select name="provider"></select></label>
+      <label>Model <select name="model"></select></label>
+    </div>
     <p id="wf-limits" class="muted small"></p>
     <p id="wf-error" class="form-error" role="alert" hidden></p>
     <div class="dlg-actions"><button type="button" class="btn ghost" data-wf-close>Kapat</button><button type="submit" name="start" class="btn accent">Başlat</button></div>

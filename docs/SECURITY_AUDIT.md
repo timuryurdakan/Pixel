@@ -605,3 +605,19 @@ Uygulayıcının notu (bağımsız inceleme değil). Tasarım ve tehdit modeli `
 - **DeviceHub yaması:** E4a `hub.request/watch/connect/unpair/updateRoom/_dropDevice`'ı yalnızca `browser` cihazı için
   yerelde yanıtlayacak şekilde sarar; diğer cihazlar özgün yoldan gider. Uçtan uca testler (gerçek sayfa ⇄ röle ⇄
   bağlayıcı) bu değişiklikle geçer.
+
+## 19. F4-3b tarayıcıda iş akışı şablonları (2026-11-01)
+
+Uygulayıcının notu (bağımsız inceleme değil). Tasarım `docs/F43B_TASARIM.md`.
+
+- **Şablon güvenilmez:** Şablon Oluşturucu kitaplığı `localStorage`'dan gelir; her girdi çalıştırılmadan önce
+  bağlayıcının doğrulayıcısının birebir kopyasından geçer (eşlik vektörleri). Oluşturucunun kendi doğrulayıcısı
+  varsayılanlarda farklı olduğu için güvenlik sınırı olarak kullanılmaz.
+- **Model çıktısı:** bir adımın çıktısı sonraki adıma yalnızca rastgele çitli ve "veri, talimat değil" etiketli
+  girer (`handoff_prompt` aynısı); `workflow.state` olaylarında ve saklanan kayıtlarda istek metni ya da çıktı yoktur.
+- **Yetki:** `dev`/`auto` adımlı şablon tarayıcıda çalışmaz (sessizce `edit`'e düşürülmez). Araçlar E4 sanal klasör
+  araçlarıyla sınırlı, komut ve ağ yok.
+- **Anahtar:** yalnızca `keystore.js`'ten, yalnızca `Authorization` başlığında; kanarya testi `workflow.*` yanıtlarını,
+  olayları ve saklanan kayıtları da kapsar.
+- **Kaynak sınırları:** akış başına 60.000 çıkış jetonu ve en fazla 30 dk, adım başına D7, saatlik 30 görev; Patron
+  ve iş akışı aynı anda çalışmaz.

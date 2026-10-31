@@ -26,6 +26,25 @@ const RUN_RE = /^w_[A-Za-z0-9_-]{10}$/;
 const ORDER_RE = /^o[1-9]$/;
 const STEP_RE = /^(o[1-9]|patron)$/;
 const WORD_RE = /^[a-z][a-z0-9_]{0,31}$/;    // role ids and codes
+
+/**
+ * F4-3a / F4-3b: the browser device's providers and their models into two <select>s (device strings via textContent).
+ * Shared by the Boss panel and the workflow dialog.
+ */
+export function fillProviderModel(d, prov, modelSel) {
+  const engines = (d && d.info && d.info.engines && Array.isArray(d.info.engines.openai) ? d.info.engines.openai : [])
+    .filter((e) => e && typeof e.id === 'string' && WORD_RE.test(e.id) && Array.isArray(e.models));
+  const keep = prov.value;
+  prov.replaceChildren(...engines.map((e) => { const o = el('option', null, String(e.name || e.id).slice(0, 40)); o.value = e.id; return o; }));
+  if (engines.some((e) => e.id === keep)) prov.value = keep;
+  const fillModels = () => {
+    const e = engines.find((x) => x.id === prov.value);
+    const models = e ? e.models.filter((m) => typeof m === 'string').slice(0, 20) : [];
+    modelSel.replaceChildren(...models.map((m) => { const o = el('option', null, m.slice(0, 96)); o.value = m; return o; }));
+  };
+  if (!prov.dataset.wired) { prov.addEventListener('change', fillModels); prov.dataset.wired = '1'; }
+  fillModels();
+}
 export const DEPT_RE = /^[a-z]{1,16}$/;
 export const BOSS_DEPARTMENTS_FEATURE = 'bossDepartments';
 export const DEFAULT_DEPARTMENT = 'yazilim';
@@ -583,19 +602,7 @@ export class BossPanel {
     if (costRow) costRow.hidden = browser;
     if (modelRow) modelRow.hidden = !browser;
     if (!browser || !modelRow) return false;
-    const engines = (d.info && d.info.engines && Array.isArray(d.info.engines.openai) ? d.info.engines.openai : [])
-      .filter((e) => e && typeof e.id === 'string' && WORD_RE.test(e.id) && Array.isArray(e.models));
-    const prov = this.f.provider;
-    const keep = prov.value;
-    prov.replaceChildren(...engines.map((e) => { const o = el('option', null, String(e.name || e.id).slice(0, 40)); o.value = e.id; return o; }));
-    if (engines.some((e) => e.id === keep)) prov.value = keep;
-    const fillModels = () => {
-      const e = engines.find((x) => x.id === prov.value);
-      const models = e ? e.models.filter((m) => typeof m === 'string').slice(0, 20) : [];
-      this.f.model.replaceChildren(...models.map((m) => { const o = el('option', null, m.slice(0, 96)); o.value = m; return o; }));
-    };
-    if (!prov.dataset.wired) { prov.addEventListener('change', fillModels); prov.dataset.wired = '1'; }
-    fillModels();
+    fillProviderModel(d, this.f.provider, this.f.model);
     this.capHint.textContent = tt('Bu tarayıcıda çalışır: kendi API anahtarınız kullanılır. İş başına en fazla {tok} çıkış '
       + 'jetonu; uzmanlar yalnızca bu tarayıcıdaki sanal klasörde okur ve yazar, komut çalıştırmaz.',
     { tok: Number(d.info && d.info.boss && d.info.boss.maxOutTok || 0).toLocaleString(tt('tr-TR')) });

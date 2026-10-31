@@ -10,6 +10,7 @@ import { PROFILE_TEXT } from './prompt.js';
 import { TemplateBuilder } from './template_builder.js';
 import { PreviewDrawer } from './preview.js';
 import { t as tt } from './i18n.js';
+import { fillProviderModel } from './boss.js';
 
 export const WORKFLOWS_FEATURE = 'workflows';
 export const BRIEF_MAX = 4096;               // = pixel_connector/workflows.py BRIEF_MAX (UTF-8 bytes)
@@ -43,6 +44,8 @@ export const CODE_TEXT = {
   budget: tt('Bütçe sınırına ulaşıldı'),
   error: tt('Adım hata verdi'),
   revoked: tt('Başlatan tarayıcının eşleşmesi kaldırıldı'),
+  budget_exceeded: tt('Jeton tavanı doldu'),
+  page_closed: tt('Sayfa kapandığı için durdu'),
 };
 
 export function codeText(code) {
@@ -82,12 +85,17 @@ export function validRun(run) {
 
 const money = (n) => `$${(Number.isFinite(n) ? n : 0).toFixed(2)}`;
 
-/** "2/4 adım · $0.05 / $1.00 · 5 tur" */
+/** "2/4 adım · $0.05 / $1.00 · 5 tur"; a browser run (F4-3b) counts output tokens instead of money. */
 export function progressText(run) {
   const finished = run.steps.filter((s) => s.state === 'done').length;
   const bits = [tt('{done}/{all} adım', { done: finished, all: run.steps.length })];
-  const cap = run.limits && Number.isFinite(run.limits.maxCostUsd) ? ` / ${money(run.limits.maxCostUsd)}` : '';
-  bits.push(`${money(run.costUsd)}${cap}`);
+  if (run.limits && Number.isFinite(run.limits.maxOutTok)) {
+    const n = (v) => (Number.isFinite(v) ? v : 0).toLocaleString(tt('tr-TR'));
+    bits.push(tt('{used} / {max} jeton', { used: n(run.outTok), max: n(run.limits.maxOutTok) }));
+  } else {
+    const cap = run.limits && Number.isFinite(run.limits.maxCostUsd) ? ` / ${money(run.limits.maxCostUsd)}` : '';
+    bits.push(`${money(run.costUsd)}${cap}`);
+  }
   if (Number.isFinite(run.turns) && run.turns > 0) bits.push(`${run.turns} tur`);
   return bits.join(' · ');
 }
@@ -313,7 +321,11 @@ export class WorkflowDialog {
     if (this._device() !== d) return;
     const t = this.store.templates.get(d.id) || { list: [], invalid: 0 };
     const keep = this.f.template.value;
-    this.f.template.replaceChildren(...t.list.map((x) => { const o = el('option', null, x.name); o.value = x.id; return o; }));
+    this.f.template.replaceChildren(...t.list.map((x) => {
+      const o = el('option', null, x.unavailable ? `${x.name} ${tt('(tarayıcıda çalışmaz)')}` : x.name);
+      o.value = x.id;
+      return o;
+    }));
     if (t.list.some((x) => x.id === keep)) this.f.template.value = keep;
     const ws = this.f.workspace;
     const list = this.wsCache.get(d.id) || [];
@@ -336,13 +348,32 @@ export class WorkflowDialog {
     this.f.cost.value = t && t.limits ? String(t.limits.maxCostUsd) : '1';
     this.f.cost.max = String(costCeiling(t));
     this.f.sub.value = t && t.folder ? t.folder : '';
+    const browser = this._browser(d);
     this.limits.textContent = t && t.limits
       ? tt('Sınırlar: en fazla {turns} tur, {min} dk. Aşılırsa akış durur, sonraki adım başlamaz.', { turns: t.limits.maxTurns, min: Math.round(t.limits.timeoutS / 60) })
       : '';
+    if (browser && t && t.limits) {
+      this.limits.textContent += ` ${tt('Bu tarayıcıda çalışır: kendi API anahtarınız kullanılır, akış başına en fazla {tok} çıkış jetonu. '
+        + 'Adımlar bu tarayıcıdaki sanal klasörde okur ve yazar, komut çalıştırmaz.', { tok: Number(t.limits.maxOutTok || 0).toLocaleString(tt('tr-TR')) })}`;
+    }
+    if (browser && t && t.unavailable) {
+      this.limits.textContent = tt('Bu şablon komut çalıştıran bir adım içeriyor (Geliştirici izni); tarayıcıda çalışamaz. Bilgisayarınızdaki bağlayıcıyla çalıştırın.');
+    }
     this.stepsBox.replaceChildren();
     for (const s of t ? t.steps : []) this.stepsBox.appendChild(this._stepRow(s, d));
     this._ws();
     this._updateStart();
+  }
+
+  /** F4-3b: the browser device runs templates with one provider and model (C2) and no money cap (C4). */
+  _browser(d) {
+    const browser = !!(d && d.isBrowserLocal);
+    const costRow = this.dialog.querySelector('#wf-cost-row');
+    const modelRow = this.dialog.querySelector('#wf-model-row');
+    if (costRow) costRow.hidden = browser;
+    if (modelRow) modelRow.hidden = !browser;
+    if (browser && modelRow) fillProviderModel(d, this.f.provider, this.f.model);
+    return browser;
   }
 
   _stepRow(s, d) {
@@ -351,6 +382,11 @@ export class WorkflowDialog {
     li.appendChild(el('b', 'wf-step-role', s.role));
     if (s.type === 'approval') {
       li.appendChild(el('span', 'muted small', tt(' — sizin onayınız (Onayla / Reddet)')));
+      return li;
+    }
+    if (d && d.isBrowserLocal) {
+      const prof = (PROFILE_TEXT[s.profile] || { label: s.profile }).label;
+      li.appendChild(el('span', 'wf-step-note muted small', ` — ${tt('İzin: {label}', { label: prof })}`));
       return li;
     }
     const eng = (d && d.info && d.info.engines) || {};
@@ -391,7 +427,8 @@ export class WorkflowDialog {
   _ws() {
     const list = this.wsCache.get(this.f.device.value) || [];
     const w = list.find((x) => x.id === this.f.workspace.value);
-    this.subRow.hidden = !(w && Array.isArray(w.children));
+    const d = this._device();
+    this.subRow.hidden = !(w && Array.isArray(w.children)) || !!(d && d.isBrowserLocal);      // C7: no sub-folders
   }
 
   _error(text) {
@@ -401,7 +438,9 @@ export class WorkflowDialog {
 
   _updateStart() {
     const busy = this.store.list(this.f.device.value).some((x) => isActive(x.run));
-    this.f.start.disabled = busy || !this._tpl() || !!this.starting;
+    const t = this._tpl();
+    const d = this._device();
+    this.f.start.disabled = busy || !t || !!this.starting || !!(d && d.isBrowserLocal && t.unavailable);
     this.f.start.title = busy ? tt('Bu cihazda bir iş akışı çalışıyor; bitince yenisini başlatabilirsiniz.') : '';
   }
 
@@ -412,6 +451,13 @@ export class WorkflowDialog {
     const brief = this.f.brief.value.trim();
     if (t.needsBrief && !brief) return { error: tt('Ne istediğinizi kısaca yazın.') };
     if (new TextEncoder().encode(brief).length > BRIEF_MAX) return { error: tt('İstek çok uzun (en fazla 4 KB).') };
+    const d = this._device();
+    if (d && d.isBrowserLocal) {
+      if (t.unavailable) return { error: tt('Bu şablon tarayıcıda çalışamaz.') };
+      if (!this.f.provider.value || !this.f.model.value) return { error: tt('Bir sağlayıcı ve model seçin.') };
+      return { msg: { type: 'workflow.start', template: t.id, workspace: { id: this.f.workspace.value, sub: null }, brief,
+        model: { provider: this.f.provider.value, model: this.f.model.value } } };
+    }
     const cost = Number(String(this.f.cost.value).replace(',', '.'));
     const ceiling = costCeiling(t);
     if (!(cost >= COST_MIN && cost <= ceiling)) {

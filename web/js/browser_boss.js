@@ -322,6 +322,12 @@ function fenced(head, outputs) {
   return parts.length ? `${head}\n\n${parts.join('\n\n')}` : '';
 }
 
+/** B5 / C2: the run's {provider, model} from a request, or null. */
+export function parseModel(m, providers) {
+  if (!isPlain(m) || !providers.includes(m.provider) || typeof m.model !== 'string' || !MODEL_RE.test(m.model)) return null;
+  return { provider: m.provider, model: m.model };
+}
+
 /** boss.ask (untrusted, from this page) → {brief, department, provider, model}. BossError(bad_request | too_large). */
 export function parseAsk(msg, { workspaceId, providers }) {
   if (!isPlain(msg) || !Object.keys(msg).every((k) => ASK_FIELDS.includes(k))) throw new BossError('bad_request', 'unknown field');
@@ -333,11 +339,9 @@ export function parseAsk(msg, { workspaceId, providers }) {
   if (!brief || hiddenIn(brief, true)) throw new BossError('bad_request', 'brief');
   const department = msg.department === undefined ? R.defaultDepartment : msg.department;
   if (typeof department !== 'string' || !R.departments.some((d) => d.id === department)) throw new BossError('bad_request', 'department');
-  const m = msg.model;
-  if (!isPlain(m) || !providers.includes(m.provider) || typeof m.model !== 'string' || !MODEL_RE.test(m.model)) {
-    throw new BossError('bad_request', 'model');
-  }
-  return { brief, department, provider: m.provider, model: m.model };
+  const m = parseModel(msg.model, providers);
+  if (!m) throw new BossError('bad_request', 'model');
+  return { brief, department, ...m };
 }
 
 export class BrowserBoss {
@@ -350,11 +354,12 @@ export class BrowserBoss {
    * @param {(agentKey: string) => void} o.resetHistory
    * @param {string} o.workspaceId
    * @param {string[]} o.providers
+   * @param {() => boolean} [o.otherBusy]                 F4-3b C6: a workflow run is active in this browser
    */
-  constructor({ emit, runTask, cancelTask, resetHistory, workspaceId, providers, clock = () => Date.now(),
+  constructor({ emit, runTask, cancelTask, resetHistory, workspaceId, providers, otherBusy = () => false, clock = () => Date.now(),
     nonce = () => randomId(8, '0123456789abcdef'), jobId = () => `b_${randomId(10)}`,
     setTimer = (fn, ms) => setTimeout(fn, ms), clearTimer = (h) => clearTimeout(h) }) {
-    Object.assign(this, { emit, runTask, cancelTask, resetHistory, workspaceId, providers, clock, nonce, jobId,
+    Object.assign(this, { emit, runTask, cancelTask, resetHistory, workspaceId, providers, otherBusy, clock, nonce, jobId,
       setTimer, clearTimer });
     this.job = null;
   }
@@ -387,6 +392,7 @@ export class BrowserBoss {
   _ask(msg) {
     const opts = parseAsk(msg, { workspaceId: this.workspaceId, providers: this.providers });
     if (this._active()) throw new BossError('busy', 'a Boss job is already active');
+    if (this.otherBusy()) throw new BossError('busy', 'a workflow is running');
     const now = this.clock();
     this.job = { id: this.jobId(), state: 'planning', code: null, round: 0, ...opts, startedAt: now, endedAt: null,
       outTok: 0, plan: null, expires: null, orders: [], earlier: [], notes: [], reviewText: null, report: null, timer: null,
