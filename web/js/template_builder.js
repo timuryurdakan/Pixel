@@ -112,6 +112,8 @@ function cleanText(val, field, maxLen, { allowEmpty = false, allowNewlines = fal
   if (typeof val !== 'string') {
     return { ok: false, code: 'bad_template', message: `${field} must be a string` };
   }
+  // Browsers may hand over CR LF; the connector allows only \n and \t in multi-line texts.
+  if (allowNewlines) val = val.replace(/\r\n?/g, '\n');
   if (hasHiddenChar(val, allowNewlines)) {
     return { ok: false, code: 'bad_template', message: `${field} contains control or hidden characters` };
   }
@@ -328,7 +330,7 @@ export function validateTemplate(raw, { autoEnabled = false, existingIds = [] } 
   const nameRes = cleanText(raw.name, 'name', NAME_MAX);
   if (!nameRes.ok) return nameRes;
 
-  const descRes = cleanText(raw.description !== undefined ? raw.description : '', 'description', DESCRIPTION_MAX, {
+  const descRes = cleanText(raw.description ?? '', 'description', DESCRIPTION_MAX, {
     allowEmpty: true,
   });
   if (!descRes.ok) return descRes;
@@ -363,7 +365,7 @@ export function validateTemplate(raw, { autoEnabled = false, existingIds = [] } 
     value: {
       id: tid,
       name: nameRes.value,
-      description: descRes.value,
+      description: descRes.value || null,      // the connector refuses an empty description; absent is null
       folder: folderRes.value,
       guardrails: guardrailsRes.value,
       steps,
