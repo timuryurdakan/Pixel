@@ -860,4 +860,8 @@ export const EN = {
   'Adım çıktısı alınamadı.': 'The step output could not be loaded.',
   'Bu cihazda izinli klasör yok. Bilgisayarda şunu çalıştırın: ': 'This device has no allowed folder. Run this on the computer: ',
   ' (ya da varsayılan ~/PixelOfficeIsler klasörünü kullanmak için bağlayıcıyı güncelleyin).': ' (or update the connector to use the default ~/PixelOfficeIsler folder).',
+  'Bu tarayıcıda çalışır: kendi API anahtarınız kullanılır. İş başına en fazla {tok} çıkış jetonu; uzmanlar yalnızca bu tarayıcıdaki sanal klasörde okur ve yazar, komut çalıştırmaz.': 'Runs in this browser with your own API key. At most {tok} output tokens per job; the specialists only read and write in this browser\'s virtual folder and run no commands.',
+  'Bir sağlayıcı ve model seçin.': 'Choose a provider and a model.',
+  '{used} / {max} çıkış jetonu': '{used} / {max} output tokens',
+  'En fazla {n} iş emri · en fazla {tok} çıkış jetonu (kendi API anahtarınızdan)': 'At most {n} work orders · at most {tok} output tokens (from your own API key)',
 };

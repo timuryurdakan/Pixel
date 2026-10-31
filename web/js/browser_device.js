@@ -7,6 +7,8 @@
 import { ControlError } from './control.js';
 import { KeyStore, keyHint } from './keystore.js';
 import { t as tt } from './i18n.js';
+import { BrowserBoss, BossError, BOSS_AGENT, JOB_MAX_OUT_TOKENS } from './browser_boss.js';
+import { BOSS_RULES } from './boss_rules.js';
 
 export const BROWSER_DEVICE_ID = 'browser';
 
@@ -565,6 +567,16 @@ export class BrowserDevice {
     this.histories = new Map();
     this.taskTimestamps = [];
     this.usageLedger = { inTok: 0, outTok: 0, cacheRead: 0, cacheWrite: 0, tasks: 0 };
+    // F4-3a: the Boss's Room in this browser, answering boss.* like the connector (docs/F43_TASARIM.md).
+    this.bossRecord = null;
+    this.boss = new BrowserBoss({
+      emit: (m) => this._emitHubEvent(m),
+      runTask: (t) => this._runBossTask(t),
+      cancelTask: () => this._cancelBossTask(),
+      resetHistory: (key) => this.histories.delete(key),
+      workspaceId: this.workspace.workspaceId,
+      providers: ALLOWED_PROVIDERS,
+    });
   }
 
   /**
@@ -705,7 +717,9 @@ export class BrowserDevice {
       profiles: ['readonly', 'edit', 'dev'],
       confirm: { task: 'never', agentCreate: false, runtime: false, peerRevoke: false, timeoutS: 120 },
       remote: { agentCreate: true, agentDelete: true, budgetEdit: false },
-      features: ['browserDevice'],
+      features: ['browserDevice', 'boss', 'bossDepartments'],
+      bossDepartments: BOSS_RULES.departments.map((d) => ({ ...d, roles: [...d.roles] })),
+      boss: { browser: true, maxOutTok: JOB_MAX_OUT_TOKENS },
     };
   }
 
@@ -735,7 +749,7 @@ export class BrowserDevice {
   }
 
   async _saveAgents() {
-    const list = Array.from(this.agents.values()).map((a) => ({
+    const list = Array.from(this.agents.values()).filter((a) => !a.transient).map((a) => ({
       key: a.key,
       name: a.name,
       engine: 'openai',
@@ -751,6 +765,7 @@ export class BrowserDevice {
 
   _emitOffice(agent, state, tool = null) {
     agent.state = state;
+    if (agent.hidden) return;                 // the Boss is drawn by the scene, never as a character
     if (typeof this.onUpsert === 'function') {
       this.onUpsert({
         id: `${this.id}-${agent.key}`,
@@ -800,6 +815,17 @@ export class BrowserDevice {
         if (devEntry) devEntry.info = info;
         return info;
       }
+      case 'boss.get':
+      case 'boss.ask':
+      case 'boss.approve':
+      case 'boss.cancel':
+      case 'boss.reset':
+        try {
+          return this.boss.handle(msg);
+        } catch (e) {
+          if (e instanceof BossError) throw new ControlError(e.code, e.detail);
+          throw e;
+        }
       case 'agent.list':
         return {
           type: 'agent.list.result',
@@ -1340,6 +1366,45 @@ export class BrowserDevice {
     };
   }
 
+  /** F4-3a: one Boss or specialist task; resolves with its outcome (agents are transient, the Boss is hidden). */
+  _runBossTask({ agentKey, name, role, profile, prompt, fresh, provider, model }) {
+    let agent = this.agents.get(agentKey);
+    if (!agent) {
+      agent = { key: agentKey, name, engine: 'openai', engineId: provider, model, workspace: { id: this.workspace.workspaceId,
+        sub: null }, profile, role, character: [...agentKey].reduce((n, c) => n + c.charCodeAt(0), 0) % 6, state: 'idle',
+        busy: false, taskId: null, transient: true, hidden: agentKey === BOSS_AGENT };
+      this.agents.set(agentKey, agent);
+    }
+    Object.assign(agent, { engineId: provider, model, profile });
+    if (agent.busy) return Promise.resolve({ status: 'error', result: null, usage: emptyUsage(false), error: { code: 'busy' } });
+    try {
+      this._checkHourlyTaskRate();
+    } catch (e) {
+      return Promise.resolve({ status: 'error', result: null, usage: emptyUsage(false), error: { code: 'rate_limited' } });
+    }
+    if (fresh) this.histories.delete(agentKey);
+    return new Promise((resolve) => {
+      const record = { task: `bt_${randomHex(6)}`, agent: agent.key, prompt, status: 'running', result: null,
+        usage: emptyUsage(false), error: null, startedAt: this.clock(), endedAt: null, cancelled: false,
+        abortController: new AbortController(), done: resolve };
+      agent.busy = true;
+      agent.taskId = record.task;
+      this.tasks.set(record.task, record);
+      this.bossRecord = record;
+      this._runTaskLoop(agent, record).catch(() => {
+        if (record.status === 'running') this._finishTask(agent, record, 'error', null, emptyUsage(false), { code: 'engine_error' });
+      });
+    });
+  }
+
+  _cancelBossTask() {
+    const r = this.bossRecord;
+    if (r && r.status === 'running') {
+      r.cancelled = true;
+      r.abortController.abort();
+    }
+  }
+
   _finishTask(agent, record, status, result, usage, error) {
     record.status = status;
     record.result = result;
@@ -1355,6 +1420,7 @@ export class BrowserDevice {
     this.usageLedger.tasks += 1;
 
     this._emitOffice(agent, status === 'error' ? 'attention' : 'idle', null);
+    if (typeof record.done === 'function') record.done({ status, result, usage, error: error || null });
     this._emitHubEvent({
       type: 'task.end',
       task: record.task,

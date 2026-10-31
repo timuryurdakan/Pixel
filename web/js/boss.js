@@ -129,6 +129,7 @@ function button(cls, text, onClick, disabled = false) {
 }
 
 const money = (n) => `$${(Number.isFinite(n) ? n : 0).toFixed(2)}`;
+const tokens = (n) => (Number.isFinite(n) ? n : 0).toLocaleString(tt('tr-TR'));
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const numOrNull = (v) => (isNum(v) ? v : null);
 const bytes = (s) => new TextEncoder().encode(s).length;
@@ -209,6 +210,7 @@ export function readState(m) {
     department: typeof m.department === 'string' && DEPT_RE.test(m.department) ? m.department : null,
     round: m.round, orders: Number.isInteger(m.orders) && m.orders >= 0 && m.orders <= MAX_ORDERS ? m.orders : 0,
     costUsd: m.costUsd, maxCostUsd: m.maxCostUsd, estimateUsd: numOrNull(m.estimateUsd), run: m.run || null,
+    outTok: numOrNull(m.outTok), maxOutTok: numOrNull(m.maxOutTok),
     orderStates: (m.orderStates || []).slice(0, MAX_ORDERS + 1).map(readOrderState).filter(Boolean),
     workspace: { id: str(ws.id, 64), sub: str(ws.sub, 200) }, expiresAt: numOrNull(m.expiresAt),
   };
@@ -238,7 +240,7 @@ export function readPlan(m) {
     if (WORD_RE.test(id) && r && typeof r.name === 'string') roles[id] = { name: r.name.slice(0, TEXT_MAX.role) };
   }
   return { job: m.job, summary, orders, roles, estimateUsd: numOrNull(m.estimateUsd), maxCostUsd: numOrNull(m.maxCostUsd),
-    round: m.round === 1 ? 1 : 0, expiresAt: numOrNull(m.expiresAt) };
+    round: m.round === 1 ? 1 : 0, expiresAt: numOrNull(m.expiresAt), maxOutTok: numOrNull(m.maxOutTok) };
 }
 
 /** Untrusted `boss.report` → {job, report, partial, state, code, costUsd, maxCostUsd} or null. */
@@ -555,6 +557,11 @@ export class BossPanel {
     ws.replaceChildren(...list.map((w) => { const o = el('option', null, typeof w.name === 'string' ? w.name : w.id); o.value = w.id; return o; }));
     if (list.some((w) => w.id === keep)) ws.value = keep;
     else if (list.some((w) => w.id === 'isler')) ws.value = 'isler';            // ~/PixelOfficeIsler (Phase 17 default)
+    if (this._fillBrowserModel(d)) {
+      this._ws();
+      this._updateAsk();
+      return;
+    }
     const ceiling = costCeiling(d);
     this.f.cost.max = String(ceiling);
     this.f.cost.min = String(COST_MIN);
@@ -563,6 +570,36 @@ export class BossPanel {
       + 'Abonelikle kullanımda bu tutar kullanım kotanızdan düşen eşdeğer maliyettir.', { max: ceiling.toFixed(2) });
     this._ws();
     this._updateAsk();
+  }
+
+  /**
+   * F4-3a: the Boss in this browser has no money cap (provider prices are unknown) but a token cap, and the user picks
+   * the provider and model. → true when `d` is the browser device (cost row hidden, model row shown).
+   */
+  _fillBrowserModel(d) {
+    const browser = !!(d && d.isBrowserLocal);
+    const costRow = this.dialog.querySelector('#boss-cost-row');
+    const modelRow = this.dialog.querySelector('#boss-model-row');
+    if (costRow) costRow.hidden = browser;
+    if (modelRow) modelRow.hidden = !browser;
+    if (!browser || !modelRow) return false;
+    const engines = (d.info && d.info.engines && Array.isArray(d.info.engines.openai) ? d.info.engines.openai : [])
+      .filter((e) => e && typeof e.id === 'string' && WORD_RE.test(e.id) && Array.isArray(e.models));
+    const prov = this.f.provider;
+    const keep = prov.value;
+    prov.replaceChildren(...engines.map((e) => { const o = el('option', null, String(e.name || e.id).slice(0, 40)); o.value = e.id; return o; }));
+    if (engines.some((e) => e.id === keep)) prov.value = keep;
+    const fillModels = () => {
+      const e = engines.find((x) => x.id === prov.value);
+      const models = e ? e.models.filter((m) => typeof m === 'string').slice(0, 20) : [];
+      this.f.model.replaceChildren(...models.map((m) => { const o = el('option', null, m.slice(0, 96)); o.value = m; return o; }));
+    };
+    if (!prov.dataset.wired) { prov.addEventListener('change', fillModels); prov.dataset.wired = '1'; }
+    fillModels();
+    this.capHint.textContent = tt('Bu tarayıcıda çalışır: kendi API anahtarınız kullanılır. İş başına en fazla {tok} çıkış '
+      + 'jetonu; uzmanlar yalnızca bu tarayıcıdaki sanal klasörde okur ve yazar, komut çalıştırmaz.',
+    { tok: Number(d.info && d.info.boss && d.info.boss.maxOutTok || 0).toLocaleString(tt('tr-TR')) });
+    return true;
   }
 
   _ws() {
@@ -600,9 +637,16 @@ export class BossPanel {
     if (!brief) return { error: tt('Patrona ne yaptırmak istediğinizi kısaca yazın.') };
     if (bytes(brief) > BRIEF_MAX) return { error: tt('İstek çok uzun (en fazla 4 KB).') };
     if (!this.f.workspace.value) return { error: tt('Bir çalışma klasörü seçin.') };
-    const cost = parseCost(this.f.cost.value, costCeiling(d));
-    if (cost.error) return { error: cost.error };
-    const msg = { type: 'boss.ask', workspace: this._workspace(), brief, maxCostUsd: cost.value };
+    let msg;
+    if (d.isBrowserLocal) {
+      if (!this.f.provider.value || !this.f.model.value) return { error: tt('Bir sağlayıcı ve model seçin.') };
+      msg = { type: 'boss.ask', workspace: this._workspace(), brief,
+        model: { provider: this.f.provider.value, model: this.f.model.value } };
+    } else {
+      const cost = parseCost(this.f.cost.value, costCeiling(d));
+      if (cost.error) return { error: cost.error };
+      msg = { type: 'boss.ask', workspace: this._workspace(), brief, maxCostUsd: cost.value };
+    }
     if (supportsBossDepartments(d) && readDepartments(d).length > 0 && this.f.department) {
       const dept = this.f.department.value;
       if (typeof dept === 'string' && DEPT_RE.test(dept)) msg.department = dept;
@@ -686,7 +730,10 @@ export class BossPanel {
     const name = this._folderName(job.workspace.id);
     const ws = name ? `${tt('Klasör:')} ${name}${job.workspace.sub ? '/' + job.workspace.sub : ''} · ` : '';
     const dept = job.department ? `${tt('Departman:')} ${this._departmentName(job.department)} · ` : '';
-    card.appendChild(el('div', 'wf-run-meta muted small', `${dept}${ws}${money(job.costUsd)} / ${money(job.maxCostUsd)}`));
+    const spend = job.maxOutTok !== null && job.maxOutTok !== undefined
+      ? tt('{used} / {max} çıkış jetonu', { used: tokens(job.outTok), max: tokens(job.maxOutTok) })
+      : `${money(job.costUsd)} / ${money(job.maxCostUsd)}`;
+    card.appendChild(el('div', 'wf-run-meta muted small', `${dept}${ws}${spend}`));
     if (STATE_NOTE[job.state]) card.appendChild(el('p', 'wf-run-note small', STATE_NOTE[job.state]));
     if (this.actError) {
       const err = el('p', 'form-error boss-act-error', this.actError);
@@ -761,7 +808,9 @@ export class BossPanel {
     }
     box.appendChild(ol);
     const est = plan.estimateUsd ?? job.estimateUsd;
-    box.appendChild(el('p', 'boss-cost', tt('Tahmini maliyet: {est} · Kesin tavan: {cap}', { est: money(est), cap: money(plan.maxCostUsd ?? job.maxCostUsd) })));
+    box.appendChild(el('p', 'boss-cost', plan.maxOutTok !== null && plan.maxOutTok !== undefined
+      ? tt('En fazla {n} iş emri · en fazla {tok} çıkış jetonu (kendi API anahtarınızdan)', { n: plan.orders.length, tok: tokens(plan.maxOutTok) })
+      : tt('Tahmini maliyet: {est} · Kesin tavan: {cap}', { est: money(est), cap: money(plan.maxCostUsd ?? job.maxCostUsd) })));
     const exp = plan.expiresAt ?? job.expiresAt;
     const left = isNum(exp) ? Math.max(0, Math.round((exp - Date.now()) / 60000)) : null;
     box.appendChild(el('p', 'muted small', tt('Onaylamazsanız hiçbir uzman çalışmaz.') + (left !== null ? ' ' + tt('Yanıt verilmezse {n} dk sonra reddedilmiş sayılır.', { n: left }) : '')));
