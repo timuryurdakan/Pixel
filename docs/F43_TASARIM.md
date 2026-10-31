@@ -1,6 +1,6 @@
 # F4-3 — Tarayıcıda Patron Odası: Tasarım (taslak)
 
-Durum: **taslak, kullanıcı onayı bekliyor** (2026-10-31, Claude). Kaynak: `docs/ARASTIRMA2_ORTAK.md` F4-3 ve K2.
+Durum: **onaylandı** (2026-10-31): B1–B8 önerildiği gibi; F4-3a Claude yapar. Kaynak: `docs/ARASTIRMA2_ORTAK.md` F4-3 ve K2.
 K2 kararı: "Claude dışı modellerle Patron önce yalnızca tarayıcıda denenir".
 
 ## 1. Amaç

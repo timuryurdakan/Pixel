@@ -11,6 +11,8 @@ export const MODULES = [
   'board.js',
   'boss.js',
   'boss_scene.js',
+  'boss_rules.js',
+  'browser_boss.js',
   'browser_device.js',
   'browser_office.js',
   'cloud.js',
