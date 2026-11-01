@@ -621,3 +621,25 @@ Uygulayıcının notu (bağımsız inceleme değil). Tasarım `docs/F43B_TASARIM
   olayları ve saklanan kayıtları da kapsar.
 - **Kaynak sınırları:** akış başına 60.000 çıkış jetonu ve en fazla 30 dk, adım başına D7, saatlik 30 görev; Patron
   ve iş akışı aynı anda çalışmaz.
+
+## 20. Gizli bilgi ve maliyet kontrolü (2026-11-01)
+
+Kullanıcının isteğiyle (yapay zekâyla yapılmış projelerde koda/yoruma gömülü API anahtarı yüzünden çıkan faturalar).
+
+- **Gizli bilgi taraması:** Bütün dosyalar ve git geçmişinin tamamı (131 commit) bilinen anahtar biçimleri (OpenAI,
+  Anthropic, Google, Groq, GitHub, Slack, AWS, Hugging Face, Replicate, özel anahtar, JWT) ve genel
+  `key/token/secret = '…'` atamaları için tarandı: **gerçek anahtar yok.** Çıkan eşleşmeler testlerin uydurma
+  değerleri (`CANARY`, `test-relay-secret-…`). Röle sırrı (`RELAY_SECRET`) ve `PIXEL_SECRET` yalnızca Cloudflare /
+  Vercel panelinde. `.gitignore` `.env*`, `*.pem`, `*.key`, `.npmrc`, `.dev.vars`, `.vercel/`'i dışarıda tutuyor.
+  Yeni `tests/test_no_secrets.py` her test koşusunda projedeki her dosyayı (yorumlar dahil) aynı biçimler için tarar;
+  dosyaya bırakılan sahte bir Groq anahtarıyla denendi, yakaladı.
+- **Sunucu maliyeti:** Vercel Hobby, Upstash Redis ücretsiz katmanı, Cloudflare Workers Free (Durable Objects SQLite).
+  Sunucu kodu hiçbir ücretli yapay zekâ API'sini çağırmıyor. Yazma, oda oluşturma, bilet ve okuma uçlarında IP ve oda
+  başına hız sınırı var (`pixel_cloud/settings.py`). Kartsız ücretsiz planlarda sınır aşılırsa servis durur, fatura
+  çıkmaz; hesaplara kart eklenmemesi ve ücretli plana geçilmemesi kullanıcının denetiminde.
+- **Yapay zekâ harcaması:** Yalnızca kullanıcının kendi bilgisayarındaki bağlayıcıdan ya da kendi tarayıcısındaki
+  anahtardan çıkar; görevi yalnızca bilgisayarda kodla eşleştirilmiş cihazlar başlatabilir. Tavanlar: Claude görev
+  başına 2 $ (`maxBudgetUsdPerTask`), saatte 60 / dakikada 6 görev, eşzamanlı 2; Claude dışı motorlarda görev başına
+  8.000 çıkış jetonu ve 20 tur; tarayıcıda saatte 30 görev, Patron/şablon başına 60.000 jeton; Patron'da iş başına dolar
+  tavanı. **Açık nokta:** varsayılan günlük bütçe yok (`budgets: []`); kullanıcı tanımlamazsa üst sınır yalnızca hız ve
+  görev tavanlarıdır.
