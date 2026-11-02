@@ -882,4 +882,10 @@ export const EN = {
   // 2026-11-01: default daily Claude budget
   '(varsayılan)': '(default)',
   'Güvenlik için varsayılan günlük Claude bütçesi. Cihaza kendi dolar bütçenizi koyduğunuzda bu kalkar.': 'Default daily Claude budget, for safety. It goes away once you set your own dollar budget on the device.',
+  // F4-6a: ACP agents
+  'ACP ajanı: izinleri ajanın kendi ayarları belirler. Pixel Office yalnızca ajan sorduğunda karar verir; komut ve ağ istekleri bilgisayarda onaya gelir. Oluşturmak bilgisayarda onay ister.': 'ACP agent: its own settings decide what it may do. Pixel Office only decides when the agent asks; command and network requests come to the computer for approval. Creating one needs a confirmation on the computer.',
+  'ACP ajanı: izinleri ajanın kendi ayarları belirler. Pixel Office yalnızca ajan sorduğunda karar verir.': 'ACP agent: its own settings decide what it may do. Pixel Office only decides when the agent asks.',
+  'Bu ajan için bir çalışma klasörü seçin.': 'Choose a work folder for this agent.',
+  'bilgisayarda kapalı ya da kurulu değil': 'off on the computer or not installed',
+  '(ajanın kendi ayarı)': "(the agent's own setting)",
 };

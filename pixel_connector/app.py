@@ -32,6 +32,7 @@ from .engines.base import TaskContext, clear_history
 from .engines.claude import ClaudeEngine
 from .engines.ollama import OllamaEngine
 from .engines.openai_compat import OpenAIEngine
+from .engines.acp import AcpEngine
 from .peers import DeviceKey, PeerStore
 from .relay import RelayClient
 from .runtimes import RuntimeError_, Runtimes
@@ -47,13 +48,14 @@ BUILTIN_IDS = frozenset(t["id"] for t in BUILTIN_TEMPLATES)
 REQ_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}\Z")
 TASK_RE = re.compile(r"^t_[A-Za-z0-9_-]{10}\Z")
 PROFILE_LABELS = {"readonly": "Sadece okuma", "edit": "Düzenleyebilir", "dev": "Geliştirici", "auto": "Otomatik"}
+ACP_PROFILES = ("readonly", "edit")      # F4-6a A2: no dev or auto for an ACP agent
 STOP_WAIT_S = 10.0          # stop(): how long all cancelled runs together may take to end (v2.md H11)
 APPROVAL_RESULT = {"ok": "allow", "denied": "deny", "timeout": "expired", "withdrawn": "withdrawn"}
 APPROVAL_AUDIT = {"ok": "approval.approve", "denied": "approval.deny", "timeout": "approval.expire",
                   "withdrawn": "approval.withdraw"}
 APPROVAL_POLL_S = 0.5       # how often a waiting /ctl/approvals/tool call checks that its hook is still there
 # device.info.features: optional protocol parts (v4-B handoff, v4-C workflows, Patron Odası boss.*)
-FEATURES = ["handoff", "workflows", "boss", "bossRetry", "bossDepartments", "workflowSave"]
+FEATURES = ["handoff", "workflows", "boss", "bossRetry", "bossDepartments", "workflowSave", "acp"]
 SLOW_TYPES = {"peer.hello", "runtime.list", "runtime.start", "runtime.stop", "model.load", "model.unload",
               "workspace.list", "agent.create", "peer.revoke", "workflow.list", "workflow.start", "boss.ask",
               "boss.retry_step"}
@@ -131,6 +133,9 @@ class Connector:
         self.openai: Dict[str, OpenAIEngine] = eng.get("openai") or {
             e["id"]: OpenAIEngine(e) for e in self.cfg["engines"]["openai"]}
         self.approvals = Approvals(self.cfg["confirm"]["timeoutS"], clock=clock)
+        # F4-6a: ACP agents from connector.json only; their permission requests come to these approvals (A2).
+        self.acp: Dict[str, AcpEngine] = eng.get("acp") or {
+            e["id"]: AcpEngine(e, approvals=self.approvals, drop_env=api_key_envs) for e in self.cfg["engines"]["acp"]}
         self.router = Router(self.key, self.peers, self.audit, self.send_l1, self._on_inner,
                              self.cfg["deviceName"], clock, self.cfg["limits"]["handshakesPerHour"],
                              on_peer_closed=lambda p: None)
@@ -339,6 +344,11 @@ class Connector:
             return self.claude
         if agent["engine"] == "ollama":
             return self.ollama
+        if agent["engine"] == "acp":
+            e = self.acp.get(agent.get("engineId"))
+            if e is None or not e.available().get("available"):
+                raise TaskError("engine_unavailable", "ACP agent not configured or disabled")
+            return e
         eid = agent.get("engineId") or (next(iter(self.openai)) if self.openai else None)
         e = self.openai.get(eid) if eid else None
         if e is None:
@@ -359,6 +369,8 @@ class Connector:
     def _check_profile(self, agent: dict) -> None:
         if agent["engine"] == "claude" and agent.get("profile") == "auto" and not self.cfg["profiles"]["auto"]["enabled"]:
             raise TaskError("not_allowed", "auto profile disabled on this device")
+        if agent["engine"] == "acp" and agent.get("profile") not in ACP_PROFILES:
+            raise TaskError("not_allowed", "ACP agents run with readonly or edit only")
 
     # -- Scheduler callbacks ---------------------------------------------------------------------
     def precheck(self, run: TaskRun) -> None:
@@ -529,7 +541,9 @@ class Connector:
                                        "auth": c.get("auth", "unknown")},
                             "ollama": {"available": bool(o.get("available")), "version": o.get("version"),
                                        "models": o.get("models", [])},
-                            "openai": oa},
+                            "openai": oa,
+                            "acp": [{"id": aid, "name": e.cfg["name"], "available": bool(e.available().get("available"))}
+                                    for aid, e in self.acp.items()]},
                 "limits": {"maxPrompt": self.cfg["limits"]["maxPromptBytes"],
                            "maxConcurrent": self.cfg["limits"]["maxConcurrent"]},
                 "profiles": [{"id": p, "label": PROFILE_LABELS[p],
@@ -641,7 +655,7 @@ class Connector:
         ws = msg.get("workspace")
         if ws is not None and not isinstance(ws, dict):
             raise Reply("bad_request", "workspace")
-        if engine == "claude" and not ws:
+        if engine in ("claude", "acp") and not ws:
             raise Reply("workspace_denied", "workspace required")
         if ws:
             self.workspaces.resolve(ws.get("id"), ws.get("sub"))      # WorkspaceDenied → workspace_denied
@@ -649,7 +663,16 @@ class Connector:
         if engine == "claude" and profile == "auto" and not self.cfg["profiles"]["auto"]["enabled"]:
             raise Reply("not_allowed", "auto profile disabled on this device")
         engine_id = None
-        if engine == "openai":
+        if engine == "acp":
+            engine_id = msg.get("engineId")
+            e = self.acp.get(engine_id) if isinstance(engine_id, str) else None
+            if e is None or not e.available().get("available"):
+                raise Reply("engine_unavailable", "no such ACP agent enabled on this device")
+            if profile not in ACP_PROFILES:
+                raise Reply("not_allowed", "ACP agents run with readonly or edit only")
+            if msg.get("model") is not None:
+                raise Reply("bad_request", "model")
+        elif engine == "openai":
             engine_id = msg.get("engineId") or (next(iter(self.openai)) if self.openai else None)
             if engine_id not in self.openai:
                 raise Reply("engine_unavailable", "no OpenAI-compatible server configured")
@@ -667,7 +690,9 @@ class Connector:
             self.office(a, "idle", None, "Hazır", None)
             return {"type": "agent.created", "agent": self.agent_public(a)}
 
-        if self.cfg["confirm"]["agentCreate"]:
+        # A4: an ACP agent can be held back less than Claude Code (docs/F46A_TASARIM.md §3), so creating one from a
+        # browser is always confirmed on this computer.
+        if self.cfg["confirm"]["agentCreate"] or engine == "acp":
             self._confirm_then(peer, msg, "agent.create", "Yeni ajan: %s" % str(msg.get("name"))[:24],
                                str(msg.get("name"))[:24], create, (AgentError,))
             return None
@@ -682,6 +707,11 @@ class Connector:
         if "profile" in fields and fields["profile"] not in PROFILE_LABELS:
             raise Reply("bad_request", "profile")
         cur = self._not_boss(self.agents.get(msg.get("agent")))
+        if cur["engine"] == "acp":
+            if "profile" in fields and fields["profile"] not in ACP_PROFILES:
+                raise Reply("not_allowed", "ACP agents run with readonly or edit only")
+            if fields.get("model") is not None:
+                raise Reply("bad_request", "model")
 
         def update() -> dict:
             a = self.agents.update(cur["key"], fields)
@@ -692,7 +722,8 @@ class Connector:
 
         # S23-03: changing the profile gives an agent the powers of a new one, so it needs the same local
         # confirmation as agent creation (otherwise a confirmed readonly agent could be raised to dev remotely).
-        if self.cfg["confirm"]["agentCreate"] and "profile" in fields and fields["profile"] != cur.get("profile"):
+        if ((self.cfg["confirm"]["agentCreate"] or cur["engine"] == "acp") and "profile" in fields
+                and fields["profile"] != cur.get("profile")):
             self._confirm_then(peer, msg, "agent.update", "Profil değişikliği: %s → %s" % (
                 str(cur["name"])[:24], PROFILE_LABELS.get(fields["profile"], "?")), str(cur["name"])[:24], update,
                 (AgentError,))

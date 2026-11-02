@@ -862,6 +862,10 @@ export class NewAgentDialog {
     const o = eng.ollama || {};
     opts.push({ value: 'ollama', label: 'Ollama', ok: !!o.available, why: tt('çalışmıyor ya da kapalı') });
     for (const s of Array.isArray(eng.openai) ? eng.openai : []) opts.push({ value: `openai:${s.id}`, label: s.name || s.id, ok: !!s.available, why: tt('sunucu çalışmıyor') });
+    // F4-6a: ACP agents come from the computer's connector.json; a disabled one is listed but cannot be chosen.
+    for (const s of Array.isArray(eng.acp) ? eng.acp : []) {
+      if (s && typeof s.id === 'string') opts.push({ value: `acp:${s.id}`, label: `${String(s.name || s.id).slice(0, 40)} (ACP)`, ok: !!s.available, why: tt('bilgisayarda kapalı ya da kurulu değil') });
+    }
     let first = null;
     for (const op of opts) {
       const lab = el('label', `radio${op.ok ? '' : ' disabled'}`);
@@ -921,6 +925,8 @@ export class NewAgentDialog {
     const ev = this._engineValue();
     const eng = (d && d.info && d.info.engines) || {};
     const isClaude = ev === 'claude';
+    const isAcp = !!(ev && ev.startsWith('acp:'));
+    const needsFolder = isClaude || isAcp;
     // models
     const ms = this.f.model;
     ms.replaceChildren();
@@ -932,26 +938,52 @@ export class NewAgentDialog {
       models = (s && s.models || []).map((m) => [m, m]);
     }
     for (const [v, t] of models) { const o = el('option', null, t); o.value = v; ms.appendChild(o); }
-    if (!models.length) { const o = el('option', null, tt('Model yok')); o.value = ''; ms.appendChild(o); }
+    if (!models.length) { const o = el('option', null, isAcp ? tt('(ajanın kendi ayarı)') : tt('Model yok')); o.value = ''; ms.appendChild(o); }
     // workspace: required for Claude, optional for chat models
     const wsSel = this.f.workspace;
     const keep = wsSel.value;
     wsSel.replaceChildren();
-    if (!isClaude) { const o = el('option', null, tt('(yok, yalnızca sohbet)')); o.value = ''; wsSel.appendChild(o); }
+    if (!needsFolder) { const o = el('option', null, tt('(yok, yalnızca sohbet)')); o.value = ''; wsSel.appendChild(o); }
     for (const w of this.workspaces || []) { const o = el('option', null, w.name); o.value = w.id; wsSel.appendChild(o); }
-    const none = isClaude && noWorkspaces(this.workspaces);
+    const none = needsFolder && noWorkspaces(this.workspaces);
     if (none) { const o = el('option', null, tt('İzinli klasör yok')); o.value = ''; wsSel.appendChild(o); }
     this.wsHint.hidden = !none;
     if ([...wsSel.options].some((o) => o.value === keep)) wsSel.value = keep;
-    this.f.profile.disabled = !isClaude;
-    this.dialog.querySelector('#agent-profile-row').hidden = !isClaude;
-    this.dialog.querySelector('#agent-local-note').hidden = isClaude || !ev;
+    this.f.profile.disabled = !needsFolder;
+    this.dialog.querySelector('#agent-profile-row').hidden = !needsFolder;
+    // F4-6a A2: an ACP agent runs with readonly or edit only
+    for (const o of this.f.profile.options) if (isAcp && (o.value === 'dev' || o.value === 'auto')) o.disabled = true;
+    if (isAcp && this.f.profile.selectedOptions[0] && this.f.profile.selectedOptions[0].disabled) this.f.profile.value = 'edit';
+    if (!isAcp) this._profileOptions();
+    this.dialog.querySelector('#agent-local-note').hidden = needsFolder || !ev;
+    this._acpNote(isAcp);
     if (!this.f.name.value || this.f.name.dataset.auto === '1') {
       this.f.name.value = isClaude ? tt('Kâtip') : 'Yerel';
       this.f.name.dataset.auto = '1';
     }
     this.f.name.oninput = () => { this.f.name.dataset.auto = '0'; };
     this._ws();
+  }
+
+  /** Profile options enabled again as the device allows (after an ACP engine disabled dev/auto). */
+  _profileOptions() {
+    const d = this._device();
+    const profiles = d && d.info && Array.isArray(d.info.profiles) ? d.info.profiles : null;
+    for (const o of this.f.profile.options) {
+      const p = profiles ? profiles.find((x) => x.id === o.value) : null;
+      o.disabled = profiles ? !(p && p.enabled) : o.value === 'auto';
+    }
+  }
+
+  /** F4-6a A3: say plainly that an ACP agent's own settings decide what it may do. */
+  _acpNote(show) {
+    let n = this.dialog.querySelector('#agent-acp-note');
+    if (!n && show) {
+      n = el('p', 'muted small warn', tt('ACP ajanı: izinleri ajanın kendi ayarları belirler. Pixel Office yalnızca ajan sorduğunda karar verir; komut ve ağ istekleri bilgisayarda onaya gelir. Oluşturmak bilgisayarda onay ister.'));
+      n.id = 'agent-acp-note';
+      this.dialog.querySelector('#agent-profile-row').after(n);
+    }
+    if (n) n.hidden = !show;
   }
 
   _ws() {
@@ -973,12 +1005,12 @@ export class NewAgentDialog {
     if (!d || !ev) { this._error(tt('Bir motor seçin.')); return; }
     const name = this.f.name.value.trim();
     if (!name || [...name].length > 24) { this._error(tt('Ad 1–24 karakter olmalı.')); return; }
-    const engine = ev.startsWith('openai:') ? 'openai' : ev;
-    const model = this.f.model.value || null;
-    if (engine !== 'claude' && !model) { this._error(tt('Bir model seçin.')); return; }
+    const engine = ev.startsWith('openai:') ? 'openai' : (ev.startsWith('acp:') ? 'acp' : ev);
+    const model = engine === 'acp' ? null : (this.f.model.value || null);
+    if (engine !== 'claude' && engine !== 'acp' && !model) { this._error(tt('Bir model seçin.')); return; }
     const wsId = this.f.workspace.value;
-    if (engine === 'claude' && !wsId) {
-      this._error(noWorkspaces(this.workspaces) ? NO_WORKSPACE_HINT : tt('Claude Code ajanı için bir çalışma klasörü seçin.'));
+    if ((engine === 'claude' || engine === 'acp') && !wsId) {
+      this._error(noWorkspaces(this.workspaces) ? NO_WORKSPACE_HINT : tt('Bu ajan için bir çalışma klasörü seçin.'));
       return;
     }
     const sub = this.f.sub.value.trim() || null;
@@ -989,8 +1021,9 @@ export class NewAgentDialog {
       budget = { period: 'day', unit: this.f.budgetUnit.value, limit: n, action: this.f.budgetAction.value };
     }
     const msg = { type: 'agent.create', name, engine, model, workspace: wsId ? { id: wsId, sub: this.subRow.hidden ? null : sub } : null,
-      profile: engine === 'claude' ? this.f.profile.value : 'edit', budget };
+      profile: engine === 'claude' || engine === 'acp' ? this.f.profile.value : 'edit', budget };
     if (engine === 'openai') msg.engineId = ev.slice(7);
+    if (engine === 'acp') msg.engineId = ev.slice(4);
     this._error('');
     this.f.create.disabled = true;
     try {

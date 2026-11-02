@@ -397,6 +397,7 @@ def validate(raw: Any, home: Optional[str] = None, which=shutil.which) -> Tuple[
                    "allowRemote": allow_remote, "apiKeyEnv": env_name, "preset": preset,
                    "tools": _bool(e.get("tools"), False)})
     d["engines"]["openai"] = oa
+    d["engines"]["acp"] = acp_from(eng.get("acp"), errors)
 
     # profiles
     pr = raw.get("profiles") if isinstance(raw.get("profiles"), dict) else {}
@@ -514,6 +515,53 @@ def validate(raw: Any, home: Optional[str] = None, which=shutil.which) -> Tuple[
             budgets.append(v)
     d["budgets"] = budgets
     return d, errors, warnings
+
+
+# F4-6a (docs/F46A_TASARIM.md A1): ACP agents come from this file only, off unless `enabled`, started by an absolute
+# path. A package runner fetches code on every start (supply chain), so the user installs the agent and names it.
+ACP_MAX = 8
+ACP_ARGS_MAX = 32
+PACKAGE_RUNNERS = frozenset({"npx", "bunx", "pnpx", "uvx", "pipx", "npm", "pnpm", "yarn", "bun"})
+
+
+def acp_from(raw, errors: List[str]) -> List[dict]:
+    out: List[dict] = []
+    if raw is None:
+        return out
+    if not isinstance(raw, list):
+        errors.append("engines.acp: must be a list")
+        return out
+    for i, e in enumerate(raw[:ACP_MAX + 1]):
+        where = "engines.acp[%d]" % i
+        if i >= ACP_MAX:
+            errors.append("engines.acp: at most %d agents" % ACP_MAX)
+            break
+        if not isinstance(e, dict) or not isinstance(e.get("id"), str) or not ID_RE.match(e["id"]):
+            errors.append("%s: id must match [a-z0-9_-]{1,24}" % where)
+            continue
+        if any(x["id"] == e["id"] for x in out):
+            errors.append("%s: duplicate id" % where)
+            continue
+        cmd = e.get("command")
+        if (not isinstance(cmd, list) or not 1 <= len(cmd) <= ACP_ARGS_MAX
+                or not all(isinstance(c, str) and 0 < len(c) <= 4096 and "\0" not in c for c in cmd)):
+            errors.append("%s.command: a list of 1–%d strings (the program and its arguments)" % (where, ACP_ARGS_MAX))
+            continue
+        if not os.path.isabs(cmd[0]):
+            errors.append("%s.command[0]: must be the absolute path of the installed agent" % where)
+            continue
+        prog = os.path.basename(cmd[0]).lower()
+        for ext in (".exe", ".cmd", ".bat", ".ps1"):
+            if prog.endswith(ext):
+                prog = prog[:-len(ext)]
+        if prog in PACKAGE_RUNNERS:
+            errors.append("%s.command: package runners (npx, uvx, …) are refused; install the agent and give its path"
+                          % where)
+            continue
+        name = e.get("name")
+        out.append({"id": e["id"], "name": (name if isinstance(name, str) and name.strip() else e["id"]).strip()[:40],
+                    "command": list(cmd), "enabled": _bool(e.get("enabled"), False)})
+    return out
 
 
 def boss_from(raw: dict, errors: List[str], warnings: List[str]) -> dict:

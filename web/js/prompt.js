@@ -786,6 +786,7 @@ export class PromptPanel {
     else if (this.mode === 'connecting') hint = tt('Cihaza güvenli bağlantı kuruluyor…');
     else if (this.mode === 'error') hint = tt('Cihazla güvenli bağlantı kurulamadı. Yeniden eşleştirmeyi deneyin (Cihazlar).');
     else if (d && d.isBrowserLocal) hint = tt('Tarayıcı ajanı: bu tarayıcıdaki sanal klasörde dosya okur ve yazar, komut çalıştırmaz.');
+    else if (engine === 'acp') hint = tt('ACP ajanı: izinleri ajanın kendi ayarları belirler. Pixel Office yalnızca ajan sorduğunda karar verir.');
     else if (engine === 'ollama' || engine === 'openai') hint = tt('Model: sohbet eder. Bağlayıcıda araçlar açıksa klasörde dosya okuyup yazar, komut çalıştırmaz.');
     else if (engine === 'claude' && da) {
       // H39: where files go and what the agent may do, so out-of-folder requests don't surprise anyone.

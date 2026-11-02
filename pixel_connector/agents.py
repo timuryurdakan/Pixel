@@ -93,7 +93,7 @@ class AgentStore:
         nm = clean_name(name)
         if not nm:
             raise AgentError("bad_request", "name")
-        if engine not in ("claude", "ollama", "openai"):
+        if engine not in ("claude", "ollama", "openai", "acp"):
             raise AgentError("bad_request", "engine")
         if model is not None and (not isinstance(model, str) or not MODEL_RE.match(model)):
             raise AgentError("bad_request", "model")

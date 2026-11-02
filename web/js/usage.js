@@ -62,7 +62,7 @@ export function fmtClock(ms) {
   return h ? `${h}:${two(m)}:${two(s)}` : `${m}:${two(s)}`;
 }
 
-export const ENGINE_LABELS = { claude: 'Claude Code', ollama: 'Ollama', openai: tt('OpenAI uyumlu') };
+export const ENGINE_LABELS = { claude: 'Claude Code', ollama: 'Ollama', openai: tt('OpenAI uyumlu'), acp: 'ACP' };
 
 /**
  * Cost text with the honesty labels of §10.1/§11.3.

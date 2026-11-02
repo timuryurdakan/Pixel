@@ -1,6 +1,6 @@
 # F4-6a — Bağlayıcıda ACP istemcisi: Tasarım (taslak)
 
-Durum: **onay bekliyor**. Kaynak: `docs/ARASTIRMA2_ORTAK.md` §3.1/2 ve F4-6. F4-6 ikiye bölündü:
+Durum: **onaylandı** (2026-11-01) ve uygulandı (bağlayıcı 3.16.0). Uygulamadaki tek sapma, daha sıkı yönde: A2'deki onaylar ilk sürümde yalnızca bilgisayarda verilir (`/onay`, `pixel-connector approve`). Tarayıcıdan cevaplanabilen onaylar şimdilik yalnızca Claude Code'un araç onayları. Kaynak: `docs/ARASTIRMA2_ORTAK.md` §3.1/2 ve F4-6. F4-6 ikiye bölündü:
 
 - **F4-6a (bu belge):** ACP istemcisi. K2'ye bağlı değil.
 - **F4-6b:** Çok motorlu Patron. K2 gereği, tarayıcıdaki Patron gerçek anahtarla denenip kalitesi görüldükten sonra

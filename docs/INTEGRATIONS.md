@@ -371,6 +371,41 @@ Sonuç (Aşama 19'da uygulandı ve böyle kaldı, 2026-10-21): Antigravity için
 
 ---
 
+## 6b. ACP ajanları: Codex CLI, Gemini CLI, OpenCode… (F4-6a, bağlayıcı 3.16.0)
+
+Agent Client Protocol (ACP) konuşan bir ajan, bağlayıcıda normal bir ajan gibi oluşturulur: ofiste görünür,
+telefondan görev alır. Tasarım ve kararlar: `docs/F46A_TASARIM.md`.
+
+1. Ajanı bilgisayarına kendin kur ve terminalde bir kez kendi girişini yap (ör. `codex login`). Bağlayıcı giriş
+   akışını yürütmez; giriş yoksa görev "Ajan giriş istiyor" hatasıyla biter.
+2. Ajanın ACP komutunun **mutlak yolunu** bul (`which <komut>`). `npx`, `uvx` gibi her çalıştırmada paket indiren
+   komutlar kabul edilmez.
+3. `~/.pixel-office/connector/config.json` içine ekle ve bağlayıcıyı yeniden başlat:
+
+```json
+"engines": {
+  "acp": [
+    {"id": "ajanim", "name": "Ajanım", "command": ["/home/kullanici/.local/bin/ajanim", "<ACP bayrağı>"], "enabled": true}
+  ]
+}
+```
+
+Komut ve bayrak ajanına göre değişir; ajanın kendi belgesinde "ACP" ya da "Zed ile kullanım" bölümüne bak.
+`enabled` yazılmazsa ajan kapalı kalır.
+
+4. Tarayıcıda **Yeni ajan** → motor listesinde "Ajanım (ACP)". Bir çalışma klasörü ve "Sadece okuma" ya da
+   "Düzenleyebilir" seç. Oluşturma **her zaman bilgisayarda onay ister** (`/onay` sayfası ya da
+   `pixel-connector approve`).
+
+**İzinler hakkında dürüst not:** ACP'de ajanın izin sorması isteğe bağlıdır. Ajan dosyaları kendi araçlarıyla
+değiştirebilir ve bize hiç sormayabilir. Bu yüzden bir ACP ajanına, o ajanın komut satırını kendin çalıştırıyormuş
+gibi güven. Pixel Office yalnızca ajan sorduğunda karar verir:
+- **Sadece okuma:** klasördeki okumalar serbest, geri kalan her şey reddedilir.
+- **Düzenleyebilir:** klasördeki okuma ve dosya değişiklikleri serbest. Komut, ağ ve klasör dışı işlemler
+  bilgisayarda onaya gelir (ilk sürümde yalnızca bilgisayarda; 120 sn cevapsız kalırsa reddedilir).
+- "Her zaman izin ver" hiçbir zaman seçilmez. Terminal yetkisi verilmez, MCP sunucusu aktarılmaz. Bizim API anahtarı
+  ortam değişkenlerimiz ajana geçmez.
+
 ## 7. Sorun giderme
 - **Karakter görünmüyor:**
   - `pixel_hook.py doctor` çalıştırın. Sunucuya ulaşılabildiğini ve kancalı olay sayısının 13/13 olduğunu kontrol edin.

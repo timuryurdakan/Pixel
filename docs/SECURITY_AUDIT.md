@@ -645,3 +645,23 @@ Kullanıcının isteğiyle (yapay zekâyla yapılmış projelerde koda/yoruma g�
   Claude için dolar bütçesi (`device` ya da `engine:claude`) yoksa `usage.DEFAULT_CLAUDE_BUDGET` geçerli: günde 5 $,
   dolunca yeni Claude görevi başlamaz, kalan tutar `--max-budget-usd` olur. Kullanıcının kendi dolar bütçesi onun
   yerini alır; dosyaya yazılmaz; diğer motorlara uygulanmaz (`tests/test_default_budget.py`).
+
+## 21. F4-6a ACP istemcisi (2026-11-01)
+
+Uygulayıcının notu (bağımsız inceleme değil). Tasarım `docs/F46A_TASARIM.md`.
+
+- **Asıl sınır:** ACP'de izin sormak ajanın isteğine bağlı. Profil yalnızca ajan sorduğunda ve `fs/*` yöntemlerinde
+  zorlanır; ajan kendi araçlarıyla bize sormadan iş yapabilir. Bu kullanıcıya hem ajan oluştururken hem ajan kartında
+  açıkça yazılır. ACP ajanı oluşturmak ve profilini değiştirmek her zaman bilgisayarda onay ister.
+- **Uzaktan kod yürütme:** ACP komutu yalnızca bilgisayardaki `config.json`'dan gelir, varsayılan kapalı, mutlak yol
+  zorunlu, paket indiren çalıştırıcılar (npx, uvx, …) reddedilir. Tarayıcı yalnızca tanımlı bir ajanı seçebilir.
+- **İzin cevapları:** `allow_always` hiç seçilmez; okuma ve (düzenleme profilinde) dosya değişikliği yalnızca bütün
+  konumlar klasörün içindeyse kendiliğinden kabul. "İçinde" denetimi ad önekine değil yol ayırıcısına bakar
+  (`…/isler2`, `…/isler`'in içinde sayılmaz; testle kilitli). Diğer her şey bilgisayarda onaya gider, cevapsız kalırsa ret.
+- **Dosya yöntemleri:** E3 `WorkspaceFiles` (O_NOFOLLOW, ret listesi, boyut tavanı, profil). Terminal yeteneği ilan
+  edilmez; MCP sunucusu aktarılmaz (K3).
+- **Ortam:** Claude motorunun izin listesi (`child_env`), ayrıca OpenAI uyumlu motorların anahtar değişkenleri düşülür;
+  kanarya testiyle doğrulandı.
+- **Kaynak:** satır başına 1 MB, kurulum adımlarında 30 sn, 20'den fazla bozuk satırda görev biter, iptalde 5 sn sonra
+  süreç grubu öldürülür. Testler sahte bir ACP ajanıyla (`tests/_fake_acp_agent.py`); beş bilinçli bozmadan beşi de
+  testlerce yakalandı (biri için yeni test eklendi).
