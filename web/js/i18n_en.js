@@ -888,4 +888,18 @@ export const EN = {
   'Bu ajan için bir çalışma klasörü seçin.': 'Choose a work folder for this agent.',
   'bilgisayarda kapalı ya da kurulu değil': 'off on the computer or not installed',
   '(ajanın kendi ayarı)': "(the agent's own setting)",
+  // F4-4: virtual folder ZIP and file import
+  'Dosyaları bu bölüme sürükleyip bırakabilirsiniz (yalnızca metin, en fazla 512 KB).': 'You can drag and drop files onto this section (text only, at most 512 KB).',
+  'Tümünü ZIP indir': 'Download all as ZIP',
+  'Dosya ekle': 'Add files',
+  'aynı adla bir dosya var': 'a file with this name exists',
+  'bu dosya adına izin yok': 'this file name is not allowed',
+  'geçersiz dosya adı': 'invalid file name',
+  'gizli ya da biçim karakteri içeriyor': 'contains hidden or formatting characters',
+  'klasör dolu (en fazla 200 dosya)': 'the folder is full (at most 200 files)',
+  'metin dosyası değil': 'not a text file',
+  'okunamadı': 'could not be read',
+  '{ok} dosya eklendi': '{ok} files added',
+  '{ok} dosya eklendi, {bad} eklenmedi: {why}': '{ok} files added, {bad} not added: {why}',
+  'çok büyük (en fazla 512 KB)': 'too large (at most 512 KB)',
 };

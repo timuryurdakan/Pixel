@@ -11,6 +11,7 @@ import { BrowserBoss, BossError, BOSS_AGENT, JOB_MAX_OUT_TOKENS } from './browse
 import { BOSS_RULES } from './boss_rules.js';
 import { BrowserWorkflows, WorkflowError } from './browser_workflows.js';
 import { CUSTOM_TEMPLATES_KEY } from './template_builder.js';
+import { buildZip } from './zip.js';
 
 export const BROWSER_DEVICE_ID = 'browser';
 
@@ -479,6 +480,14 @@ export class VirtualWorkspace {
     return existed;
   }
 
+  /** F4-4: every file as stored, for the ZIP download (the 256 KB read cap is the model's, not the user's). */
+  async exportEntries() {
+    const files = await this._loadMap();
+    return Array.from(files.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([path, v]) => ({ path, content: v.content, mtime: v.updatedAt }));
+  }
+
   async listFiles() {
     const files = await this._loadMap();
     return Array.from(files.entries())
@@ -521,6 +530,47 @@ export class VirtualWorkspace {
  * Scrub any API key or Bearer token from error texts so an upstream server echoing
  * a key in an HTTP 401/403/500 body can NEVER leak into DeviceHub messages or DOM.
  */
+// F4-4: files the user drops into the virtual folder: text only, the model's write rules (name, size, characters,
+// folder caps), never over an existing file.
+export const IMPORT_TEXT = {
+  too_large: tt('çok büyük (en fazla 512 KB)'),
+  binary: tt('metin dosyası değil'),
+  exists: tt('aynı adla bir dosya var'),
+  denied: tt('bu dosya adına izin yok'),
+  bad_path: tt('geçersiz dosya adı'),
+  bad_content: tt('gizli ya da biçim karakteri içeriyor'),
+  too_many_files: tt('klasör dolu (en fazla 200 dosya)'),
+  io_error: tt('okunamadı'),
+};
+
+/** One dropped or picked File → {path, code}; code is null when it was written. */
+export async function importUserFile(workspace, file) {
+  const path = file && typeof file.name === 'string' ? file.name : '';
+  try {
+    const parts = splitPath(path);
+    if (typeof file.size !== 'number' || file.size > WRITE_MAX) throw new ToolError('too_large');
+    let text;
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer());
+    } catch {
+      throw new ToolError('binary');
+    }
+    if (text.slice(0, BINARY_SNIFF).includes('\0')) throw new ToolError('binary');
+    const norm = parts.join('/');
+    if ((await workspace.listFiles()).some((f) => f.path === norm)) throw new ToolError('exists');
+    await workspace.writeFile(norm, text, 'edit');
+    return { path: norm, code: null };
+  } catch (e) {
+    return { path, code: e instanceof ToolError && Object.hasOwn(IMPORT_TEXT, e.code) ? e.code : 'io_error' };
+  }
+}
+
+/** The virtual folder as a .zip (stored, UTF-8 names). */
+export async function workspaceZip(workspace) {
+  const enc = new TextEncoder();
+  return buildZip((await workspace.exportEntries()).map((f) => ({ path: f.path, data: enc.encode(f.content), mtime: f.mtime })));
+}
+
 /** F4-3b C1: this browser's template-builder library (untrusted: BrowserWorkflows validates every entry). */
 function readTemplateLibrary() {
   try {
@@ -1589,6 +1639,7 @@ export class BrowserDevicePanel {
 
     // Virtual workspace file list section
     const filesSec = el(this.doc, 'div', { className: 'browser-vfs-section' });
+    this._wireDrop(filesSec);
     filesSec.append(el(this.doc, 'h5', {}, tt('Sanal Klasör Dosyaları (IndexedDB)')));
     const fileList = el(this.doc, 'ul', { className: 'browser-vfs-list' });
     const files = await this.device.workspace.listFiles();
@@ -1636,9 +1687,52 @@ export class BrowserDevicePanel {
       }
     }
     filesSec.append(fileList);
+    filesSec.append(this._fileTools(files.length));
     wrap.append(filesSec);
 
     this.container.append(wrap);
+  }
+
+  /** F4-4: download everything as a ZIP, add files with a picker (phones) or by dropping them on the section. */
+  _fileTools(count) {
+    const bar = el(this.doc, 'div', { className: 'browser-vfs-tools' });
+    const zipBtn = el(this.doc, 'button', { type: 'button', className: 'btn sm', 'data-action': 'download-vfs-zip' }, tt('Tümünü ZIP indir'));
+    zipBtn.disabled = !count;
+    zipBtn.addEventListener('click', async () => {
+      const blob = new Blob([await workspaceZip(this.device.workspace)], { type: 'application/zip' });
+      const url = URL.createObjectURL(blob);
+      el(this.doc, 'a', { href: url, download: 'pixel-office-klasor.zip' }).click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+    const input = el(this.doc, 'input', { type: 'file', multiple: 'multiple', hidden: 'hidden', 'data-action': 'pick-vfs-files' });
+    const addBtn = el(this.doc, 'button', { type: 'button', className: 'btn sm', 'data-action': 'add-vfs-files' }, tt('Dosya ekle'));
+    addBtn.addEventListener('click', () => input.click());
+    input.addEventListener('change', () => this._import([...input.files]));
+    const hint = el(this.doc, 'p', { className: 'muted small' }, tt('Dosyaları bu bölüme sürükleyip bırakabilirsiniz (yalnızca metin, en fazla 512 KB).'));
+    bar.append(zipBtn, addBtn, input, hint);
+    return bar;
+  }
+
+  async _import(files) {
+    if (!files.length) return;
+    const results = [];
+    for (const f of files.slice(0, 50)) results.push(await importUserFile(this.device.workspace, f));
+    const ok = results.filter((r) => !r.code).length;
+    const bad = results.filter((r) => r.code);
+    const why = bad.slice(0, 3).map((r) => `${String(r.path).slice(0, 60)}: ${IMPORT_TEXT[r.code]}`).join('; ');
+    this.toast(bad.length ? tt('{ok} dosya eklendi, {bad} eklenmedi: {why}', { ok, bad: bad.length, why }) : tt('{ok} dosya eklendi', { ok }),
+      { error: !!bad.length, ms: bad.length ? 8000 : 4000 });
+    await this.render();
+  }
+
+  _wireDrop(section) {
+    section.addEventListener('dragover', (e) => { e.preventDefault(); section.classList.add('is-drop'); });
+    section.addEventListener('dragleave', () => section.classList.remove('is-drop'));
+    section.addEventListener('drop', (e) => {
+      e.preventDefault();
+      section.classList.remove('is-drop');
+      this._import([...(e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files : [])]);
+    });
   }
 
   async _updateKeyStatus(badgeEl, providerId) {

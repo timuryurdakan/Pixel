@@ -1421,3 +1421,8 @@ body.demo-on #topbar { flex-wrap: wrap; }
   word-break: break-word;
   color: var(--fg);
 }
+
+/* F4-4: the browser's virtual folder: ZIP download, add files, drop target */
+.browser-vfs-section.is-drop { outline: 2px dashed var(--accent); outline-offset: 4px; }
+.browser-vfs-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.browser-vfs-tools p { flex-basis: 100%; margin: 2px 0 0; }

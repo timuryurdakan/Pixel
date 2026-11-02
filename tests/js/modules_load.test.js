@@ -43,6 +43,7 @@ export const MODULES = [
   'update_banner.js',
   'usage.js',
   'workflows.js',
+  'zip.js',
 ];
 
 test('every web/js library module loads', async () => {
