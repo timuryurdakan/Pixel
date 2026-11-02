@@ -641,5 +641,7 @@ Kullanıcının isteğiyle (yapay zekâyla yapılmış projelerde koda/yoruma g�
   anahtardan çıkar; görevi yalnızca bilgisayarda kodla eşleştirilmiş cihazlar başlatabilir. Tavanlar: Claude görev
   başına 2 $ (`maxBudgetUsdPerTask`), saatte 60 / dakikada 6 görev, eşzamanlı 2; Claude dışı motorlarda görev başına
   8.000 çıkış jetonu ve 20 tur; tarayıcıda saatte 30 görev, Patron/şablon başına 60.000 jeton; Patron'da iş başına dolar
-  tavanı. **Açık nokta:** varsayılan günlük bütçe yok (`budgets: []`); kullanıcı tanımlamazsa üst sınır yalnızca hız ve
-  görev tavanlarıdır.
+  tavanı. **Açık nokta (kapandı, bağlayıcı 3.15.0):** varsayılan günlük bütçe yoktu (`budgets: []`). Artık cihazda
+  Claude için dolar bütçesi (`device` ya da `engine:claude`) yoksa `usage.DEFAULT_CLAUDE_BUDGET` geçerli: günde 5 $,
+  dolunca yeni Claude görevi başlamaz, kalan tutar `--max-budget-usd` olur. Kullanıcının kendi dolar bütçesi onun
+  yerini alır; dosyaya yazılmaz; diğer motorlara uygulanmaz (`tests/test_default_budget.py`).

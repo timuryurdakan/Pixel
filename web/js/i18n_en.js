@@ -879,4 +879,7 @@ export const EN = {
   'Jeton tavanı doldu': 'Token cap reached',
   'Sayfa kapandığı için durdu': 'Stopped because the page was closed',
   '{used} / {max} jeton': '{used} / {max} tokens',
+  // 2026-11-01: default daily Claude budget
+  '(varsayılan)': '(default)',
+  'Güvenlik için varsayılan günlük Claude bütçesi. Cihaza kendi dolar bütçenizi koyduğunuzda bu kalkar.': 'Default daily Claude budget, for safety. It goes away once you set your own dollar budget on the device.',
 };

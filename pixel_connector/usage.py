@@ -28,6 +28,10 @@ CREATE INDEX IF NOT EXISTS tasks_agent_time ON tasks(agent, started_ms);
 CREATE INDEX IF NOT EXISTS tasks_time ON tasks(started_ms);
 """
 CACHE_READ_WEIGHT = 0.1
+# 2026-11-01 security and cost check (docs/SECURITY_AUDIT.md §20): with no money budget of its own for Claude (scope
+# `engine:claude` or `device`, unit usd), the device gets this one: 5 $ a day, then new Claude tasks are refused. Any
+# such budget the user sets (connector.json or from a browser) replaces it; it is never written to a file.
+DEFAULT_CLAUDE_BUDGET = {"scope": "engine:claude", "period": "day", "unit": "usd", "limit": 5.0, "action": "block"}
 
 
 def local_tz() -> tzinfo:
@@ -225,9 +229,16 @@ class Budgets:
             t = self.ledger.totals(b["period"], engine=scope[7:], now_ms=now_ms)
         return t["costUsd"] if b["unit"] == "usd" else t["tokens"]
 
+    def effective(self) -> List[dict]:
+        """all() plus DEFAULT_CLAUDE_BUDGET when nothing else caps Claude's spending in dollars."""
+        out = self.all()
+        if not any(b["unit"] == "usd" and b["scope"] in ("device", "engine:claude") for b in out):
+            out.append(dict(DEFAULT_CLAUDE_BUDGET, locked=False, default=True))
+        return out
+
     def evaluate(self, now_ms: Optional[int] = None, scopes: Optional[List[str]] = None) -> List[dict]:
         out = []
-        for b in self.all():
+        for b in self.effective():
             if scopes is not None and b["scope"] not in scopes:
                 continue
             used = self._used(b, now_ms)

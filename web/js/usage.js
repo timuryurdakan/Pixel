@@ -142,8 +142,10 @@ export function gaugeEl(b, { showScope = false } = {}) {
   const lab = document.createElement('div');
   lab.className = 'gauge-label';
   const scope = showScope ? SCOPE_LABEL(b.scope) : '';
-  lab.textContent = (scope ? `${scope} · ` : '') + t.label + (b.locked ? ' 🔒' : '');
+  lab.textContent = (scope ? `${scope} · ` : '') + t.label + (b.locked ? ' 🔒' : '') + (b.default ? ` ${tt('(varsayılan)')}` : '');
   if (b.locked) lab.title = tt('Bu bütçe cihazdaki connector.json dosyasında tanımlı, buradan değiştirilemez.');
+  // 2026-11-01: the connector's built-in Claude cap (usage.DEFAULT_CLAUDE_BUDGET) until the user sets a money budget
+  if (b.default) lab.title = tt('Güvenlik için varsayılan günlük Claude bütçesi. Cihaza kendi dolar bütçenizi koyduğunuzda bu kalkar.');
   if (b.unit !== 'usd') lab.title = (lab.title ? lab.title + '\n' : '') + WEIGHT_NOTE;
   const bar = document.createElement('div');
   bar.className = 'gauge-bar';
