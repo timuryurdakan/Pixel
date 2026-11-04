@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { MemoryStore } from '../../web/js/idb.js';
 import { errorText } from '../../web/js/control.js';
 import { endText } from '../../web/js/prompt.js';
-import { BrowserDevice, PROVIDER_PRESETS, RETIRED_MODELS, createMemoryKeystore } from '../../web/js/browser_device.js';
+import { BrowserDevice, BrowserDevicePanel, PROVIDER_PRESETS, RETIRED_MODELS, createMemoryKeystore } from '../../web/js/browser_device.js';
 
 test('no preset offers a retired model; every replacement is on its provider list', () => {
   const offered = Object.values(PROVIDER_PRESETS).flatMap((p) => p.models);
@@ -54,4 +54,31 @@ test('no key (a page reload clears a key not remembered) says so, not "motor bul
   assert.equal(r.error.code, 'api_key_missing');
   assert.match(endText({ status: 'error', error: r.error }), /API anahtarı yok/);
   assert.equal(endText({ status: 'error', error: { code: 'engine_error' } }).includes('('), false);
+});
+
+test('"Bu cihazda hatırla" is a normal checkbox next to its text (it sat apart, stretched, and nobody saw it)', async () => {
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = '/web/css/style.css';
+  const loaded = new Promise((r) => { link.onload = r; });
+  document.head.appendChild(link);
+  await loaded;
+  const box = document.createElement('div');
+  box.style.width = '600px';
+  document.body.appendChild(box);
+  try {
+    const dev = new BrowserDevice({ keystore: createMemoryKeystore(), store: new MemoryStore() });
+    await new BrowserDevicePanel({ container: box, device: dev }).render();
+    const input = box.querySelector('input[name=remember]');
+    const text = input.closest('label').querySelector('span');
+    const a = input.getBoundingClientRect();
+    const b = text.getBoundingClientRect();
+    assert.ok(a.width < 40, `checkbox width ${a.width}`);
+    assert.ok(a.right <= b.left && b.left - a.right < 30, `gap ${b.left - a.right}`);
+    assert.ok(a.top < b.bottom && b.top < a.bottom, 'on the same line as its text');
+    assert.ok(a.left - box.getBoundingClientRect().left < 30, 'at the start of the row');
+  } finally {
+    box.remove();
+    link.remove();
+  }
 });

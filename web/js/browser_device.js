@@ -1612,7 +1612,7 @@ export class BrowserDevicePanel {
     keyLabel.append(keyInput);
 
     // D3: "Bu cihazda hatırla" defaults to false (unchecked)
-    const remLabel = el(this.doc, 'label', { className: 'checkbox-row' });
+    const remLabel = el(this.doc, 'label', { className: 'check' });
     const remInput = el(this.doc, 'input', { type: 'checkbox', name: 'remember' });
     remInput.checked = false;
     remLabel.append(remInput, el(this.doc, 'span', {}, tt('Bu cihazda hatırla (IndexedDB şifreli)')));
