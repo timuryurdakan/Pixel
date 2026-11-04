@@ -902,4 +902,5 @@ export const EN = {
   '{ok} dosya eklendi': '{ok} files added',
   '{ok} dosya eklendi, {bad} eklenmedi: {why}': '{ok} files added, {bad} not added: {why}',
   'çok büyük (en fazla 512 KB)': 'too large (at most 512 KB)',
+  'Sağlayıcı bu modeli sunmuyor. Listeden başka bir modelle yeni ajan oluşturun.': 'The provider does not offer this model. Create a new agent with another model from the list.',
 };

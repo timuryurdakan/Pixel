@@ -17,36 +17,37 @@ export const BROWSER_DEVICE_ID = 'browser';
 
 // D4 & D5: Fixed allow-list of 6 https OpenAI-compatible providers matching pixel_connector/config.py PROVIDER_PRESETS.
 // Free-tier / low-cost models are listed first (§3.4). No custom URL, no localhost/Ollama.
+// Model names were checked against each provider's own pages on 2026-11-04; providers retire them often.
 export const PROVIDER_PRESETS = Object.freeze({
   gemini: Object.freeze({
     id: 'gemini',
     name: 'Google Gemini',
     url: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    models: Object.freeze(['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro']),
+    models: Object.freeze(['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-2.5-flash-lite']),
   }),
   groq: Object.freeze({
     id: 'groq',
     name: 'Groq',
     url: 'https://api.groq.com/openai/v1',
-    models: Object.freeze(['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'qwen/qwen3-32b']),
+    models: Object.freeze(['openai/gpt-oss-20b', 'openai/gpt-oss-120b', 'qwen/qwen3.8-27b']),
   }),
   openrouter: Object.freeze({
     id: 'openrouter',
     name: 'OpenRouter',
     url: 'https://openrouter.ai/api/v1',
-    models: Object.freeze(['meta-llama/llama-3.3-70b-instruct:free', 'google/gemini-2.0-flash-exp:free', 'deepseek/deepseek-chat-v3-0324:free']),
+    models: Object.freeze(['google/gemma-4-31b-it:free', 'nvidia/nemotron-3.5-lightning:free', 'cohere/north-mini-code:free']),
   }),
   openai: Object.freeze({
     id: 'openai',
     name: 'OpenAI',
     url: 'https://api.openai.com/v1',
-    models: Object.freeze(['gpt-4o-mini', 'gpt-4.1-mini', 'gpt-4o']),
+    models: Object.freeze(['gpt-4o-mini', 'gpt-4.1-mini', 'gpt-6-luna']),
   }),
   deepseek: Object.freeze({
     id: 'deepseek',
     name: 'DeepSeek',
     url: 'https://api.deepseek.com/v1',
-    models: Object.freeze(['deepseek-chat', 'deepseek-reasoner']),
+    models: Object.freeze(['deepseek-flash', 'deepseek-v4-pro']),
   }),
   mistral: Object.freeze({
     id: 'mistral',
@@ -57,6 +58,20 @@ export const PROVIDER_PRESETS = Object.freeze({
 });
 
 export const ALLOWED_PROVIDERS = Object.freeze(Object.keys(PROVIDER_PRESETS));
+
+// Saved agents may hold a model the provider no longer serves; they move to the provider's named replacement on load.
+export const RETIRED_MODELS = Object.freeze({
+  'gemini-2.5-flash': 'gemini-3.5-flash-lite',
+  'gemini-2.5-pro': 'gemini-3.8-flash',
+  'llama-3.3-70b-versatile': 'openai/gpt-oss-120b',
+  'llama-3.1-8b-instant': 'openai/gpt-oss-20b',
+  'qwen/qwen3-32b': 'openai/gpt-oss-120b',
+  'meta-llama/llama-3.3-70b-instruct:free': 'google/gemma-4-31b-it:free',
+  'google/gemini-2.0-flash-exp:free': 'google/gemma-4-31b-it:free',
+  'deepseek/deepseek-chat-v3-0324:free': 'google/gemma-4-31b-it:free',
+  'deepseek-chat': 'deepseek-flash',
+  'deepseek-reasoner': 'deepseek-v4-pro',
+});
 
 // D7 & pixel_connector/engines/tools.py limits
 export const READ_MAX = 256 * 1024;
@@ -820,7 +835,7 @@ export class BrowserDevice {
             name: String(a.name || a.key).slice(0, 40),
             engine: 'openai',
             engineId: a.engineId,
-            model: String(a.model || PROVIDER_PRESETS[a.engineId].models[0]),
+            model: RETIRED_MODELS[a.model] || String(a.model || PROVIDER_PRESETS[a.engineId].models[0]),
             workspace: { id: this.workspace.workspaceId, sub: null },
             profile: READ_PROFILES.has(a.profile) ? a.profile : 'edit',
             role: a.role || null,
@@ -1258,7 +1273,7 @@ export class BrowserDevice {
           } catch {
             if (errBodyText) rawMsg = errBodyText;
           }
-          const code = resp && resp.status === 404 ? 'model_not_found' : 'engine_error';
+          const code = resp && resp.status === 404 ? 'model_unavailable' : 'engine_error';
           const safeMsg =
             resp && (resp.status === 401 || resp.status === 403)
               ? tt('API anahtarı geçersiz veya yetkisiz (HTTP ') + resp.status + ')'
