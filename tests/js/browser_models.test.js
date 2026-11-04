@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MemoryStore } from '../../web/js/idb.js';
 import { errorText } from '../../web/js/control.js';
+import { endText } from '../../web/js/prompt.js';
 import { BrowserDevice, PROVIDER_PRESETS, RETIRED_MODELS, createMemoryKeystore } from '../../web/js/browser_device.js';
 
 test('no preset offers a retired model; every replacement is on its provider list', () => {
@@ -40,4 +41,17 @@ test('a provider 404 ends the task with its own code and text, not "yüklü değ
   assert.equal(r.error.code, 'model_unavailable');
   assert.ok(!errorText('model_unavailable').includes('yüklü değil'));
   assert.ok(errorText('model_unavailable').includes('Sağlayıcı'));
+  const line = endText({ status: 'error', error: r.error });
+  assert.ok(line.includes('no longer available'), line);                    // the provider's own words are visible
+  assert.ok(!line.includes('CANARY'));
+});
+
+test('no key (a page reload clears a key not remembered) says so, not "motor bulunamadı"', async () => {
+  const dev = new BrowserDevice({ keystore: createMemoryKeystore(), store: new MemoryStore(),
+    fetchFn: async () => { throw new Error('must not call the provider without a key'); } });
+  const r = await dev._runBossTask({ agentKey: 'wf-a', name: 'A', role: 'A', profile: 'edit', prompt: 'x', fresh: true,
+    provider: 'gemini', model: 'gemini-3.5-flash-lite' });
+  assert.equal(r.error.code, 'api_key_missing');
+  assert.match(endText({ status: 'error', error: r.error }), /API anahtarı yok/);
+  assert.equal(endText({ status: 'error', error: { code: 'engine_error' } }).includes('('), false);
 });

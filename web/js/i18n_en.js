@@ -903,4 +903,6 @@ export const EN = {
   '{ok} dosya eklendi, {bad} eklenmedi: {why}': '{ok} files added, {bad} not added: {why}',
   'çok büyük (en fazla 512 KB)': 'too large (at most 512 KB)',
   'Sağlayıcı bu modeli sunmuyor. Listeden başka bir modelle yeni ajan oluşturun.': 'The provider does not offer this model. Create a new agent with another model from the list.',
+  'API anahtarı yok. Tarayıcı ajanından anahtarı girin; sayfa yenilenince silinmemesi için "Bu cihazda hatırla"yı işaretleyin.': 'No API key. Enter it in the browser agent; tick "Remember on this device" so a page reload does not remove it.',
+  'API anahtarı kaydedildi. Sayfa yenilenince silinir; kalması için "Bu cihazda hatırla"yı işaretleyin.': 'API key saved. It goes away when the page reloads; tick "Remember on this device" to keep it.',
 };

@@ -27,6 +27,7 @@ export const ERROR_TEXT = {
   workspace_denied: tt('Bu klasöre izin verilmiyor.'),
   engine_unavailable: tt('Motor cihazda bulunamadı ya da çalışmıyor.'),
   model_not_found: tt('Model cihazda yüklü değil.'),
+  api_key_missing: tt('API anahtarı yok. Tarayıcı ajanından anahtarı girin; sayfa yenilenince silinmemesi için "Bu cihazda hatırla"yı işaretleyin.'),
   model_unavailable: tt('Sağlayıcı bu modeli sunmuyor. Listeden başka bir modelle yeni ajan oluşturun.'),
   confirm_denied: tt('Cihazda reddedildi.'),
   confirm_timeout: tt('Cihazda onay süresi doldu.'),

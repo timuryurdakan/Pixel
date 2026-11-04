@@ -164,7 +164,10 @@ export function endText(m) {
     return bits.join(' · ');
   }
   if (st === 'timeout') return tt('Süre aşımı ({n} dk)', { n: Math.max(1, Math.round((m.durationMs || 0) / 60000)) });
-  if (st === 'error') return `Hata: ${errorText(m.error && m.error.code)}`;
+  if (st === 'error') {
+    const detail = m.error && typeof m.error.detail === 'string' ? m.error.detail.slice(0, 200) : '';
+    return `Hata: ${errorText(m.error && m.error.code)}${detail ? ` (${detail})` : ''}`;
+  }
   if (st === 'denied' && m.error && m.error.code === 'confirm_timeout') return tt('Cihazda onay süresi doldu');
   if (st === 'cancelled' && m.error && m.error.code === 'revoked') return tt('Durduruldu: başlatan tarayıcının eşleşmesi kaldırıldı');
   return END_TEXT[st] || 'Bitti';

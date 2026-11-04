@@ -1184,7 +1184,7 @@ export class BrowserDevice {
     }
     if (!apiKey || typeof apiKey !== 'string') {
       this._finishTask(agent, record, 'error', null, emptyUsage(false), {
-        code: 'engine_unavailable',
+        code: 'api_key_missing',
         message: tt('{provider} için API anahtarı girilmemiş', { provider: preset.name }),
       });
       return;
@@ -1278,9 +1278,11 @@ export class BrowserDevice {
             resp && (resp.status === 401 || resp.status === 403)
               ? tt('API anahtarı geçersiz veya yetkisiz (HTTP ') + resp.status + ')'
               : sanitizeErrorText(rawMsg, apiKey);
+          // `detail`: the provider's own words (key removed), shown after our text: quota, region, model…
           this._finishTask(agent, record, 'error', textParts.join('') || null, usage, {
             code,
             message: safeMsg,
+            detail: safeMsg,
           });
           return;
         }
@@ -1637,7 +1639,8 @@ export class BrowserDevicePanel {
       try {
         await this.keystore.set(this.selectedProvider, rawKey, { remember: Boolean(remInput.checked) });
         await this._updateKeyStatus(statusBadge, this.selectedProvider);
-        this.toast(tt('API anahtarı kaydedildi'), 'ok');
+        this.toast(remInput.checked ? tt('API anahtarı kaydedildi')
+          : tt('API anahtarı kaydedildi. Sayfa yenilenince silinir; kalması için "Bu cihazda hatırla"yı işaretleyin.'), 'ok');
       } finally {
         keyInput.value = '';
       }
